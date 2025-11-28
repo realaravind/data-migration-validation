@@ -16,6 +16,9 @@ app.include_router(execution_router, prefix="/execution", tags=["Execution"])
 from metadata.extract import router as metadata_router
 app.include_router(metadata_router, prefix="/metadata", tags=["Metadata"])
 
+from execution.results import router as results_router
+app.include_router(results_router, prefix="/execution", tags=["Execution"])
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

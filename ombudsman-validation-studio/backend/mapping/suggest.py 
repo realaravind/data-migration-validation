@@ -1,75 +1,10 @@
 from fastapi import APIRouter
-from difflib import SequenceMatcher
-import sys, os
-
-# OPTIONAL: Import Ombudsman Core mapping engine if available
-CORE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "ombudsman-core"))
-sys.path.append(CORE_PATH)
-
-try:
-    from ombudsman_core.mapping.engine import generate_mapping
-    CORE_AVAILABLE = True
-except:
-    CORE_AVAILABLE = False
-
+from core_adapter import generate_mapping
 
 router = APIRouter()
 
-
-def fuzzy_score(a, b):
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
-
-
 @router.post("/suggest")
-def suggest(payload: dict):
-    source = payload["source"]
-    target = payload["target"]
-
-    # If Ombudsman Core mapping engine exists, use it first
-    if CORE_AVAILABLE:
-        try:
-            core_result = generate_mapping(source, target)
-            return core_result
-        except Exception:
-            pass
-
-    # Otherwise, fallback to fuzzy match AI
-    results = {}
-    for s in source:
-        best_match = None
-        best_score = -1
-        for t in target:
-            score = fuzzy_score(s, t)
-            if score > best_score:
-                best_score = score
-                best_match = t
-
-        results[s] = {
-            "match": best_match,
-            "score": round(best_score, 3)
-        }
-
-    return results
-
-
-@router.post("/save")
-def save_mapping(payload: dict):
-    mapping = payload["mapping"]
-    path = payload.get("path", "mapping_saved.json")
-
-    import json
-    with open(path, "w") as f:
-        json.dump(mapping, f, indent=2)
-
-    return {"status": "saved", "path": path}
-
-
-@router.post("/load")
-def load_mapping(payload: dict):
-    path = payload.get("path", "mapping_saved.json")
-
-    import json
-    with open(path, "r") as f:
-        data = json.load(f)
-
-    return data
+def suggest_mapping(payload: dict):
+    source = payload.get("source", [])
+    target = payload.get("target", [])
+    return generate_mapping(source, target)

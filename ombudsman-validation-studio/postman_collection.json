@@ -1,0 +1,52 @@
+{
+  "info": {
+    "name": "Ombudsman Validation Studio",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Extract Metadata",
+      "request": {
+        "method": "POST",
+        "url": "http://localhost:8000/metadata/extract",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"connection\":\"...\",\"table\":\"...\"}"
+        }
+      }
+    },
+    {
+      "name": "Suggest Mapping",
+      "request": {
+        "method": "POST",
+        "url": "http://localhost:8000/mapping/suggest",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"source\":[],\"target\":[]}"
+        }
+      }
+    },
+    {
+      "name": "Run Validations",
+      "request": {
+        "method": "POST",
+        "url": "http://localhost:8000/rules/validate",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"config\":{}}"
+        }
+      }
+    },
+    {
+      "name": "Run YAML Pipeline",
+      "request": {
+        "method": "POST",
+        "url": "http://localhost:8000/execution/run",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"yaml_content\":\"pipeline: ...\"}"
+        }
+      }
+    }
+  ]
+}

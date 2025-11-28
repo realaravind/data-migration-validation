@@ -7,7 +7,6 @@ import {
   Button,
   List,
   ListItem,
-  ListItemText,
   TextField
 } from "@mui/material";
 
@@ -45,7 +44,7 @@ export default function PipelineSuggestions() {
       const res = await fetch("/pipeline/load", { method: "POST" });
       const data = await res.json();
       setSteps(data.steps || []);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const updateStep = (idx: number, value: string) => {

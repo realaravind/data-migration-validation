@@ -30,7 +30,7 @@ export default function PipelineExecution() {
   }, []);
 
   const run = async () => {
-    const res = await fetch("/execution/run", {
+    await fetch("/execution/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -39,7 +39,6 @@ export default function PipelineExecution() {
       })
     });
 
-    const data = await res.json();
     await loadLogs();
   };
 

@@ -1,24 +1,22 @@
 version: "3.9"
 
 services:
-  backend:
-    build: ./backend
-    container_name: ovs-backend
+  studio-backend:
+    build: ./ombudsman-validation-studio/backend
     ports:
-      - "8050:8050"
+      - "8000:8000"
     volumes:
-      - ../ombudsman-core:/core
-      - ./backend:/app
+      - ./ombudsman_core:/core
+      - ./ombudsman-validation-studio/backend:/app
     environment:
-      - PYTHONPATH=/app:/core
+      PYTHONPATH: "/app:/core/src"
     networks:
       - ovs-net
 
-  frontend:
-    build: ./frontend
-    container_name: ovs-frontend
+  studio-frontend:
+    build: ./ombudsman-validation-studio/frontend
     ports:
-      - "3050:3050"
+      - "3000:3000"
     networks:
       - ovs-net
 
