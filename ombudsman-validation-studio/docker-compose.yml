@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: ovs-backend
+    ports:
+      - "8050:8050"
+    volumes:
+      - ../ombudsman-core:/core
+      - ./backend:/app
+    environment:
+      - PYTHONPATH=/app:/core
+    networks:
+      - ovs-net
+
+  frontend:
+    build: ./frontend
+    container_name: ovs-frontend
+    ports:
+      - "3050:3050"
+    networks:
+      - ovs-net
+
+networks:
+  ovs-net:
+    driver: bridge

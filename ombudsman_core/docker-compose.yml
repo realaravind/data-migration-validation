@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    env_file:
+      - .env
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    healthcheck:
+      test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "${MSSQL_USER}", "-P", "${MSSQL_PASSWORD}", "-Q", "SELECT 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  snowflake:
+    image: databrickslabs/snowflake-simulator:latest
+    container_name: snowflake-emulator
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    environment:
+      - SNOWFLAKE_SIMULATOR_PORT=8080
+      - SNOWFLAKE_SIMULATOR_MODE=metadata
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ombudsman:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ombudsman-runner
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      snowflake:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./pipelines:/app/pipelines
+      - ./config:/app/config
+      - ./src:/app/src
+    command: >
+      validate pipelines/validate_fact_sales.yaml
+    # Or run all pipelines:
+    # command: >
+    #   sh -c 'for f in pipelines/*.yaml; do echo "Running $f"; ombudsman validate "$f"; done'
+
+volumes:
+  sql_data:

@@ -1,0 +1,19 @@
+connections:
+  sql:
+    driver: "mssql"
+    host: ${MSSQL_HOST}
+    port: ${MSSQL_PORT}
+    user: ${MSSQL_USER}
+    password: ${MSSQL_PASSWORD}
+    database: ${MSSQL_DATABASE}
+
+  snowflake:
+    host: ${SNOW_HOST}
+    port: ${SNOW_PORT}
+    user: ${SNOW_USER}
+    password: ${SNOW_PASSWORD}
+    database: ${SNOW_DATABASE}
+    schema: ${SNOW_SCHEMA}
+
+notifications:
+  email: ${ALERT_EMAIL}

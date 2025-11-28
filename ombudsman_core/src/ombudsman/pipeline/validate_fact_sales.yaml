@@ -1,0 +1,23 @@
+steps:
+  - name: validate_nulls
+    config:
+      table: "fact_sales"
+
+  - name: validate_record_counts
+    config:
+      table: "fact_sales"
+
+  - name: validate_metric_sums
+    config:
+      table: "fact_sales"
+      metric_cols: ["sales_amount"]
+
+mapping:
+  fact_sales:
+    sql: dbo.fact_sales
+    snow: analytics.fact_sales
+
+metadata:
+  fact_sales:
+    columns: ["id", "sales_amount", "customer_id", "order_date"]
+    numeric_columns: ["sales_amount"]

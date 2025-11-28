@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Ombudsman Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        body.dark {
+            background: #111;
+            color: #eee;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: #2c3e50;
+            color: white;
+            height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .sidebar.dark {
+            background: #000;
+        }
+
+        .sidebar h2 {
+            margin-top: 0;
+        }
+
+        .sidebar a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 8px 0;
+        }
+
+        .sidebar a:hover {
+            text-decoration: underline;
+        }
+
+        /* Main Content */
+        .content {
+            flex-grow: 1;
+            padding: 25px;
+        }
+
+        .chart-container {
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+
+        body.dark th {
+            background: #222;
+        }
+
+        body.dark td,
+        body.dark th {
+            border-color: #444;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+
+        /* Pagination */
+        .pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .pagination button {
+            padding: 5px 10px;
+            margin: 0 5px;
+        }
+
+        /* Modal */
+        #pipelineModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.65);
+            justify-content: center;
+            align-items: center;
+        }
+
+        #pipelineModalContent {
+            background: white;
+            padding: 20px;
+            width: 60%;
+            border-radius: 8px;
+        }
+
+        body.dark #pipelineModalContent {
+            background: #222;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+        <h2>Ombudsman</h2>
+
+        <a href="/">Dashboard</a>
+
+        {% if role in ['admin', 'operator'] %}
+        <a href="/upload">Upload Pipeline</a>
+        <a href="#" onclick="document.getElementById('runAllForm').submit()">Run All Pipelines</a>
+        {% endif %}
+
+        {% if role == 'admin' %}
+        <a href="/users">User Administration</a>
+        {% endif %}
+
+        <a href="/logout">Logout</a>
+
+        <br><br>
+        <button onclick="toggleDark()">🌙 Dark Mode</button>
+    </div>
+
+
+
+    <!-- MAIN CONTENT -->
+    <div class="content">
+
+        <h1>Ombudsman Dashboard</h1>
+
+        <!-- Filters -->
+        <form method="get" action="/" style="margin-bottom:25px">
+            <label>Pipeline:</label>
+            <input type="text" name="pipeline">
+
+            <label style="margin-left:10px;">Status:</label>
+            <select name="status">
+                <option value="">Any</option>
+                <option value="PASS">PASS</option>
+                <option value="FAIL">FAIL</option>
+            </select>
+
+            <label style="margin-left:10px;">From:</label>
+            <input type="date" name="start_date">
+
+            <label style="margin-left:10px;">To:</label>
+            <input type="date" name="end_date">
+
+            <button type="submit" style="margin-left:10px;">Filter</button>
+        </form>
+
+
+        <!-- Run Single Pipeline (RBAC) -->
+        {% if role in ['admin', 'operator'] %}
+        <form action="/run_pipeline" method="post" style="margin-top:20px; margin-bottom:20px;">
+            <label>Run Pipeline:</label>
+            <input type="text" name="name" placeholder="example.yaml">
+            <button type="submit">Run Now</button>
+        </form>
+        {% endif %}
+
+
+        <!-- Run All (RBAC) -->
+        {% if role in ['admin', 'operator'] %}
+        <form id="runAllForm" action="/schedule" method="get" style="margin-top:10px;">
+            <button type="submit">Run All Pipelines (Scheduler)</button>
+        </form>
+        {% endif %}
+
+
+        <!-- Charts -->
+        <div class="chart-container">
+            <h3>Status Breakdown</h3>
+            <canvas id="statusChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h3>Runs Per Day</h3>
+            <canvas id="historyChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h3>Pipeline Success Trend</h3>
+            <canvas id="trendChart"></canvas>
+        </div>
+
+
+        <!-- Results Table -->
+        <h2>Pipeline Results</h2>
+
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th>Pipeline</th>
+                    <th>Step</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                    <th>Timestamp (UTC)</th>
+                    <th>Definition</th>
+                </tr>
+            </thead>
+
+            <tbody id="resultsBody">
+                {% for r in rows %}
+                <tr>
+                    <td>{{ r[0] }}</td>
+                    <td>{{ r[1] }}</td>
+                    <td style="color:{{ 'green' if r[2] == 'PASS' else 'red' }}">{{ r[2] }}</td>
+                    <td>{{ r[3] }}</td>
+                    <td>{{ r[4].strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+                    <td>
+                        <button onclick="viewPipeline('{{ r[0] }}')">View</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination Controls -->
+        <div class="pagination">
+            <button onclick="prevPage()">Previous</button>
+            <span id="pageNum">1</span>
+            <button onclick="nextPage()">Next</button>
+        </div>
+
+    </div>
+
+
+    <!-- Pipeline Definition Modal -->
+    <div id="pipelineModal">
+        <div id="pipelineModalContent">
+            <h3>Pipeline Definition</h3>
+            <pre id="pipelineContent"></pre>
+            <button onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+
+    <!-- Dark Mode -->
+    <script>
+        function toggleDark() {
+            document.body.classList.toggle('dark');
+            document.getElementById('sidebar').classList.toggle('dark');
+            localStorage.setItem("theme", document.body.classList.contains("dark"));
+        }
+        if (localStorage.getItem("theme") === "true") {
+            document.body.classList.add("dark");
+            document.getElementById('sidebar').classList.add("dark");
+        }
+    </script>
+
+
+    <!-- Charts -->
+    <script>
+        fetch('/chart-data')
+            .then(r => r.json())
+            .then(d => {
+                new Chart(document.getElementById('statusChart'), {
+                    type: 'pie',
+                    data: {
+                        labels: d.labels,
+                        datasets: [{ data: d.values, backgroundColor: ['green', 'red'] }]
+                    }
+                })
+            })
+
+        fetch('/chart-history')
+            .then(r => r.json())
+            .then(d => {
+                new Chart(document.getElementById('historyChart'), {
+                    type: 'line',
+                    data: {
+                        labels: d.dates,
+                        datasets: [{
+                            label: "Runs per Day",
+                            data: d.counts,
+                            borderColor: "blue",
+                            fill: false
+                        }]
+                    }
+                })
+            })
+
+        fetch('/pipeline-trend')
+            .then(r => r.json())
+            .then(d => {
+                new Chart(document.getElementById('trendChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: d.pipelines,
+                        datasets: [
+                            { label: "PASS", data: d.pass, backgroundColor: "green" },
+                            { label: "FAIL", data: d.fail, backgroundColor: "red" }
+                        ]
+                    }
+                })
+            })
+    </script>
+
+
+    <!-- Pagination Logic -->
+    <script>
+        let page = 1;
+        const rowsPerPage = 20;
+
+        function renderPage() {
+            const rows = [...document.querySelectorAll("#resultsBody tr")];
+            rows.forEach((row, i) => {
+                row.style.display = (i >= (page - 1) * rowsPerPage && i < page * rowsPerPage)
+                    ? "table-row"
+                    : "none";
+            });
+            document.getElementById("pageNum").innerText = page;
+        }
+
+        function nextPage() {
+            page++;
+            renderPage();
+        }
+
+        function prevPage() {
+            if (page > 1) page--;
+            renderPage();
+        }
+
+        renderPage();
+    </script>
+
+
+    <!-- Modal + AJAX Fetch -->
+    <script>
+        function viewPipeline(name) {
+            fetch("/get_pipeline?name=" + name)
+                .then(r => r.json())
+                .then(d => {
+                    document.getElementById("pipelineContent").textContent = d.yaml;
+                    document.getElementById("pipelineModal").style.display = "flex";
+                });
+        }
+
+        function closeModal() {
+            document.getElementById("pipelineModal").style.display = "none";
+        }
+    </script>
+
+
+    <!-- WebSocket Live Updates -->
+    <script>
+        const ws = new WebSocket("ws://" + window.location.host + "/ws");
+
+        ws.onmessage = function (event) {
+            const update = JSON.parse(event.data);
+
+            // Prepend new result row
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${update.pipeline}</td>
+                <td>${update.step}</td>
+                <td style="color:${update.status === 'PASS' ? 'green' : 'red'}">${update.status}</td>
+                <td>${update.message}</td>
+                <td>${update.timestamp}</td>
+                <td><button onclick="viewPipeline('${update.pipeline}')">View</button></td>
+            `;
+            const tbody = document.getElementById("resultsBody");
+            tbody.insertBefore(row, tbody.firstChild);
+
+            renderPage();
+        };
+    </script>
+
+</body>
+
+</html>

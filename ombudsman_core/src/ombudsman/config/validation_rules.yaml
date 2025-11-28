@@ -1,0 +1,47 @@
+validations:
+
+  # ----------------------
+  # METRIC VALIDATIONS
+  # ----------------------
+  - name: total_revenue_match
+    type: metric
+    description: Total revenue should match in fact_1
+    sql_server_query: "SELECT SUM(amount) FROM fact_1;"
+    snowflake_query: "SELECT SUM(amount) FROM fact_1;"
+    tolerance_pct: 0.5
+
+  - name: rowcount_fact_1
+    type: metric
+    description: Fact table rowcounts should match
+    sql_server_query: "SELECT COUNT(*) FROM fact_1;"
+    snowflake_query: "SELECT COUNT(*) FROM fact_1;"
+    tolerance_abs: 2
+
+  - name: dim_1_unique_ids
+    type: metric
+    description: Distinct dim_1 id count match
+    sql_server_query: "SELECT COUNT(DISTINCT dim_1_id) FROM dim_1;"
+    snowflake_query: "SELECT COUNT(DISTINCT dim_1_id) FROM dim_1;"
+    tolerance_abs: 0
+
+  # ----------------------
+  # RULE VALIDATIONS
+  # ----------------------
+  - name: fact_without_dim
+    type: rule
+    description: No fact rows should reference missing dimension values
+    query: |
+      SELECT f.fact_1_id
+      FROM fact_1 f
+      LEFT JOIN dim_1 d ON f.dim_1_id = d.dim_1_id
+      WHERE d.dim_1_id IS NULL;
+    error_if_rows: true
+
+  - name: amount_positive
+    type: rule
+    description: Amount must always be >= 0
+    query: |
+      SELECT fact_1_id
+      FROM fact_1
+      WHERE amount < 0;
+    error_if_rows: true

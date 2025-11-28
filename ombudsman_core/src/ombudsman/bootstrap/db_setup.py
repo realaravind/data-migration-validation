@@ -1,0 +1,23 @@
+def initialize_snowflake_tables(conn):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS OMBUDSMAN_RESULTS (
+        ID INTEGER AUTOINCREMENT PRIMARY KEY,
+        PIPELINE_NAME STRING,
+        STEP_NAME STRING,
+        STATUS STRING,
+        MESSAGE STRING,
+        RUN_TIMESTAMP TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS OMBUDSMAN_PIPELINES (
+        ID INTEGER AUTOINCREMENT PRIMARY KEY,
+        NAME STRING,
+        YAML_CONTENT STRING,
+        UPLOADED_BY STRING,
+        UPLOADED_AT TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    """)

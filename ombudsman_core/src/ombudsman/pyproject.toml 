@@ -1,0 +1,20 @@
+[project]
+name = "ombudsman"
+version = "0.1.0"
+description = "Cross-system data validation and quality assurance framework"
+authors = [{ name = "Your Name" }]
+requires-python = ">=3.9"
+dependencies = [
+    "pyodbc",
+    "snowflake-connector-python",
+    "pyyaml",
+    "scipy",
+    "numpy",
+]
+
+[project.scripts]
+ombudsman = "ombudsman.cli.main:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"

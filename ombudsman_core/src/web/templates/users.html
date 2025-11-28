@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family:Arial; padding:20px">
+
+<h1>User Administration</h1>
+<a href="/">← Back to Dashboard</a>
+
+<h2>Users</h2>
+<table border="1" cellpadding="6">
+<tr><th>Username</th><th>Role</th><th>Actions</th></tr>
+
+{% for u in users %}
+<tr>
+    <td>{{ u[0] }}</td>
+    <td>{{ u[1] }}</td>
+    <td>
+        <form action="/users/delete" method="post" style="display:inline;">
+            <input type="hidden" name="username" value="{{ u[0] }}">
+            <button>Delete</button>
+        </form>
+
+        <form action="/users/role" method="post" style="display:inline;">
+            <input type="hidden" name="username" value="{{ u[0] }}">
+            <select name="role">
+                <option value="viewer" {% if u[1]=='viewer' %}selected{% endif %}>viewer</option>
+                <option value="operator" {% if u[1]=='operator' %}selected{% endif %}>operator</option>
+                <option value="admin" {% if u[1]=='admin' %}selected{% endif %}>admin</option>
+            </select>
+            <button>Change</button>
+        </form>
+    </td>
+</tr>
+{% endfor %}
+</table>
+
+<h2>Add User</h2>
+<form action="/users/add" method="post">
+    <label>Username:</label>
+    <input name="username">
+
+    <label>Password:</label>
+    <input type="password" name="password">
+
+    <label>Role:</label>
+    <select name="role">
+        <option value="viewer">viewer</option>
+        <option value="operator">operator</option>
+        <option value="admin">admin</option>
+    </select>
+
+    <button>Add User</button>
+</form>
+
+</body>
+</html>

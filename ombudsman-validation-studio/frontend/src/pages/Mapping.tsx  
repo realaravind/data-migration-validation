@@ -1,0 +1,163 @@
+import { useState, useEffect } from "react";
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Grid,
+  List,
+  ListItem,
+  ListItemText,
+  Button,
+  Divider,
+  TextField
+} from "@mui/material";
+
+export default function Mapping() {
+  const [sourceCols, setSourceCols] = useState<string[]>([]);
+  const [targetCols, setTargetCols] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<any>({});
+  const [manualMap, setManualMap] = useState<any>({});
+  const [finalMap, setFinalMap] = useState<any>({});
+
+  useEffect(() => {
+    const schema = JSON.parse(localStorage.getItem("schema") || "{}");
+    setSourceCols(schema.source || []);
+    setTargetCols(schema.target || []);
+    loadMapping();
+  }, []);
+
+  const runSuggestions = async () => {
+    const res = await fetch("/mapping/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: sourceCols,
+        target: targetCols
+      })
+    });
+    const data = await res.json();
+    setSuggestions(data);
+  };
+
+  const acceptSuggestion = (src: string) => {
+    const suggested = suggestions[src]?.match || "";
+    setFinalMap((prev: any) => ({ ...prev, [src]: suggested }));
+  };
+
+  const handleManualChange = (src: string, value: string) => {
+    setFinalMap((prev: any) => ({ ...prev, [src]: value }));
+    setManualMap((prev: any) => ({ ...prev, [src]: value }));
+  };
+
+  const saveMapping = async () => {
+    await fetch("/mapping/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mapping: finalMap })
+    });
+    alert("Mapping Saved");
+  };
+
+  const loadMapping = async () => {
+    try {
+      const res = await fetch("/mapping/load", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      setFinalMap(data);
+    } catch (_) {
+      // File may not exist yet
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="h4" mb={3}>Mapping</Typography>
+
+      <Grid container spacing={3}>
+
+        {/* LEFT SIDE: SOURCE */}
+        <Grid item xs={12} md={5}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6">Source Columns</Typography>
+              <List>
+                {sourceCols.map((col) => (
+                  <ListItem key={col}>
+                    <ListItemText primary={col} />
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* CENTER BUTTONS */}
+        <Grid item xs={12} md={2}>
+          <Box textAlign="center" mt={10}>
+            <Button variant="contained" onClick={runSuggestions}>
+              Auto‑Map
+            </Button>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Button variant="contained" color="success" onClick={saveMapping}>
+              Save Mapping
+            </Button>
+
+            <Button sx={{ mt: 2 }} onClick={loadMapping}>
+              Load Mapping
+            </Button>
+          </Box>
+        </Grid>
+
+        {/* RIGHT SIDE: TARGET & MAPPING */}
+        <Grid item xs={12} md={5}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6">Target Mapping</Typography>
+
+              {sourceCols.map((src) => {
+                const sugg = suggestions[src]?.match;
+                const score = suggestions[src]?.score;
+
+                return (
+                  <Box key={src} sx={{ mb: 3 }}>
+                    <Typography fontWeight={600}>{src}</Typography>
+
+                    <TextField
+                      fullWidth
+                      placeholder="Type or accept suggestion"
+                      value={finalMap[src] || ""}
+                      onChange={(e) =>
+                        handleManualChange(src, e.target.value)
+                      }
+                      sx={{ mt: 1 }}
+                    />
+
+                    {sugg && (
+                      <Box mt={1} display="flex" justifyContent="space-between">
+                        <Typography fontSize={12} color="gray">
+                          Suggestion: {sugg} (score: {score})
+                        </Typography>
+                        <Button
+                          size="small"
+                          onClick={() => acceptSuggestion(src)}
+                        >
+                          Accept
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+}
