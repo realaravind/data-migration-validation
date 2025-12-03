@@ -84,7 +84,11 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
         for col in request.columns:
             col_name = col.get('name', '')
             # Support both 'type' and 'data_type' field names
-            col_type = (col.get('data_type') or col.get('type', '')).lower()
+            col_type = col.get('data_type') or col.get('type') or ''
+            # Ensure col_type is a string, handle if it's not
+            if not isinstance(col_type, str):
+                col_type = str(col_type) if col_type else ''
+            col_type = col_type.lower()
 
             # Identify numeric columns (metrics)
             # Support both SQL Server types (int, decimal, numeric, float, money) and Snowflake types (NUMBER)
