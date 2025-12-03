@@ -1,106 +1,235 @@
 #!/usr/bin/env python3
 """
-Advanced Sample Data Generator
+Enhanced Sample Data Generator with realistic schemas
 
-Creates synthetic dimensional & fact models with:
-- Configurable number of dimensions and facts
-- Configurable row counts
-- Optional broken foreign keys (for testing)
-- Random but deterministic sample data
-- Runs on SQL Server or Snowflake Emulator
+Features:
+- Generates proper DATE dimension with calendar attributes
+- Uses realistic table/column names
+- Supports predefined schema templates
+- Configurable via env variables or schema definition
 """
 
 import os
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 import pyodbc
 import snowflake.connector
+import yaml
 
 
 # -----------------------------------------------------------
-# CONFIGURATION VIA ENV VARIABLES
+# SCHEMA TEMPLATES
 # -----------------------------------------------------------
 
-MODE = os.getenv("SAMPLE_SOURCE", "").lower()
-
-NUM_DIMENSIONS = int(os.getenv("SAMPLE_DIM_COUNT", "3"))
-NUM_FACTS = int(os.getenv("SAMPLE_FACT_COUNT", "2"))
-ROWS_PER_DIM = int(os.getenv("SAMPLE_DIM_ROWS", "50"))
-ROWS_PER_FACT = int(os.getenv("SAMPLE_FACT_ROWS", "200"))
-
-BROKEN_FK_RATE = float(os.getenv("BROKEN_FK_RATE", "0.05"))  # 5% broken FK rows
-random.seed(int(os.getenv("SAMPLE_SEED", "12345")))
-
-
-# -----------------------------------------------------------
-# UTILITY FUNCTIONS
-# -----------------------------------------------------------
-
-def random_string(n=8):
-    return ''.join(random.choice(string.ascii_letters) for _ in range(n))
-
-
-def random_date():
-    start = datetime(2020, 1, 1)
-    end = datetime(2024, 12, 31)
-    delta = end - start
-    return (start + timedelta(days=random.randint(0, delta.days))).date()
-
-
-# -----------------------------------------------------------
-# DATA MODEL GENERATION
-# -----------------------------------------------------------
-
-def generate_dimensions():
-    dims = {}
-    for i in range(1, NUM_DIMENSIONS + 1):
-        name = f"dim_{i}"
-        dims[name] = []
-
-        for row_id in range(1, ROWS_PER_DIM + 1):
-            dims[name].append({
-                "id": row_id,
-                "attr1": random_string(6),
-                "attr2": random_string(10)
-            })
-
-    return dims
-
-
-def generate_facts(dims):
-    facts = {}
-    dim_names = list(dims.keys())
-
-    for i in range(1, NUM_FACTS + 1):
-        name = f"fact_{i}"
-        facts[name] = []
-
-        for row_id in range(1, ROWS_PER_FACT + 1):
-            row = {
-                "id": row_id,
-                "amount": round(random.uniform(5, 5000), 2),
-                "event_date": random_date(),
+SCHEMA_TEMPLATES = {
+    "retail": {
+        "dimensions": {
+            "dim_customer": {
+                "pk": "customer_key",
+                "columns": {
+                    "customer_id": "VARCHAR(50)",
+                    "customer_name": "VARCHAR(100)",
+                    "email": "VARCHAR(100)",
+                    "segment": "VARCHAR(20)",
+                    "region": "VARCHAR(50)"
+                },
+                "sample_data": lambda: {
+                    "customer_id": f"CUST{random.randint(1000, 9999)}",
+                    "customer_name": f"{random.choice(['Alice', 'Bob', 'Charlie', 'Diana', 'Eve'])} {random.choice(['Smith', 'Johnson', 'Williams', 'Brown'])}",
+                    "email": f"user{random.randint(1, 999)}@example.com",
+                    "segment": random.choice(['Gold', 'Silver', 'Bronze']),
+                    "region": random.choice(['North', 'South', 'East', 'West'])
+                }
+            },
+            "dim_product": {
+                "pk": "product_key",
+                "columns": {
+                    "product_id": "VARCHAR(50)",
+                    "product_name": "VARCHAR(200)",
+                    "category": "VARCHAR(50)",
+                    "subcategory": "VARCHAR(50)",
+                    "unit_price": "DECIMAL(10,2)"
+                },
+                "sample_data": lambda: {
+                    "product_id": f"PROD{random.randint(1000, 9999)}",
+                    "product_name": f"{random.choice(['Widget', 'Gadget', 'Device', 'Tool'])} {random.choice(['Pro', 'Ultra', 'Plus', 'Max'])}",
+                    "category": random.choice(['Electronics', 'Clothing', 'Food', 'Books']),
+                    "subcategory": random.choice(['Premium', 'Standard', 'Economy']),
+                    "unit_price": round(random.uniform(9.99, 999.99), 2)
+                }
+            },
+            "dim_store": {
+                "pk": "store_key",
+                "columns": {
+                    "store_id": "VARCHAR(20)",
+                    "store_name": "VARCHAR(100)",
+                    "city": "VARCHAR(50)",
+                    "state": "VARCHAR(2)",
+                    "store_type": "VARCHAR(20)"
+                },
+                "sample_data": lambda: {
+                    "store_id": f"STR{random.randint(100, 999)}",
+                    "store_name": f"Store #{random.randint(1, 999)}",
+                    "city": random.choice(['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix']),
+                    "state": random.choice(['NY', 'CA', 'IL', 'TX', 'AZ']),
+                    "store_type": random.choice(['Flagship', 'Standard', 'Outlet'])
+                }
             }
+        },
+        "facts": {
+            "fact_sales": {
+                "pk": "sales_key",
+                "dimensions": ["dim_customer", "dim_product", "dim_store", "dim_date"],
+                "metrics": {
+                    "quantity": "INT",
+                    "unit_price": "DECIMAL(10,2)",
+                    "discount_amount": "DECIMAL(10,2)",
+                    "sales_amount": "DECIMAL(12,2)",
+                    "cost_amount": "DECIMAL(12,2)"
+                },
+                "sample_data": lambda: {
+                    "quantity": random.randint(1, 10),
+                    "unit_price": round(random.uniform(10, 500), 2),
+                    "discount_amount": round(random.uniform(0, 50), 2),
+                    "sales_amount": lambda q, up, da: round(q * up - da, 2),
+                    "cost_amount": lambda q, up, da: round((q * up - da) * 0.6, 2)
+                }
+            }
+        }
+    }
+}
 
-            # FK references to all dimensions
-            for dim in dim_names:
-                if random.random() < BROKEN_FK_RATE:
-                    row[f"{dim}_id"] = random.randint(99999, 199999)
+
+# -----------------------------------------------------------
+# DATE DIMENSION GENERATOR
+# -----------------------------------------------------------
+
+def generate_date_dimension(start_date: date, end_date: date):
+    """Generate a complete date dimension with calendar attributes"""
+    dates = []
+    current = start_date
+    date_key = 1
+
+    while current <= end_date:
+        dates.append({
+            "date_key": date_key,
+            "date": current,
+            "year": current.year,
+            "quarter": (current.month - 1) // 3 + 1,
+            "month": current.month,
+            "month_name": current.strftime("%B"),
+            "week": current.isocalendar()[1],
+            "day_of_month": current.day,
+            "day_of_week": current.isoweekday(),
+            "day_name": current.strftime("%A"),
+            "is_weekend": 1 if current.isoweekday() >= 6 else 0,
+            "is_holiday": 0,  # Could be enhanced with holiday logic
+            "fiscal_year": current.year if current.month >= 7 else current.year - 1,
+            "fiscal_quarter": ((current.month + 5) % 12) // 3 + 1
+        })
+        current += timedelta(days=1)
+        date_key += 1
+
+    return dates
+
+
+# -----------------------------------------------------------
+# ENHANCED DATA GENERATION
+# -----------------------------------------------------------
+
+def generate_schema_data(schema_name="retail",
+                        rows_per_dim=100,
+                        rows_per_fact=1000,
+                        start_date=None,
+                        end_date=None,
+                        broken_fk_rate=0.0):
+    """
+    Generate data based on schema template
+
+    Args:
+        schema_name: Name of schema template to use
+        rows_per_dim: Number of rows per dimension
+        rows_per_fact: Number of rows per fact table
+        start_date: Start date for date dimension
+        end_date: End date for date dimension
+        broken_fk_rate: Percentage of broken foreign keys (for testing)
+    """
+    if schema_name not in SCHEMA_TEMPLATES:
+        raise ValueError(f"Unknown schema: {schema_name}")
+
+    schema = SCHEMA_TEMPLATES[schema_name]
+
+    # Default date range: 2020-2024
+    if not start_date:
+        start_date = date(2020, 1, 1)
+    if not end_date:
+        end_date = date(2024, 12, 31)
+
+    data = {
+        "dimensions": {},
+        "facts": {}
+    }
+
+    # Generate date dimension
+    print("Generating date dimension...")
+    data["dimensions"]["dim_date"] = generate_date_dimension(start_date, end_date)
+
+    # Generate other dimensions
+    for dim_name, dim_def in schema["dimensions"].items():
+        print(f"Generating {dim_name}...")
+        dim_data = []
+        for i in range(1, rows_per_dim + 1):
+            row = {dim_def["pk"]: i}
+            row.update(dim_def["sample_data"]())
+            dim_data.append(row)
+        data["dimensions"][dim_name] = dim_data
+
+    # Generate facts
+    for fact_name, fact_def in schema["facts"].items():
+        print(f"Generating {fact_name}...")
+        fact_data = []
+        date_keys = [d["date_key"] for d in data["dimensions"]["dim_date"]]
+
+        for i in range(1, rows_per_fact + 1):
+            row = {fact_def["pk"]: i}
+
+            # Add dimension foreign keys
+            for dim in fact_def["dimensions"]:
+                fk_col = f"{dim}_key"
+                if dim == "dim_date":
+                    # Always valid date key
+                    row[fk_col] = random.choice(date_keys)
+                elif random.random() < broken_fk_rate:
+                    # Broken FK for testing
+                    row[fk_col] = random.randint(99999, 199999)
                 else:
-                    row[f"{dim}_id"] = random.randint(1, ROWS_PER_DIM)
+                    # Valid FK
+                    row[fk_col] = random.randint(1, rows_per_dim)
 
-            facts[name].append(row)
+            # Add metrics
+            metric_sample = fact_def["sample_data"]()
+            for metric_name, metric_value in metric_sample.items():
+                if callable(metric_value):
+                    # Computed metric (e.g., sales_amount = quantity * unit_price - discount)
+                    row[metric_name] = metric_value(*[row.get(k, 0) for k in ['quantity', 'unit_price', 'discount_amount']])
+                else:
+                    row[metric_name] = metric_value
 
-    return facts
+            fact_data.append(row)
+
+        data["facts"][fact_name] = fact_data
+
+    return data, schema
 
 
 # -----------------------------------------------------------
-# SQL SERVER IMPLEMENTATION
+# DATABASE LOADERS
 # -----------------------------------------------------------
 
-def load_sqlserver(dims, facts):
+def load_to_sqlserver(data, schema_def):
+    """Load generated data to SQL Server"""
     conn_str = os.getenv("SQLSERVER_CONN_STR")
     if not conn_str:
         raise Exception("SQLSERVER_CONN_STR not set")
@@ -111,110 +240,223 @@ def load_sqlserver(dims, facts):
     cursor.execute("IF DB_ID('SampleDW') IS NULL CREATE DATABASE SampleDW;")
     cursor.execute("USE SampleDW;")
 
-    # Dimensions
-    for dim in dims:
-        cursor.execute(f"""
-            IF OBJECT_ID('dbo.{dim}') IS NOT NULL DROP TABLE dbo.{dim};
-            CREATE TABLE dbo.{dim}(
-                {dim}_id INT PRIMARY KEY,
-                attr1 NVARCHAR(100),
-                attr2 NVARCHAR(100)
-            );
-        """)
+    # Create schemas
+    print("Creating schemas...")
+    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'DIM') EXEC('CREATE SCHEMA DIM');")
+    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'FACT') EXEC('CREATE SCHEMA FACT');")
 
-        for row in dims[dim]:
-            cursor.execute(
-                f"INSERT INTO dbo.{dim} VALUES (?, ?, ?);",
-                row["id"], row["attr1"], row["attr2"]
-            )
+    # Drop existing tables (facts first)
+    print("Dropping existing tables...")
+    for fact_name in data["facts"]:
+        cursor.execute(f"IF OBJECT_ID('FACT.{fact_name}') IS NOT NULL DROP TABLE FACT.{fact_name};")
 
-    # Facts
-    for fact in facts:
-        dim_cols = ", ".join([f"{dim}_id INT" for dim in dims])
-        fk_constraints = ", ".join(
-            [f"FOREIGN KEY ({dim}_id) REFERENCES dbo.{dim}({dim}_id)" for dim in dims]
-        )
+    for dim_name in data["dimensions"]:
+        cursor.execute(f"IF OBJECT_ID('DIM.{dim_name}') IS NOT NULL DROP TABLE DIM.{dim_name};")
 
-        cursor.execute(f"""
-            IF OBJECT_ID('dbo.{fact}') IS NOT NULL DROP TABLE dbo.{fact};
-            CREATE TABLE dbo.{fact}(
-                {fact}_id INT PRIMARY KEY,
-                amount DECIMAL(18,2),
-                event_date DATE,
-                {dim_cols},
-                {fk_constraints}
-            );
-        """)
+    # Create and populate date dimension
+    print("Creating dim_date...")
+    cursor.execute("""
+        CREATE TABLE DIM.dim_date(
+            date_key INT PRIMARY KEY,
+            date DATE,
+            year INT,
+            quarter INT,
+            month INT,
+            month_name VARCHAR(20),
+            week INT,
+            day_of_month INT,
+            day_of_week INT,
+            day_name VARCHAR(20),
+            is_weekend INT,
+            is_holiday INT,
+            fiscal_year INT,
+            fiscal_quarter INT
+        );
+    """)
 
-        for row in facts[fact]:
-            values = [row["id"], row["amount"], row["event_date"]] + \
-                     [row[f"{dim}_id"] for dim in dims]
+    for row in data["dimensions"]["dim_date"]:
+        cursor.execute("""
+            INSERT INTO DIM.dim_date VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, (
+            row["date_key"], row["date"], row["year"], row["quarter"], row["month"],
+            row["month_name"], row["week"], row["day_of_month"], row["day_of_week"],
+            row["day_name"], row["is_weekend"], row["is_holiday"], row["fiscal_year"],
+            row["fiscal_quarter"]
+        ))
 
+    # Create other dimensions
+    for dim_name, dim_data in data["dimensions"].items():
+        if dim_name == "dim_date":
+            continue
+
+        dim_def = schema_def["dimensions"][dim_name]
+        columns = []
+        for col_name, col_type in dim_def["columns"].items():
+            # Convert to SQL Server types
+            sql_type = col_type.replace("VARCHAR", "NVARCHAR")
+            columns.append(f"{col_name} {sql_type}")
+
+        pk_col = dim_def["pk"]
+        columns_str = f"{pk_col} INT PRIMARY KEY, " + ", ".join(columns)
+
+        print(f"Creating {dim_name}...")
+        cursor.execute(f"CREATE TABLE DIM.{dim_name}({columns_str});")
+
+        for row in dim_data:
+            cols = [pk_col] + list(dim_def["columns"].keys())
+            values = [row[c] for c in cols]
             placeholders = ", ".join(["?"] * len(values))
-            cursor.execute(f"INSERT INTO dbo.{fact} VALUES ({placeholders});", values)
+            cursor.execute(f"INSERT INTO DIM.{dim_name} VALUES ({placeholders});", values)
 
-    print("SQL Server sample data loaded.")
+    # Create fact tables
+    for fact_name, fact_data in data["facts"].items():
+        fact_def = schema_def["facts"][fact_name]
+        pk_col = fact_def["pk"]
+
+        # Build column list
+        columns = [f"{pk_col} INT PRIMARY KEY"]
+
+        # Add dimension FK columns
+        for dim in fact_def["dimensions"]:
+            columns.append(f"{dim}_key INT")
+
+        # Add metric columns
+        for metric_name, metric_type in fact_def["metrics"].items():
+            sql_type = metric_type.replace("VARCHAR", "NVARCHAR")
+            columns.append(f"{metric_name} {sql_type}")
+
+        columns_str = ", ".join(columns)
+
+        print(f"Creating {fact_name}...")
+        cursor.execute(f"CREATE TABLE FACT.{fact_name}({columns_str});")
+
+        for row in fact_data:
+            cols = [pk_col] + [f"{d}_key" for d in fact_def["dimensions"]] + list(fact_def["metrics"].keys())
+            values = [row[c] for c in cols]
+            placeholders = ", ".join(["?"] * len(values))
+            cursor.execute(f"INSERT INTO FACT.{fact_name} VALUES ({placeholders});", values)
+
+    print("SQL Server data load complete!")
 
 
-# -----------------------------------------------------------
-# SNOWFLAKE IMPLEMENTATION
-# -----------------------------------------------------------
-
-def load_snowflake(dims, facts):
+def load_to_snowflake(data, schema_def):
+    """Load generated data to Snowflake"""
     conn = snowflake.connector.connect(
         user=os.getenv("SNOWFLAKE_USER"),
         password=os.getenv("SNOWFLAKE_PASSWORD"),
         account=os.getenv("SNOWFLAKE_ACCOUNT"),
+        warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+        role=os.getenv("SNOWFLAKE_ROLE"),
     )
     cursor = conn.cursor()
 
     db = os.getenv("SNOWFLAKE_DATABASE", "SAMPLEDW")
-    schema = os.getenv("SNOWFLAKE_SCHEMA", "PUBLIC")
 
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
-    cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {db}.{schema}")
     cursor.execute(f"USE DATABASE {db}")
-    cursor.execute(f"USE SCHEMA {schema}")
 
-    # Dimensions
-    for dim in dims:
-        cursor.execute(f"DROP TABLE IF EXISTS {dim}")
-        cursor.execute(f"""
-            CREATE TABLE {dim}(
-                {dim}_id INT,
-                attr1 STRING,
-                attr2 STRING
-            );
-        """)
+    # Create schemas
+    print("Creating schemas...")
+    cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {db}.DIM")
+    cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {db}.FACT")
 
-        for row in dims[dim]:
-            cursor.execute(
-                f"INSERT INTO {dim} VALUES (?, ?, ?);",
-                (row["id"], row["attr1"], row["attr2"])
-            )
+    # Drop existing tables
+    print("Dropping existing tables...")
+    for fact_name in data["facts"]:
+        cursor.execute(f"DROP TABLE IF EXISTS {db}.FACT.{fact_name}")
 
-    # Facts
-    for fact in facts:
-        dim_cols = ", ".join([f"{dim}_id INT" for dim in dims])
+    for dim_name in data["dimensions"]:
+        cursor.execute(f"DROP TABLE IF EXISTS {db}.DIM.{dim_name}")
 
-        cursor.execute(f"DROP TABLE IF EXISTS {fact}")
-        cursor.execute(f"""
-            CREATE TABLE {fact}(
-                {fact}_id INT,
-                amount NUMBER(18,2),
-                event_date DATE,
-                {dim_cols}
-            );
-        """)
+    # Create date dimension
+    print("Creating dim_date...")
+    cursor.execute(f"""
+        CREATE TABLE {db}.DIM.dim_date(
+            date_key INT,
+            date DATE,
+            year INT,
+            quarter INT,
+            month INT,
+            month_name STRING,
+            week INT,
+            day_of_month INT,
+            day_of_week INT,
+            day_name STRING,
+            is_weekend INT,
+            is_holiday INT,
+            fiscal_year INT,
+            fiscal_quarter INT
+        );
+    """)
 
-        for row in facts[fact]:
-            values = [row["id"], row["amount"], row["event_date"]] + \
-                     [row[f"{dim}_id"] for dim in dims]
+    # Batch insert for dim_date
+    print(f"Inserting {len(data['dimensions']['dim_date'])} rows into dim_date...")
+    date_values = [
+        (row["date_key"], row["date"], row["year"], row["quarter"], row["month"],
+         row["month_name"], row["week"], row["day_of_month"], row["day_of_week"],
+         row["day_name"], row["is_weekend"], row["is_holiday"], row["fiscal_year"],
+         row["fiscal_quarter"])
+        for row in data["dimensions"]["dim_date"]
+    ]
+    cursor.executemany(f"""
+        INSERT INTO {db}.DIM.dim_date VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, date_values)
 
-            placeholders = ", ".join(["?"] * len(values))
-            cursor.execute(f"INSERT INTO {fact} VALUES ({placeholders});", values)
+    # Create other dimensions
+    for dim_name, dim_data in data["dimensions"].items():
+        if dim_name == "dim_date":
+            continue
 
-    print("Snowflake sample data loaded.")
+        dim_def = schema_def["dimensions"][dim_name]
+        columns = []
+        for col_name, col_type in dim_def["columns"].items():
+            # Convert to Snowflake types
+            snow_type = col_type.replace("DECIMAL", "NUMBER").replace("VARCHAR", "STRING").replace("NVARCHAR", "STRING")
+            columns.append(f"{col_name} {snow_type}")
+
+        pk_col = dim_def["pk"]
+        columns_str = f"{pk_col} INT, " + ", ".join(columns)
+
+        print(f"Creating {dim_name}...")
+        cursor.execute(f"CREATE TABLE {db}.DIM.{dim_name}({columns_str});")
+
+        # Batch insert for dimension
+        print(f"Inserting {len(dim_data)} rows into {dim_name}...")
+        cols = [pk_col] + list(dim_def["columns"].keys())
+        dim_values = [tuple(row[c] for c in cols) for row in dim_data]
+        placeholders = ", ".join(["%s"] * len(cols))
+        cursor.executemany(f"INSERT INTO {db}.DIM.{dim_name} VALUES ({placeholders})", dim_values)
+
+    # Create fact tables
+    for fact_name, fact_data in data["facts"].items():
+        fact_def = schema_def["facts"][fact_name]
+        pk_col = fact_def["pk"]
+
+        # Build column list
+        columns = [f"{pk_col} INT"]
+
+        # Add dimension FK columns
+        for dim in fact_def["dimensions"]:
+            columns.append(f"{dim}_key INT")
+
+        # Add metric columns
+        for metric_name, metric_type in fact_def["metrics"].items():
+            snow_type = metric_type.replace("DECIMAL", "NUMBER").replace("VARCHAR", "STRING")
+            columns.append(f"{metric_name} {snow_type}")
+
+        columns_str = ", ".join(columns)
+
+        print(f"Creating {fact_name}...")
+        cursor.execute(f"CREATE TABLE {db}.FACT.{fact_name}({columns_str});")
+
+        # Batch insert for fact table
+        print(f"Inserting {len(fact_data)} rows into {fact_name}...")
+        cols = [pk_col] + [f"{d}_key" for d in fact_def["dimensions"]] + list(fact_def["metrics"].keys())
+        fact_values = [tuple(row[c] for c in cols) for row in fact_data]
+        placeholders = ", ".join(["%s"] * len(cols))
+        cursor.executemany(f"INSERT INTO {db}.FACT.{fact_name} VALUES ({placeholders})", fact_values)
+
+    print("Snowflake data load complete!")
 
 
 # -----------------------------------------------------------
@@ -222,17 +464,30 @@ def load_snowflake(dims, facts):
 # -----------------------------------------------------------
 
 def main():
-    if MODE not in ("sqlserver", "snowflake"):
-        raise Exception("SAMPLE_SOURCE must be 'sqlserver' or 'snowflake'")
+    mode = os.getenv("SAMPLE_SOURCE", "sqlserver").lower()
+    schema_name = os.getenv("SAMPLE_SCHEMA", "retail")
+    rows_per_dim = int(os.getenv("SAMPLE_DIM_ROWS", "100"))
+    rows_per_fact = int(os.getenv("SAMPLE_FACT_ROWS", "1000"))
+    broken_fk_rate = float(os.getenv("BROKEN_FK_RATE", "0.0"))
 
-    print("Generating synthetic schema...")
-    dims = generate_dimensions()
-    facts = generate_facts(dims)
+    # Generate data
+    data, schema_def = generate_schema_data(
+        schema_name=schema_name,
+        rows_per_dim=rows_per_dim,
+        rows_per_fact=rows_per_fact,
+        broken_fk_rate=broken_fk_rate
+    )
 
-    if MODE == "sqlserver":
-        load_sqlserver(dims, facts)
+    # Load to target
+    if mode == "sqlserver":
+        load_to_sqlserver(data, schema_def)
+    elif mode == "snowflake":
+        load_to_snowflake(data, schema_def)
+    elif mode == "both":
+        load_to_sqlserver(data, schema_def)
+        load_to_snowflake(data, schema_def)
     else:
-        load_snowflake(dims, facts)
+        raise ValueError(f"Unknown mode: {mode}")
 
 
 if __name__ == "__main__":

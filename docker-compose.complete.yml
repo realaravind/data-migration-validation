@@ -1,0 +1,134 @@
+# =============================================================================
+# Complete Docker Compose - Ombudsman Core + Validation Studio
+# =============================================================================
+# This includes:
+# 1. SQL Server with sample data
+# 2. Ombudsman Core Web App (original, port 5000)
+# 3. Validation Studio Backend (new, port 8000)
+# 4. Validation Studio Frontend (new, port 3000)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # SQL Server (Azure SQL Edge for ARM64)
+  # ---------------------------------------------------------------------------
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    container_name: sqlserver
+    platform: linux/arm64
+    env_file:
+      - ./ombudsman_core/.env
+    environment:
+      - ACCEPT_EULA=1
+      - MSSQL_SA_PASSWORD=YourStrong!Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    networks:
+      - ovs-net
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/opt/mssql/log/errorlog || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Ombudsman Core - Original Web Application
+  # ---------------------------------------------------------------------------
+  ombudsman-core:
+    build:
+      context: ./ombudsman_core
+      dockerfile: Dockerfile
+    container_name: ombudsman-core-app
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./ombudsman_core/src:/app/src
+      - ./ombudsman_core/pipelines:/app/pipelines
+      - ./ombudsman_core/config:/app/config
+    env_file:
+      - ./ombudsman_core/.env
+    environment:
+      PYTHONPATH: "/app/src"
+      PYTHONUNBUFFERED: "1"
+    networks:
+      - ovs-net
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    # Override entrypoint and run custom startup
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "
+      echo 'Installing dependencies...' &&
+      pip install fastapi uvicorn jinja2 python-multipart pyodbc snowflake-connector-python starlette-session &&
+      echo 'Starting Ombudsman Core Web App on port 5000...' &&
+      cd /app/src &&
+      uvicorn web.app:app --host 0.0.0.0 --port 5000 --reload
+      "
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Validation Studio Backend (New API)
+  # ---------------------------------------------------------------------------
+  studio-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.unified
+    container_name: studio-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ombudsman_core:/core
+      - ./ombudsman-validation-studio/backend:/app
+    env_file:
+      - ./ombudsman_core/.env
+    environment:
+      PYTHONPATH: "/app:/core/src"
+      PYTHONUNBUFFERED: "1"
+    networks:
+      - ovs-net
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Validation Studio Frontend (React)
+  # ---------------------------------------------------------------------------
+  studio-frontend:
+    build:
+      context: ./ombudsman-validation-studio/frontend
+      dockerfile: Dockerfile.dev
+    container_name: studio-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./ombudsman-validation-studio/frontend:/app
+      - /app/node_modules
+    networks:
+      - ovs-net
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://studio-backend:8000
+      - VITE_CORE_API_URL=http://ombudsman-core:5001
+    depends_on:
+      studio-backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  ovs-net:
+    driver: bridge
+
+volumes:
+  sql_data:

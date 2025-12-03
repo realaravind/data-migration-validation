@@ -1,0 +1,103 @@
+snow:
+  DIM.DIM_CUSTOMER:
+    CUSTOMER_ID: VARCHAR
+    CUSTOMER_KEY: NUMBER
+    CUSTOMER_NAME: VARCHAR
+    EMAIL: VARCHAR
+    REGION: VARCHAR
+    SEGMENT: VARCHAR
+  DIM.DIM_DATE:
+    DATE: DATE
+    DATE_KEY: NUMBER
+    DAY_NAME: VARCHAR
+    DAY_OF_MONTH: NUMBER
+    DAY_OF_WEEK: NUMBER
+    FISCAL_QUARTER: NUMBER
+    FISCAL_YEAR: NUMBER
+    IS_HOLIDAY: NUMBER
+    IS_WEEKEND: NUMBER
+    MONTH: NUMBER
+    MONTH_NAME: VARCHAR
+    QUARTER: NUMBER
+    WEEK: NUMBER
+    YEAR: NUMBER
+  DIM.DIM_PRODUCT:
+    CATEGORY: VARCHAR
+    PRODUCT_ID: VARCHAR
+    PRODUCT_KEY: NUMBER
+    PRODUCT_NAME: VARCHAR
+    SUBCATEGORY: VARCHAR
+    UNIT_PRICE: NUMBER
+  DIM.DIM_STORE:
+    CITY: VARCHAR
+    STATE: VARCHAR
+    STORE_ID: VARCHAR
+    STORE_KEY: NUMBER
+    STORE_NAME: VARCHAR
+    STORE_TYPE: VARCHAR
+  FACT.FACT_SALES:
+    COST_AMOUNT: NUMBER
+    DIM_CUSTOMER_KEY: NUMBER
+    DIM_DATE_KEY: NUMBER
+    DIM_PRODUCT_KEY: NUMBER
+    DIM_STORE_KEY: NUMBER
+    DISCOUNT_AMOUNT: NUMBER
+    QUANTITY: NUMBER
+    SALES_AMOUNT: NUMBER
+    SALES_KEY: NUMBER
+    UNIT_PRICE: NUMBER
+  FACT.OMBUDSMAN_RESULTS:
+    ID: NUMBER
+    MESSAGE: VARCHAR
+    PIPELINE_NAME: VARCHAR
+    RUN_TIMESTAMP: TIMESTAMP_LTZ
+    STATUS: VARCHAR
+    STEP_NAME: VARCHAR
+sql:
+  DIM.dim_customer:
+    customer_id: NVARCHAR(50)
+    customer_key: INT
+    customer_name: NVARCHAR(100)
+    email: NVARCHAR(100)
+    region: NVARCHAR(50)
+    segment: NVARCHAR(20)
+  DIM.dim_date:
+    date: DATE
+    date_key: INT
+    day_name: VARCHAR(20)
+    day_of_month: INT
+    day_of_week: INT
+    fiscal_quarter: INT
+    fiscal_year: INT
+    is_holiday: INT
+    is_weekend: INT
+    month: INT
+    month_name: VARCHAR(20)
+    quarter: INT
+    week: INT
+    year: INT
+  DIM.dim_product:
+    category: NVARCHAR(50)
+    product_id: NVARCHAR(50)
+    product_key: INT
+    product_name: NVARCHAR(200)
+    subcategory: NVARCHAR(50)
+    unit_price: DECIMAL(10,2)
+  DIM.dim_store:
+    city: NVARCHAR(50)
+    state: NVARCHAR(2)
+    store_id: NVARCHAR(20)
+    store_key: INT
+    store_name: NVARCHAR(100)
+    store_type: NVARCHAR(20)
+  FACT.fact_sales:
+    cost_amount: DECIMAL(12,2)
+    dim_customer_key: INT
+    dim_date_key: INT
+    dim_product_key: INT
+    dim_store_key: INT
+    discount_amount: DECIMAL(10,2)
+    quantity: INT
+    sales_amount: DECIMAL(12,2)
+    sales_key: INT
+    unit_price: DECIMAL(10,2)

@@ -1,0 +1,56 @@
+relationships:
+- fact_table: FACT.fact_sales
+  fk_column: dim_customer_key
+  dim_table: DIM.dim_customer
+  dim_column: customer_key
+  confidence: high
+  confidence_score: 0.9571428571428571
+  method: name_pattern
+- fact_table: FACT.fact_sales
+  fk_column: dim_date_key
+  dim_table: DIM.dim_date
+  dim_column: date_key
+  confidence: high
+  confidence_score: 0.94
+  method: name_pattern
+- fact_table: FACT.fact_sales
+  fk_column: dim_product_key
+  dim_table: DIM.dim_product
+  dim_column: product_key
+  confidence: high
+  confidence_score: 0.9538461538461538
+  method: name_pattern
+- fact_table: FACT.fact_sales
+  fk_column: dim_store_key
+  dim_table: DIM.dim_store
+  dim_column: store_key
+  confidence: high
+  confidence_score: 0.9454545454545455
+  method: name_pattern
+metrics:
+  total_relationships: 4
+  high_confidence: 4
+  medium_confidence: 0
+  low_confidence: 0
+  fact_tables_analyzed: 1
+  dimension_tables_referenced: 4
+  source_db_label: SQL Server
+  target_db_label: Snowflake
+diagram: "erDiagram\n    dim_customer {\n        NVARCHAR50 customer_id\n        INT\
+  \ customer_key\n        NVARCHAR100 customer_name\n        NVARCHAR100 email\n \
+  \       NVARCHAR50 region\n        NVARCHAR20 segment\n    }\n    dim_date {\n \
+  \       DATE date\n        INT date_key\n        VARCHAR20 day_name\n        INT\
+  \ day_of_month\n        INT day_of_week\n        INT fiscal_quarter\n        INT\
+  \ fiscal_year\n        INT is_holiday\n        string more_columns_6\n    }\n  \
+  \  dim_product {\n        NVARCHAR50 category\n        NVARCHAR50 product_id\n \
+  \       INT product_key\n        NVARCHAR200 product_name\n        NVARCHAR50 subcategory\n\
+  \        DECIMAL102 unit_price\n    }\n    dim_store {\n        NVARCHAR50 city\n\
+  \        NVARCHAR2 state\n        NVARCHAR20 store_id\n        INT store_key\n \
+  \       NVARCHAR100 store_name\n        NVARCHAR20 store_type\n    }\n    fact_sales\
+  \ {\n        DECIMAL122 cost_amount\n        INT dim_customer_key\n        INT dim_date_key\n\
+  \        INT dim_product_key\n        INT dim_store_key\n        DECIMAL102 discount_amount\n\
+  \        INT quantity\n        DECIMAL122 sales_amount\n        string more_columns_2\n\
+  \    }\n    dim_product ||--o{ dim_product : product_id\n    dim_product ||--o{\
+  \ dim_product : product_key\n    dim_customer ||--o{ fact_sales : dim_customer_key\n\
+  \    dim_date ||--o{ fact_sales : dim_date_key\n    dim_product ||--o{ fact_sales\
+  \ : dim_product_key\n    dim_store ||--o{ fact_sales : dim_store_key"

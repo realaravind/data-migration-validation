@@ -1,0 +1,272 @@
+[
+  {
+    "query_id": 1,
+    "raw_text": "SELECT COUNT(*) FROM dim.DIM_CUSTOMER",
+    "stats": {
+      "total_executions": 1250,
+      "avg_duration": 45.3,
+      "last_execution_time": "2024-12-01T10:30:00"
+    }
+  },
+  {
+    "query_id": 2,
+    "raw_text": "SELECT COUNT(*) FROM dim.DIM_PRODUCT",
+    "stats": {
+      "total_executions": 980,
+      "avg_duration": 38.7,
+      "last_execution_time": "2024-12-01T11:15:00"
+    }
+  },
+  {
+    "query_id": 3,
+    "raw_text": "SELECT COUNT(*) FROM fact.FACT_SALES",
+    "stats": {
+      "total_executions": 2100,
+      "avg_duration": 125.5,
+      "last_execution_time": "2024-12-01T12:00:00"
+    }
+  },
+  {
+    "query_id": 4,
+    "raw_text": "SELECT CustomerID, CustomerName, Email FROM dim.DIM_CUSTOMER WHERE CustomerID = 12345",
+    "stats": {
+      "total_executions": 850,
+      "avg_duration": 12.3,
+      "last_execution_time": "2024-12-01T09:45:00"
+    }
+  },
+  {
+    "query_id": 5,
+    "raw_text": "SELECT ProductID, ProductName, Category, Price FROM dim.DIM_PRODUCT WHERE Category = 'Electronics'",
+    "stats": {
+      "total_executions": 1420,
+      "avg_duration": 45.8,
+      "last_execution_time": "2024-12-01T10:20:00"
+    }
+  },
+  {
+    "query_id": 6,
+    "raw_text": "SELECT ProductID, ProductName FROM dim.DIM_PRODUCT WHERE ProductName LIKE '%Laptop%'",
+    "stats": {
+      "total_executions": 675,
+      "avg_duration": 78.2,
+      "last_execution_time": "2024-12-01T11:30:00"
+    }
+  },
+  {
+    "query_id": 7,
+    "raw_text": "SELECT SaleID, CustomerID, ProductID, Quantity, TotalAmount FROM fact.FACT_SALES WHERE CustomerID = 12345",
+    "stats": {
+      "total_executions": 920,
+      "avg_duration": 35.6,
+      "last_execution_time": "2024-12-01T13:15:00"
+    }
+  },
+  {
+    "query_id": 8,
+    "raw_text": "SELECT ProductID, SUM(Quantity) as TotalQuantity, SUM(TotalAmount) as TotalRevenue FROM fact.FACT_SALES GROUP BY ProductID",
+    "stats": {
+      "total_executions": 1580,
+      "avg_duration": 234.7,
+      "last_execution_time": "2024-12-01T14:00:00"
+    }
+  },
+  {
+    "query_id": 9,
+    "raw_text": "SELECT c.CustomerID, c.CustomerName, s.SaleID, s.TotalAmount FROM dim.DIM_CUSTOMER c INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID",
+    "stats": {
+      "total_executions": 2450,
+      "avg_duration": 456.3,
+      "last_execution_time": "2024-12-01T15:30:00"
+    }
+  },
+  {
+    "query_id": 10,
+    "raw_text": "SELECT p.ProductID, p.ProductName, s.SaleID, s.Quantity, s.TotalAmount FROM dim.DIM_PRODUCT p INNER JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID",
+    "stats": {
+      "total_executions": 3200,
+      "avg_duration": 523.8,
+      "last_execution_time": "2024-12-01T16:00:00"
+    }
+  },
+  {
+    "query_id": 11,
+    "raw_text": "SELECT SaleDate, SUM(TotalAmount) as DailyRevenue FROM fact.FACT_SALES GROUP BY SaleDate ORDER BY SaleDate",
+    "stats": {
+      "total_executions": 1890,
+      "avg_duration": 312.5,
+      "last_execution_time": "2024-12-01T17:00:00"
+    }
+  },
+  {
+    "query_id": 12,
+    "raw_text": "SELECT * FROM fact.FACT_SALES WHERE SaleDate BETWEEN '2024-01-01' AND '2024-12-31'",
+    "stats": {
+      "total_executions": 2340,
+      "avg_duration": 567.9,
+      "last_execution_time": "2024-12-01T18:00:00"
+    }
+  },
+  {
+    "query_id": 13,
+    "raw_text": "SELECT TOP 10 ProductID, SUM(TotalAmount) as Revenue FROM fact.FACT_SALES GROUP BY ProductID ORDER BY Revenue DESC",
+    "stats": {
+      "total_executions": 1120,
+      "avg_duration": 278.4,
+      "last_execution_time": "2024-12-01T19:00:00"
+    }
+  },
+  {
+    "query_id": 14,
+    "raw_text": "SELECT c.CustomerName, COUNT(s.SaleID) as OrderCount, SUM(s.TotalAmount) as TotalSpent FROM dim.DIM_CUSTOMER c LEFT JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID GROUP BY c.CustomerID, c.CustomerName",
+    "stats": {
+      "total_executions": 1650,
+      "avg_duration": 689.2,
+      "last_execution_time": "2024-12-01T20:00:00"
+    }
+  },
+  {
+    "query_id": 15,
+    "raw_text": "SELECT AVG(TotalAmount) as AvgSale, MIN(TotalAmount) as MinSale, MAX(TotalAmount) as MaxSale FROM fact.FACT_SALES",
+    "stats": {
+      "total_executions": 890,
+      "avg_duration": 145.6,
+      "last_execution_time": "2024-12-01T21:00:00"
+    }
+  },
+  {
+    "query_id": 16,
+    "raw_text": "SELECT p.Category, COUNT(DISTINCT s.CustomerID) as UniqueCustomers FROM dim.DIM_PRODUCT p INNER JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID GROUP BY p.Category",
+    "stats": {
+      "total_executions": 1340,
+      "avg_duration": 456.8,
+      "last_execution_time": "2024-12-01T22:00:00"
+    }
+  },
+  {
+    "query_id": 17,
+    "raw_text": "SELECT CustomerID, COUNT(*) as PurchaseCount FROM fact.FACT_SALES GROUP BY CustomerID HAVING COUNT(*) > 5",
+    "stats": {
+      "total_executions": 780,
+      "avg_duration": 198.3,
+      "last_execution_time": "2024-12-01T08:00:00"
+    }
+  },
+  {
+    "query_id": 18,
+    "raw_text": "SELECT YEAR(SaleDate) as Year, MONTH(SaleDate) as Month, SUM(TotalAmount) as MonthlyRevenue FROM fact.FACT_SALES GROUP BY YEAR(SaleDate), MONTH(SaleDate) ORDER BY Year, Month",
+    "stats": {
+      "total_executions": 1450,
+      "avg_duration": 378.9,
+      "last_execution_time": "2024-12-01T07:30:00"
+    }
+  },
+  {
+    "query_id": 19,
+    "raw_text": "SELECT c.CustomerID, c.CustomerName, c.City FROM dim.DIM_CUSTOMER c WHERE c.City IN ('New York', 'Los Angeles', 'Chicago')",
+    "stats": {
+      "total_executions": 1120,
+      "avg_duration": 56.7,
+      "last_execution_time": "2024-12-01T06:45:00"
+    }
+  },
+  {
+    "query_id": 20,
+    "raw_text": "SELECT p.ProductID, p.ProductName, p.Price FROM dim.DIM_PRODUCT p WHERE p.Price BETWEEN 100 AND 500 ORDER BY p.Price",
+    "stats": {
+      "total_executions": 945,
+      "avg_duration": 67.4,
+      "last_execution_time": "2024-12-01T05:30:00"
+    }
+  },
+  {
+    "query_id": 21,
+    "raw_text": "SELECT c.CustomerID, c.CustomerName, p.ProductName, s.TotalAmount FROM dim.DIM_CUSTOMER c INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID INNER JOIN dim.DIM_PRODUCT p ON s.ProductID = p.ProductID WHERE s.TotalAmount > 1000",
+    "stats": {
+      "total_executions": 2890,
+      "avg_duration": 789.5,
+      "last_execution_time": "2024-12-01T04:15:00"
+    }
+  },
+  {
+    "query_id": 22,
+    "raw_text": "SELECT DISTINCT CustomerID FROM fact.FACT_SALES",
+    "stats": {
+      "total_executions": 1560,
+      "avg_duration": 234.6,
+      "last_execution_time": "2024-12-01T03:00:00"
+    }
+  },
+  {
+    "query_id": 23,
+    "raw_text": "SELECT ProductID, Quantity FROM fact.FACT_SALES WHERE Quantity > 10 ORDER BY Quantity DESC",
+    "stats": {
+      "total_executions": 1230,
+      "avg_duration": 178.3,
+      "last_execution_time": "2024-12-01T02:30:00"
+    }
+  },
+  {
+    "query_id": 24,
+    "raw_text": "SELECT c.CustomerName, SUM(s.TotalAmount) as TotalSpent FROM dim.DIM_CUSTOMER c INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID WHERE c.City = 'New York' GROUP BY c.CustomerID, c.CustomerName",
+    "stats": {
+      "total_executions": 1680,
+      "avg_duration": 445.7,
+      "last_execution_time": "2024-12-01T01:15:00"
+    }
+  },
+  {
+    "query_id": 25,
+    "raw_text": "SELECT p.Category, AVG(s.Quantity) as AvgQuantity, SUM(s.TotalAmount) as CategoryRevenue FROM dim.DIM_PRODUCT p INNER JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID GROUP BY p.Category ORDER BY CategoryRevenue DESC",
+    "stats": {
+      "total_executions": 2150,
+      "avg_duration": 567.8,
+      "last_execution_time": "2024-12-01T00:00:00"
+    }
+  },
+  {
+    "query_id": 26,
+    "raw_text": "SELECT COUNT(DISTINCT ProductID) as UniqueProducts, COUNT(DISTINCT CustomerID) as UniqueCustomers FROM fact.FACT_SALES",
+    "stats": {
+      "total_executions": 1340,
+      "avg_duration": 267.4,
+      "last_execution_time": "2024-11-30T23:00:00"
+    }
+  },
+  {
+    "query_id": 27,
+    "raw_text": "SELECT c.Email FROM dim.DIM_CUSTOMER c WHERE c.Email IS NOT NULL",
+    "stats": {
+      "total_executions": 890,
+      "avg_duration": 45.2,
+      "last_execution_time": "2024-11-30T22:00:00"
+    }
+  },
+  {
+    "query_id": 28,
+    "raw_text": "SELECT SaleDate, COUNT(*) as TransactionCount FROM fact.FACT_SALES WHERE SaleDate >= DATEADD(day, -30, GETDATE()) GROUP BY SaleDate ORDER BY SaleDate DESC",
+    "stats": {
+      "total_executions": 1780,
+      "avg_duration": 345.6,
+      "last_execution_time": "2024-11-30T21:00:00"
+    }
+  },
+  {
+    "query_id": 29,
+    "raw_text": "SELECT p.ProductID, p.ProductName, ISNULL(SUM(s.Quantity), 0) as TotalSold FROM dim.DIM_PRODUCT p LEFT JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID GROUP BY p.ProductID, p.ProductName",
+    "stats": {
+      "total_executions": 1450,
+      "avg_duration": 523.9,
+      "last_execution_time": "2024-11-30T20:00:00"
+    }
+  },
+  {
+    "query_id": 30,
+    "raw_text": "SELECT CustomerID, TotalAmount FROM fact.FACT_SALES WHERE TotalAmount = (SELECT MAX(TotalAmount) FROM fact.FACT_SALES)",
+    "stats": {
+      "total_executions": 670,
+      "avg_duration": 189.7,
+      "last_execution_time": "2024-11-30T19:00:00"
+    }
+  }
+]

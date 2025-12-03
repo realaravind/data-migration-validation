@@ -1,0 +1,28 @@
+# =============================================================================
+# All-in-One Docker Compose - Single Container for Everything
+# =============================================================================
+
+services:
+  ombudsman-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile.all-in-one
+    ports:
+      - "8000:8000" # Backend API
+      - "3000:3000" # Frontend
+    environment:
+      PYTHONPATH: "/app:/core/src"
+      PYTHONUNBUFFERED: "1"
+    networks:
+      - ovs-net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  ovs-net:
+    driver: bridge

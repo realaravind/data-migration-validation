@@ -1,0 +1,56 @@
+metadata:
+  name: FACT_SALES_workload_validation
+  description: Workload-based validations for FACT_SALES
+  generated_from: workload_wl_20251201_235708_da1e16dc
+  project_id: default_project
+  created_at: '2025-12-02T00:02:49.690589'
+  validation_count: 3
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: ${SQL_SCHEMA}
+  table: FACT_SALES
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: ${SNOWFLAKE_SCHEMA}
+  table: FACT_SALES
+validations:
+- name: validation_1_validate_composite_keys
+  type: time_series
+  description: Columns frequently grouped together (2 columns)
+  confidence: 75.0
+  enabled: true
+  validator: time_series_check
+  config:
+    columns:
+    - YEAR(SaleDate)
+    - StoreID
+    checks:
+    - continuity
+    - range
+    - distribution
+- name: validation_2_validate_cardinality
+  type: cardinality
+  description: Column used in GROUP BY of 1 queries (likely categorical/dimension
+    key)
+  confidence: 59.0
+  enabled: true
+  validator: cardinality_check
+  config:
+    columns:
+    - YEAR(SaleDate)
+    check_type: unique_count
+    tolerance: 0.02
+- name: validation_3_validate_cardinality
+  type: cardinality
+  description: Column used in GROUP BY of 1 queries (likely categorical/dimension
+    key)
+  confidence: 59.0
+  enabled: true
+  validator: cardinality_check
+  config:
+    columns:
+    - StoreID
+    check_type: unique_count
+    tolerance: 0.02

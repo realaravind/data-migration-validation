@@ -1,0 +1,75 @@
+metadata:
+  name: fact_inventory_comparative_validation
+  description: Comparative validations from Query Store for fact.fact_inventory
+  generated_from: workload_wl_20251202_003150_4673cc89
+  project_id: default_project
+  created_at: '2025-12-02T00:31:53.378144'
+  validation_count: 3
+  validation_type: comparative
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: fact
+  table: fact_inventory
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: FACT
+  table: FACT_INVENTORY
+validations:
+- name: comparative_validation_1_query_5
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    5)'
+  enabled: true
+  config:
+    sql_server_query: SELECT COUNT(*) FROM fact.FACT_INVENTORY
+    snowflake_query: SELECT COUNT(*) FROMFACT.FACT_INVENTORY
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 5
+    total_executions: 1450
+    avg_duration_ms: 98.2
+    last_execution_time: '2024-12-01T12:30:00'
+- name: comparative_validation_2_query_25
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    25)'
+  enabled: true
+  config:
+    sql_server_query: SELECT ProductID, SUM(QuantityOnHand) FROM fact.FACT_INVENTORY
+      GROUP BY ProductID
+    snowflake_query: SELECT ProductID, SUM(QuantityOnHand) FROMFACT.FACT_INVENTORY
+      GROUP BY ProductID
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 25
+    total_executions: 720
+    avg_duration_ms: 123.4
+    last_execution_time: '2024-12-01T22:30:00'
+- name: comparative_validation_3_query_26
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    26)'
+  enabled: true
+  config:
+    sql_server_query: SELECT * FROM fact.FACT_INVENTORY WHERE QuantityOnHand < 10
+    snowflake_query: SELECT * FROMFACT.FACT_INVENTORY WHERE QuantityOnHand < 10
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 26
+    total_executions: 640
+    avg_duration_ms: 98.7
+    last_execution_time: '2024-12-01T23:00:00'

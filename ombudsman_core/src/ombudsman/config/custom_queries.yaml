@@ -1,0 +1,33 @@
+# User-Defined Custom Query Validations
+# Copy examples from custom_query_examples.yaml and modify for your specific needs
+#
+# Configuration Format:
+# - name: "Descriptive name for the query"
+#   comparison_type: "aggregation|rowset|count"
+#   tolerance: 0.01  # Numeric tolerance for comparisons (optional, default 0.01)
+#   limit: 100       # Row limit for rowset comparisons (optional)
+#   sql_query: |
+#     Your SQL Server query here...
+#   snow_query: |
+#     Your Snowflake query here...
+
+# Add your custom queries below:
+
+# Example: Validate total sales for a specific date range
+- name: "Total Sales Last Month"
+  comparison_type: "aggregation"
+  tolerance: 0.01
+  sql_query: |
+    SELECT
+      SUM(Amount) as TotalSales,
+      COUNT(*) as OrderCount,
+      AVG(Amount) as AvgOrderValue
+    FROM fact.Sales
+    WHERE OrderDate >= DATEADD(MONTH, -1, GETDATE())
+  snow_query: |
+    SELECT
+      SUM(Amount) as TotalSales,
+      COUNT(*) as OrderCount,
+      AVG(Amount) as AvgOrderValue
+    FROM FACT.SALES
+    WHERE OrderDate >= DATEADD(MONTH, -1, CURRENT_DATE())

@@ -1,0 +1,31 @@
+pipeline:
+  name: "Test Comparison Viewer"
+  description: "Test pipeline to verify comparison viewer"
+  type: "custom_sql"
+
+  source:
+    connection: "${SQLSERVER_CONNECTION}"
+    database: "${SQL_DATABASE}"
+
+  target:
+    connection: "${SNOWFLAKE_CONNECTION}"
+    database: "${SNOWFLAKE_DATABASE}"
+
+  steps:
+    - name: "test_row_count"
+      type: "custom_sql"
+      description: "Test COUNT query"
+      sql_query: "SELECT COUNT(*) FROM DIM.DIM_STORE"
+      snowflake_query: "SELECT COUNT(*) FROM DIM.DIM_STORE"
+      compare_mode: "result_set"
+
+    - name: "test_top_10_rows"
+      type: "custom_sql"
+      description: "Test multi-row comparison"
+      sql_query: "SELECT TOP 10 STORE_KEY, STORE_NAME, CITY FROM DIM.DIM_STORE ORDER BY STORE_KEY"
+      snowflake_query: "SELECT STORE_KEY, STORE_NAME, CITY FROM DIM.DIM_STORE ORDER BY STORE_KEY LIMIT 10"
+      compare_mode: "result_set"
+
+execution:
+  write_results_to: "results/"
+  fail_on_error: false

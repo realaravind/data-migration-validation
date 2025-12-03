@@ -1,16 +1,18 @@
 # src/ombudsman/validation/dimensions/validate_scd1.py
+from ombudsman.validation.sql_utils import escape_sql_server_identifier, escape_snowflake_identifier
 
 def validate_scd1(sql_conn, snow_conn, dim, mapping, metadata):
-    sql_table = mapping[dim]["sql"]
-    snow_table = mapping[dim]["snow"]
+    sql_table = escape_sql_server_identifier(mapping[dim]["sql"])
+    snow_table = escape_snowflake_identifier(mapping[dim]["snow"])
 
     bk = metadata[dim]["business_key"]
     attrs = metadata[dim]["scd1_attributes"]
 
-    col_list = ", ".join([bk] + attrs)
+    sql_col_list = ", ".join([f"[{bk}]"] + [f"[{a}]" for a in attrs])
+    snow_col_list = ", ".join([bk] + attrs)
 
-    sql_rows = {r[0]: r[1:] for r in sql_conn.fetch_many(f"SELECT {col_list} FROM {sql_table}")}
-    snow_rows = {r[0]: r[1:] for r in snow_conn.fetch_many(f"SELECT {col_list} FROM {snow_table}")}
+    sql_rows = {r[0]: r[1:] for r in sql_conn.fetch_many(f"SELECT {sql_col_list} FROM {sql_table}")}
+    snow_rows = {r[0]: r[1:] for r in snow_conn.fetch_many(f"SELECT {snow_col_list} FROM {snow_table}")}
 
     diffs = []
 

@@ -1,0 +1,19 @@
+fact_sales:
+  sql_name: FACT.fact_sales
+  snow_name: FACT.FACT_SALES
+
+dim_customer:
+  sql_name: DIM.dim_customer
+  snow_name: DIM.DIM_CUSTOMER
+
+dim_product:
+  sql_name: DIM.dim_product
+  snow_name: DIM.DIM_PRODUCT
+
+dim_store:
+  sql_name: DIM.dim_store
+  snow_name: DIM.DIM_STORE
+
+dim_date:
+  sql_name: DIM.dim_date
+  snow_name: DIM.DIM_DATE

@@ -1,0 +1,197 @@
+dim.dim_1:
+  mappings:
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_1_id
+    target: DIM_1_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: attr1
+    target: ATTR1
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: attr2
+    target: ATTR2
+  stats:
+    mapped: 3
+    mapping_percentage: 100.0
+    total_source: 3
+    total_target: 3
+    unmatched_source_count: 0
+    unmatched_target_count: 0
+  target_table: dim.DIM_1
+  unmatched_source: []
+  unmatched_target: []
+dim.dim_2:
+  mappings:
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_2_id
+    target: DIM_2_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: attr1
+    target: ATTR1
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: attr2
+    target: ATTR2
+  stats:
+    mapped: 3
+    mapping_percentage: 100.0
+    total_source: 3
+    total_target: 3
+    unmatched_source_count: 0
+    unmatched_target_count: 0
+  target_table: dim.DIM_2
+  unmatched_source: []
+  unmatched_target: []
+dim.dim_3:
+  mappings:
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_3_id
+    target: DIM_3_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: attr1
+    target: ATTR1
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: attr2
+    target: ATTR2
+  stats:
+    mapped: 3
+    mapping_percentage: 100.0
+    total_source: 3
+    total_target: 3
+    unmatched_source_count: 0
+    unmatched_target_count: 0
+  target_table: dim.DIM_3
+  unmatched_source: []
+  unmatched_target: []
+fact.fact_1:
+  mappings:
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: fact_1_id
+    target: FACT_1_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: amount
+    target: AMOUNT
+  - auto_mapped: true
+    confidence: 100.0
+    is_exact_match: true
+    source: event_date
+    target: EVENT_DATE
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_1_id
+    target: FACT_1_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_2_id
+    target: DIM_2_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_3_id
+    target: DIM_3_ID
+  - auto_mapped: true
+    confidence: 70.67
+    is_exact_match: false
+    source: dim_4_id
+    target: FACT_1_ID
+  - auto_mapped: true
+    confidence: 70.67
+    is_exact_match: false
+    source: dim_5_id
+    target: FACT_1_ID
+  - auto_mapped: true
+    confidence: 70.67
+    is_exact_match: false
+    source: dim_6_id
+    target: FACT_1_ID
+  stats:
+    mapped: 9
+    mapping_percentage: 100.0
+    total_source: 9
+    total_target: 6
+    unmatched_source_count: 0
+    unmatched_target_count: 1
+  target_table: fact.FACT_1
+  unmatched_source: []
+  unmatched_target:
+  - DIM_1_ID
+fact.fact_2:
+  mappings:
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: fact_2_id
+    target: FACT_2_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: amount
+    target: AMOUNT
+  - auto_mapped: true
+    confidence: 100.0
+    is_exact_match: true
+    source: event_date
+    target: EVENT_DATE
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_1_id
+    target: DIM_1_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_2_id
+    target: FACT_2_ID
+  - auto_mapped: true
+    confidence: 94.0
+    is_exact_match: false
+    source: dim_3_id
+    target: DIM_3_ID
+  - auto_mapped: true
+    confidence: 70.67
+    is_exact_match: false
+    source: dim_4_id
+    target: FACT_2_ID
+  - auto_mapped: true
+    confidence: 70.67
+    is_exact_match: false
+    source: dim_5_id
+    target: FACT_2_ID
+  - auto_mapped: true
+    confidence: 70.67
+    is_exact_match: false
+    source: dim_6_id
+    target: FACT_2_ID
+  stats:
+    mapped: 9
+    mapping_percentage: 100.0
+    total_source: 9
+    total_target: 6
+    unmatched_source_count: 0
+    unmatched_target_count: 1
+  target_table: fact.FACT_2
+  unmatched_source: []
+  unmatched_target:
+  - DIM_2_ID

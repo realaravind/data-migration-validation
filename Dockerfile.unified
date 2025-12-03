@@ -1,0 +1,75 @@
+# =============================================================================
+# Unified Dockerfile for Ombudsman Validation Studio Backend
+# Builds both ombudsman_core and studio backend in a single image
+# =============================================================================
+
+FROM python:3.11-slim AS base
+
+# Install system dependencies needed for both core and studio
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    make \
+    zip \
+    git \
+    curl \
+    gnupg \
+    default-libmysqlclient-dev \
+    unixodbc \
+    unixodbc-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Microsoft SQL Server ODBC driver (18)
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/microsoft.gpg && \
+    curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && ACCEPT_EULA=Y apt-get install -y \
+    msodbcsql18 mssql-tools18 && \
+    echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc && \
+    rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+# Stage 1: Build ombudsman_core
+# =============================================================================
+FROM base AS core-builder
+
+WORKDIR /core
+
+# Copy ombudsman_core source
+COPY ombudsman_core/ .
+
+# Install core as editable package
+RUN pip install --upgrade pip && \
+    pip install -e .
+
+# =============================================================================
+# Stage 2: Build studio backend
+# =============================================================================
+FROM base AS studio-builder
+
+# Copy installed core from previous stage
+COPY --from=core-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=core-builder /core /core
+
+WORKDIR /app
+
+# Copy studio backend requirements and install
+COPY ombudsman-validation-studio/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy studio backend source
+COPY ombudsman-validation-studio/backend/ .
+
+# Set Python path to include both core and studio
+ENV PYTHONPATH="/app:/core/src"
+ENV PYTHONUNBUFFERED=1
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,36 @@
+pipeline:
+  name: Business Rules / Metrics Validation Pipeline
+  description: Validates fact data and business rules between SQL Server and Snowflake databases
+  type: business
+  category: business_logic
+
+  source:
+    connection: "${SQLSERVER_CONNECTION}"
+    database: "${SQL_DATABASE}"
+    schema: "${SQL_SCHEMA}"
+    table: "${SOURCE_TABLE}"
+
+  target:
+    connection: "${SNOWFLAKE_CONNECTION}"
+    database: "${SNOWFLAKE_DATABASE}"
+    schema: "${SNOWFLAKE_SCHEMA}"
+    table: "${TARGET_TABLE}"
+
+  steps:
+    - name: validate_metric_sums
+      config: {}
+    - name: validate_metric_averages
+      config: {}
+    - name: validate_ratios
+      config: {}
+    - name: validate_fact_dim_conformance
+      config: {}
+    - name: validate_late_arriving_facts
+      config: {}
+
+execution:
+  write_results_to: "results/business_rules/"
+  fail_on_error: false
+  notify:
+    email: []
+    slack: []

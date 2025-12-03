@@ -1,0 +1,30 @@
+pipeline:
+  name: Referential Integrity (RI) Validation Pipeline
+  description: Validates foreign keys and referential integrity consistency across SQL Server and Snowflake databases
+  type: ri
+  category: referential_integrity
+
+  source:
+    connection: "${SQLSERVER_CONNECTION}"
+    database: "${SQL_DATABASE}"
+    schema: "${SQL_SCHEMA}"
+    table: "${SOURCE_TABLE}"
+
+  target:
+    connection: "${SNOWFLAKE_CONNECTION}"
+    database: "${SNOWFLAKE_DATABASE}"
+    schema: "${SNOWFLAKE_SCHEMA}"
+    table: "${TARGET_TABLE}"
+
+  steps:
+    - name: validate_foreign_keys
+      config: {}
+    - name: validate_cross_system_fk_alignment
+      config: {}
+
+execution:
+  write_results_to: "results/referential_integrity/"
+  fail_on_error: false
+  notify:
+    email: []
+    slack: []

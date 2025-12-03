@@ -1,0 +1,59 @@
+metadata:
+  name: dim_store_comparative_validation
+  description: Comparative validations from Query Store for dim.dim_store
+  generated_from: workload_wl_20251202_010103_b2c02003
+  project_id: dw_validation
+  created_at: '2025-12-02T01:01:06.890461'
+  validation_count: 2
+  validation_type: comparative
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: dim
+  table: dim_store
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: DIM
+  table: DIM_STORE
+validations:
+- name: comparative_validation_1_query_3
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    3)'
+  enabled: true
+  config:
+    sql_server_query: SELECT COUNT(*) FROM dim.DIM_STORE
+    snowflake_query: SELECT COUNT(*) FROM DIM.DIM_STORE
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 3
+    total_executions: 850
+    avg_duration_ms: 32.1
+    last_execution_time: '2024-12-01T11:45:00'
+- name: comparative_validation_2_query_27
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    27)'
+  enabled: true
+  config:
+    sql_server_query: SELECT st.StoreName, SUM(s.TotalAmount) AS StoreRevenue FROM
+      dim.DIM_STORE st INNER JOIN fact.FACT_SALES s ON st.StoreID = s.StoreID GROUP
+      BY st.StoreName ORDER BY StoreRevenue DESC
+    snowflake_query: SELECT st.StoreName, SUM(s.TotalAmount) AS StoreRevenue FROM
+      DIM.DIM_STORE st INNER JOIN FACT.FACT_SALES s ON st.StoreID = s.StoreID GROUP
+      BY st.StoreName ORDER BY StoreRevenue DESC
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 27
+    total_executions: 810
+    avg_duration_ms: 245.3
+    last_execution_time: '2024-12-01T23:30:00'

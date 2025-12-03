@@ -1,0 +1,54 @@
+snow:
+  DIM_1:
+    ATTR1: VARCHAR
+    ATTR2: VARCHAR
+    DIM_1_ID: NUMBER
+  DIM_2:
+    ATTR1: VARCHAR
+    ATTR2: VARCHAR
+    DIM_2_ID: NUMBER
+  DIM_3:
+    ATTR1: VARCHAR
+    ATTR2: VARCHAR
+    DIM_3_ID: NUMBER
+  FACT_1:
+    AMOUNT: NUMBER
+    DIM_1_ID: NUMBER
+    DIM_2_ID: NUMBER
+    DIM_3_ID: NUMBER
+    EVENT_DATE: DATE
+    FACT_1_ID: NUMBER
+  FACT_2:
+    AMOUNT: NUMBER
+    DIM_1_ID: NUMBER
+    DIM_2_ID: NUMBER
+    DIM_3_ID: NUMBER
+    EVENT_DATE: DATE
+    FACT_2_ID: NUMBER
+sql:
+  dim_1:
+    attr1: NVARCHAR(100)
+    attr2: NVARCHAR(100)
+    dim_1_id: INT
+  dim_2:
+    attr1: NVARCHAR(100)
+    attr2: NVARCHAR(100)
+    dim_2_id: INT
+  dim_3:
+    attr1: NVARCHAR(100)
+    attr2: NVARCHAR(100)
+    dim_3_id: INT
+  fact_1:
+    amount: DECIMAL(18,2)
+    dim_1_id: INT
+    dim_2_id: INT
+    dim_3_id: INT
+    event_date: DATE
+    fact_1_id: INT
+  fact_2:
+    amount: DECIMAL(18,2)
+    dim_1_id: INT
+    dim_2_id: INT
+    dim_3_id: INT
+    event_date: DATE
+    fact_2_id: INT

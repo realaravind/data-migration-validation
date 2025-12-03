@@ -1,0 +1,57 @@
+relationships:
+- fact_table: FACT.FACT_SALES
+  fk_column: DIM_CUSTOMER_KEY
+  dim_table: DIM.DIM_CUSTOMER
+  dim_column: CUSTOMER_KEY
+  confidence: high
+  confidence_score: 0.9571428571428571
+  method: name_pattern
+- fact_table: FACT.FACT_SALES
+  fk_column: DIM_DATE_KEY
+  dim_table: DIM.DIM_DATE
+  dim_column: DATE_KEY
+  confidence: high
+  confidence_score: 0.94
+  method: name_pattern
+- fact_table: FACT.FACT_SALES
+  fk_column: DIM_PRODUCT_KEY
+  dim_table: DIM.DIM_PRODUCT
+  dim_column: PRODUCT_KEY
+  confidence: high
+  confidence_score: 0.9538461538461538
+  method: name_pattern
+- fact_table: FACT.FACT_SALES
+  fk_column: DIM_STORE_KEY
+  dim_table: DIM.DIM_STORE
+  dim_column: STORE_KEY
+  confidence: high
+  confidence_score: 0.9454545454545455
+  method: name_pattern
+metrics:
+  total_relationships: 4
+  high_confidence: 4
+  medium_confidence: 0
+  low_confidence: 0
+  fact_tables_analyzed: 1
+  dimension_tables_referenced: 4
+  source_db_label: Snowflake
+  target_db_label: Snowflake
+diagram: "erDiagram\n    DIM_CUSTOMER {\n        VARCHAR CUSTOMER_ID\n        NUMBER\
+  \ CUSTOMER_KEY\n        VARCHAR CUSTOMER_NAME\n        VARCHAR EMAIL\n        VARCHAR\
+  \ REGION\n        VARCHAR SEGMENT\n    }\n    DIM_DATE {\n        DATE DATE\n  \
+  \      NUMBER DATE_KEY\n        VARCHAR DAY_NAME\n        NUMBER DAY_OF_MONTH\n\
+  \        NUMBER DAY_OF_WEEK\n        NUMBER FISCAL_QUARTER\n        NUMBER FISCAL_YEAR\n\
+  \        NUMBER IS_HOLIDAY\n        string more_columns_6\n    }\n    DIM_PRODUCT\
+  \ {\n        VARCHAR CATEGORY\n        VARCHAR PRODUCT_ID\n        NUMBER PRODUCT_KEY\n\
+  \        VARCHAR PRODUCT_NAME\n        VARCHAR SUBCATEGORY\n        NUMBER UNIT_PRICE\n\
+  \    }\n    DIM_STORE {\n        VARCHAR CITY\n        VARCHAR STATE\n        VARCHAR\
+  \ STORE_ID\n        NUMBER STORE_KEY\n        VARCHAR STORE_NAME\n        VARCHAR\
+  \ STORE_TYPE\n    }\n    FACT_SALES {\n        NUMBER COST_AMOUNT\n        NUMBER\
+  \ DIM_CUSTOMER_KEY\n        NUMBER DIM_DATE_KEY\n        NUMBER DIM_PRODUCT_KEY\n\
+  \        NUMBER DIM_STORE_KEY\n        NUMBER DISCOUNT_AMOUNT\n        NUMBER QUANTITY\n\
+  \        NUMBER SALES_AMOUNT\n        string more_columns_2\n    }\n    OMBUDSMAN_RESULTS\
+  \ {\n        NUMBER ID\n        VARCHAR MESSAGE\n        VARCHAR PIPELINE_NAME\n\
+  \        TIMESTAMP_LTZ RUN_TIMESTAMP\n        VARCHAR STATUS\n        VARCHAR STEP_NAME\n\
+  \    }\n    DIM_CUSTOMER ||--o{ FACT_SALES : DIM_CUSTOMER_KEY\n    DIM_DATE ||--o{\
+  \ FACT_SALES : DIM_DATE_KEY\n    DIM_PRODUCT ||--o{ FACT_SALES : DIM_PRODUCT_KEY\n\
+  \    DIM_STORE ||--o{ FACT_SALES : DIM_STORE_KEY"

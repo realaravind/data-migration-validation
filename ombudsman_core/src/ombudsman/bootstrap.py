@@ -7,6 +7,21 @@ This file imports all validators and registers them automatically with the regis
 
 def register_validators(registry):
 
+    # ---- Schema Validators ----
+    from .validation.schema.validate_schema_columns import validate_schema_columns
+    from .validation.schema.validate_schema_datatypes import validate_schema_datatypes
+    from .validation.schema.validate_schema_nullability import validate_schema_nullability
+    from .validation.schema.validate_schema_constraints import validate_schema_constraints
+    from .validation.schema.validate_schema_structure import validate_schema_structure
+    from .validation.schema.validate_schema_evolution import validate_schema_evolution
+
+    registry.register("validate_schema_columns", validate_schema_columns, "schema")
+    registry.register("validate_schema_datatypes", validate_schema_datatypes, "schema")
+    registry.register("validate_schema_nullability", validate_schema_nullability, "schema")
+    registry.register("validate_schema_constraints", validate_schema_constraints, "schema")
+    registry.register("validate_schema_structure", validate_schema_structure, "schema")
+    registry.register("validate_schema_evolution", validate_schema_evolution, "schema")
+
     # ---- Data Quality Validators (Batch 4) ----
     from .validation.dq.validate_nulls import validate_nulls
     from .validation.dq.validate_uniqueness import validate_uniqueness
@@ -54,5 +69,25 @@ def register_validators(registry):
     registry.register("validate_ts_duplicates", validate_ts_duplicates, "timeseries")
     registry.register("validate_ts_rolling_drift", validate_ts_rolling_drift, "timeseries")
     registry.register("validate_period_over_period", validate_period_over_period, "timeseries")
+
+    # ---- Facts Validators ----
+    from .validation.facts.validate_fact_dim_conformance import validate_fact_dim_conformance
+    from .validation.facts.validate_late_arriving_facts import validate_late_arriving_facts
+
+    registry.register("validate_fact_dim_conformance", validate_fact_dim_conformance, "facts")
+    registry.register("validate_late_arriving_facts", validate_late_arriving_facts, "facts")
+
+    # ---- Dimensions Validators ----
+    from .validation.dimensions.validate_dim_business_keys import validate_dim_business_keys
+    from .validation.dimensions.validate_dim_surrogate_keys import validate_dim_surrogate_keys
+    from .validation.dimensions.validate_composite_keys import validate_composite_keys
+    from .validation.dimensions.validate_scd1 import validate_scd1
+    from .validation.dimensions.validate_scd2 import validate_scd2
+
+    registry.register("validate_dim_business_keys", validate_dim_business_keys, "dimensions")
+    registry.register("validate_dim_surrogate_keys", validate_dim_surrogate_keys, "dimensions")
+    registry.register("validate_composite_keys", validate_composite_keys, "dimensions")
+    registry.register("validate_scd1", validate_scd1, "dimensions")
+    registry.register("validate_scd2", validate_scd2, "dimensions")
 
     return registry

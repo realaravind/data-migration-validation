@@ -1,0 +1,36 @@
+pipeline:
+  name: Dimension Validation Pipeline
+  description: Validates dimension tables including SCD1/SCD2, surrogate keys, and business keys between SQL Server and Snowflake
+  type: dimensions
+  category: dimensional_modeling
+
+  source:
+    connection: "${SQLSERVER_CONNECTION}"
+    database: "${SQL_DATABASE}"
+    schema: "${SQL_SCHEMA}"
+    table: "${SOURCE_TABLE}"
+
+  target:
+    connection: "${SNOWFLAKE_CONNECTION}"
+    database: "${SNOWFLAKE_DATABASE}"
+    schema: "${SNOWFLAKE_SCHEMA}"
+    table: "${TARGET_TABLE}"
+
+  steps:
+    - name: validate_dim_surrogate_keys
+      config: {}
+    - name: validate_dim_business_keys
+      config: {}
+    - name: validate_composite_keys
+      config: {}
+    - name: validate_scd1
+      config: {}
+    - name: validate_scd2
+      config: {}
+
+execution:
+  write_results_to: "results/dimension_validation/"
+  fail_on_error: false
+  notify:
+    email: []
+    slack: []

@@ -1,0 +1,429 @@
+# Custom Query Examples for Business Validation
+# Copy and modify these examples to create your own custom validations
+
+# Example 1: Simple aggregation with multiple joins
+# Validates total revenue by joining sales facts with customer and product dimensions
+- name: "Total Revenue by Product Category"
+  comparison_type: "aggregation"
+  tolerance: 0.01
+  sql_query: |
+    SELECT
+      p.Category,
+      SUM(s.Amount) as TotalRevenue,
+      COUNT(DISTINCT s.CustomerID) as UniqueCustomers,
+      COUNT(*) as TotalOrders
+    FROM fact.Sales s
+    INNER JOIN dim.Product p ON s.ProductID = p.ProductID
+    GROUP BY p.Category
+    ORDER BY TotalRevenue DESC
+  snow_query: |
+    SELECT
+      p.Category,
+      SUM(s.Amount) as TotalRevenue,
+      COUNT(DISTINCT s.CustomerID) as UniqueCustomers,
+      COUNT(*) as TotalOrders
+    FROM FACT.SALES s
+    INNER JOIN DIM.PRODUCT p ON s.ProductID = p.ProductID
+    GROUP BY p.Category
+    ORDER BY TotalRevenue DESC
+
+# Example 2: Date dimension with monthly aggregation
+# Validates monthly sales trends
+- name: "Monthly Sales Summary 2024"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 12
+  sql_query: |
+    SELECT
+      d.Year,
+      d.Month,
+      d.MonthName,
+      SUM(s.Amount) as TotalSales,
+      COUNT(*) as OrderCount,
+      AVG(s.Amount) as AvgOrderValue
+    FROM fact.Sales s
+    INNER JOIN dim.Date d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+    GROUP BY d.Year, d.Month, d.MonthName
+    ORDER BY d.Year, d.Month
+  snow_query: |
+    SELECT
+      d.Year,
+      d.Month,
+      d.MonthName,
+      SUM(s.Amount) as TotalSales,
+      COUNT(*) as OrderCount,
+      AVG(s.Amount) as AvgOrderValue
+    FROM FACT.SALES s
+    INNER JOIN DIM.DATE d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+    GROUP BY d.Year, d.Month, d.MonthName
+    ORDER BY d.Year, d.Month
+
+# Example 3: Top N query (Top 5 customers)
+# Validates the top 5 customers by revenue
+- name: "Top 5 Customers by Revenue"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 5
+  sql_query: |
+    SELECT TOP 5
+      c.CustomerID,
+      c.CustomerName,
+      c.Region,
+      SUM(s.Amount) as TotalRevenue,
+      COUNT(*) as OrderCount,
+      MAX(s.OrderDate) as LastOrderDate
+    FROM fact.Sales s
+    INNER JOIN dim.Customer c ON s.CustomerID = c.CustomerID
+    GROUP BY c.CustomerID, c.CustomerName, c.Region
+    ORDER BY TotalRevenue DESC
+  snow_query: |
+    SELECT
+      c.CustomerID,
+      c.CustomerName,
+      c.Region,
+      SUM(s.Amount) as TotalRevenue,
+      COUNT(*) as OrderCount,
+      MAX(s.OrderDate) as LastOrderDate
+    FROM FACT.SALES s
+    INNER JOIN DIM.CUSTOMER c ON s.CustomerID = c.CustomerID
+    GROUP BY c.CustomerID, c.CustomerName, c.Region
+    ORDER BY TotalRevenue DESC
+    LIMIT 5
+
+# Example 4: Complex multi-table join with date filtering
+# Validates quarterly performance across multiple dimensions
+- name: "Q1 2024 Sales by Region and Product"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 100
+  sql_query: |
+    SELECT
+      c.Region,
+      p.Category,
+      p.ProductName,
+      SUM(s.Amount) as Revenue,
+      SUM(s.Quantity) as Units,
+      COUNT(DISTINCT s.CustomerID) as Customers
+    FROM fact.Sales s
+    INNER JOIN dim.Customer c ON s.CustomerID = c.CustomerID
+    INNER JOIN dim.Product p ON s.ProductID = p.ProductID
+    INNER JOIN dim.Date d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+      AND d.Quarter = 1
+    GROUP BY c.Region, p.Category, p.ProductName
+    HAVING SUM(s.Amount) > 1000
+    ORDER BY c.Region, Revenue DESC
+  snow_query: |
+    SELECT
+      c.Region,
+      p.Category,
+      p.ProductName,
+      SUM(s.Amount) as Revenue,
+      SUM(s.Quantity) as Units,
+      COUNT(DISTINCT s.CustomerID) as Customers
+    FROM FACT.SALES s
+    INNER JOIN DIM.CUSTOMER c ON s.CustomerID = c.CustomerID
+    INNER JOIN DIM.PRODUCT p ON s.ProductID = p.ProductID
+    INNER JOIN DIM.DATE d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+      AND d.Quarter = 1
+    GROUP BY c.Region, p.Category, p.ProductName
+    HAVING SUM(s.Amount) > 1000
+    ORDER BY c.Region, Revenue DESC
+
+# Example 5: Specific customer validation
+# Validates a specific customer's transaction history
+- name: "Customer 12345 Transaction History"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 50
+  sql_query: |
+    SELECT
+      s.OrderID,
+      s.OrderDate,
+      p.ProductName,
+      s.Quantity,
+      s.Amount,
+      s.Status
+    FROM fact.Sales s
+    INNER JOIN dim.Product p ON s.ProductID = p.ProductID
+    WHERE s.CustomerID = 12345
+    ORDER BY s.OrderDate DESC
+  snow_query: |
+    SELECT
+      s.OrderID,
+      s.OrderDate,
+      p.ProductName,
+      s.Quantity,
+      s.Amount,
+      s.Status
+    FROM FACT.SALES s
+    INNER JOIN DIM.PRODUCT p ON s.ProductID = p.ProductID
+    WHERE s.CustomerID = 12345
+    ORDER BY s.OrderDate DESC
+
+# Example 6: Weekly trending with rolling averages
+# Validates weekly sales trends with 4-week moving average
+- name: "Weekly Sales Trends with Moving Average"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 52
+  sql_query: |
+    SELECT
+      d.Year,
+      d.WeekOfYear,
+      SUM(s.Amount) as WeeklySales,
+      AVG(SUM(s.Amount)) OVER (
+        ORDER BY d.Year, d.WeekOfYear
+        ROWS BETWEEN 3 PRECEDING AND CURRENT ROW
+      ) as MovingAvg4Week
+    FROM fact.Sales s
+    INNER JOIN dim.Date d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+    GROUP BY d.Year, d.WeekOfYear
+    ORDER BY d.Year, d.WeekOfYear
+  snow_query: |
+    SELECT
+      d.Year,
+      d.WeekOfYear,
+      SUM(s.Amount) as WeeklySales,
+      AVG(SUM(s.Amount)) OVER (
+        ORDER BY d.Year, d.WeekOfYear
+        ROWS BETWEEN 3 PRECEDING AND CURRENT ROW
+      ) as MovingAvg4Week
+    FROM FACT.SALES s
+    INNER JOIN DIM.DATE d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+    GROUP BY d.Year, d.WeekOfYear
+    ORDER BY d.Year, d.WeekOfYear
+
+# Example 7: Count validation for complex filtering
+# Validates count of active customers with recent purchases
+- name: "Active Customers Last 90 Days Count"
+  comparison_type: "count"
+  sql_query: |
+    SELECT COUNT(DISTINCT s.CustomerID) as count
+    FROM fact.Sales s
+    WHERE s.OrderDate >= DATEADD(DAY, -90, GETDATE())
+      AND s.Status = 'Completed'
+  snow_query: |
+    SELECT COUNT(DISTINCT s.CustomerID) as count
+    FROM FACT.SALES s
+    WHERE s.OrderDate >= DATEADD(DAY, -90, CURRENT_DATE())
+      AND s.Status = 'Completed'
+
+# Example 8: Year-over-year comparison
+# Validates revenue growth by comparing 2023 vs 2024
+- name: "Revenue YoY Comparison by Month"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 12
+  sql_query: |
+    SELECT
+      d.Month,
+      d.MonthName,
+      SUM(CASE WHEN d.Year = 2023 THEN s.Amount ELSE 0 END) as Revenue2023,
+      SUM(CASE WHEN d.Year = 2024 THEN s.Amount ELSE 0 END) as Revenue2024,
+      SUM(CASE WHEN d.Year = 2024 THEN s.Amount ELSE 0 END) -
+      SUM(CASE WHEN d.Year = 2023 THEN s.Amount ELSE 0 END) as Growth
+    FROM fact.Sales s
+    INNER JOIN dim.Date d ON s.OrderDate = d.Date
+    WHERE d.Year IN (2023, 2024)
+    GROUP BY d.Month, d.MonthName
+    ORDER BY d.Month
+  snow_query: |
+    SELECT
+      d.Month,
+      d.MonthName,
+      SUM(CASE WHEN d.Year = 2023 THEN s.Amount ELSE 0 END) as Revenue2023,
+      SUM(CASE WHEN d.Year = 2024 THEN s.Amount ELSE 0 END) as Revenue2024,
+      SUM(CASE WHEN d.Year = 2024 THEN s.Amount ELSE 0 END) -
+      SUM(CASE WHEN d.Year = 2023 THEN s.Amount ELSE 0 END) as Growth
+    FROM FACT.SALES s
+    INNER JOIN DIM.DATE d ON s.OrderDate = d.Date
+    WHERE d.Year IN (2023, 2024)
+    GROUP BY d.Month, d.MonthName
+    ORDER BY d.Month
+
+# Example 9: Random sample validation
+# Validates a random sample of 100 orders for detailed comparison
+- name: "Random Sample Order Validation"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 100
+  sql_query: |
+    SELECT
+      s.OrderID,
+      s.CustomerID,
+      s.ProductID,
+      s.OrderDate,
+      s.Amount,
+      s.Quantity,
+      c.CustomerName,
+      p.ProductName
+    FROM fact.Sales s
+    INNER JOIN dim.Customer c ON s.CustomerID = c.CustomerID
+    INNER JOIN dim.Product p ON s.ProductID = p.ProductID
+    WHERE s.OrderID IN (
+      SELECT TOP 100 OrderID
+      FROM fact.Sales
+      ORDER BY NEWID()
+    )
+    ORDER BY s.OrderID
+  snow_query: |
+    SELECT
+      s.OrderID,
+      s.CustomerID,
+      s.ProductID,
+      s.OrderDate,
+      s.Amount,
+      s.Quantity,
+      c.CustomerName,
+      p.ProductName
+    FROM FACT.SALES s
+    INNER JOIN DIM.CUSTOMER c ON s.CustomerID = c.CustomerID
+    INNER JOIN DIM.PRODUCT p ON s.ProductID = p.ProductID
+    WHERE s.OrderID IN (
+      SELECT OrderID
+      FROM FACT.SALES
+      ORDER BY RANDOM()
+      LIMIT 100
+    )
+    ORDER BY s.OrderID
+
+# Example 10: Product performance metrics with ranking
+# Validates top performing products with rankings
+- name: "Product Performance Rankings"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 20
+  sql_query: |
+    SELECT TOP 20
+      p.ProductID,
+      p.ProductName,
+      p.Category,
+      SUM(s.Amount) as TotalRevenue,
+      SUM(s.Quantity) as TotalUnits,
+      COUNT(DISTINCT s.CustomerID) as UniqueCustomers,
+      RANK() OVER (ORDER BY SUM(s.Amount) DESC) as RevenueRank,
+      RANK() OVER (ORDER BY SUM(s.Quantity) DESC) as UnitRank
+    FROM fact.Sales s
+    INNER JOIN dim.Product p ON s.ProductID = p.ProductID
+    INNER JOIN dim.Date d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+    GROUP BY p.ProductID, p.ProductName, p.Category
+    ORDER BY TotalRevenue DESC
+  snow_query: |
+    SELECT
+      p.ProductID,
+      p.ProductName,
+      p.Category,
+      SUM(s.Amount) as TotalRevenue,
+      SUM(s.Quantity) as TotalUnits,
+      COUNT(DISTINCT s.CustomerID) as UniqueCustomers,
+      RANK() OVER (ORDER BY SUM(s.Amount) DESC) as RevenueRank,
+      RANK() OVER (ORDER BY SUM(s.Quantity) DESC) as UnitRank
+    FROM FACT.SALES s
+    INNER JOIN DIM.PRODUCT p ON s.ProductID = p.ProductID
+    INNER JOIN DIM.DATE d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+    GROUP BY p.ProductID, p.ProductName, p.Category
+    ORDER BY TotalRevenue DESC
+    LIMIT 20
+
+# Example 11: Customer cohort analysis
+# Validates customer segments based on purchase behavior
+- name: "Customer Segmentation by Purchase Frequency"
+  comparison_type: "aggregation"
+  tolerance: 0.01
+  sql_query: |
+    SELECT
+      CASE
+        WHEN OrderCount >= 10 THEN 'High Frequency'
+        WHEN OrderCount >= 5 THEN 'Medium Frequency'
+        ELSE 'Low Frequency'
+      END as CustomerSegment,
+      COUNT(DISTINCT CustomerID) as CustomerCount,
+      SUM(TotalRevenue) as SegmentRevenue,
+      AVG(TotalRevenue) as AvgRevenuePerCustomer
+    FROM (
+      SELECT
+        s.CustomerID,
+        COUNT(*) as OrderCount,
+        SUM(s.Amount) as TotalRevenue
+      FROM fact.Sales s
+      GROUP BY s.CustomerID
+    ) CustomerStats
+    GROUP BY
+      CASE
+        WHEN OrderCount >= 10 THEN 'High Frequency'
+        WHEN OrderCount >= 5 THEN 'Medium Frequency'
+        ELSE 'Low Frequency'
+      END
+  snow_query: |
+    SELECT
+      CASE
+        WHEN OrderCount >= 10 THEN 'High Frequency'
+        WHEN OrderCount >= 5 THEN 'Medium Frequency'
+        ELSE 'Low Frequency'
+      END as CustomerSegment,
+      COUNT(DISTINCT CustomerID) as CustomerCount,
+      SUM(TotalRevenue) as SegmentRevenue,
+      AVG(TotalRevenue) as AvgRevenuePerCustomer
+    FROM (
+      SELECT
+        s.CustomerID,
+        COUNT(*) as OrderCount,
+        SUM(s.Amount) as TotalRevenue
+      FROM FACT.SALES s
+      GROUP BY s.CustomerID
+    ) CustomerStats
+    GROUP BY
+      CASE
+        WHEN OrderCount >= 10 THEN 'High Frequency'
+        WHEN OrderCount >= 5 THEN 'Medium Frequency'
+        ELSE 'Low Frequency'
+      END
+
+# Example 12: Date range with specific dimension filters
+# Validates sales for specific regions in a date range
+- name: "Regional Sales Q4 2024 - North America Only"
+  comparison_type: "rowset"
+  tolerance: 0.01
+  limit: 50
+  sql_query: |
+    SELECT
+      c.Region,
+      c.Country,
+      d.Month,
+      d.MonthName,
+      SUM(s.Amount) as Revenue,
+      COUNT(*) as Orders,
+      AVG(s.Amount) as AvgOrderValue
+    FROM fact.Sales s
+    INNER JOIN dim.Customer c ON s.CustomerID = c.CustomerID
+    INNER JOIN dim.Date d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+      AND d.Quarter = 4
+      AND c.Region IN ('North America', 'USA', 'Canada', 'Mexico')
+    GROUP BY c.Region, c.Country, d.Month, d.MonthName
+    ORDER BY c.Region, d.Month
+  snow_query: |
+    SELECT
+      c.Region,
+      c.Country,
+      d.Month,
+      d.MonthName,
+      SUM(s.Amount) as Revenue,
+      COUNT(*) as Orders,
+      AVG(s.Amount) as AvgOrderValue
+    FROM FACT.SALES s
+    INNER JOIN DIM.CUSTOMER c ON s.CustomerID = c.CustomerID
+    INNER JOIN DIM.DATE d ON s.OrderDate = d.Date
+    WHERE d.Year = 2024
+      AND d.Quarter = 4
+      AND c.Region IN ('North America', 'USA', 'Canada', 'Mexico')
+    GROUP BY c.Region, c.Country, d.Month, d.MonthName
+    ORDER BY c.Region, d.Month

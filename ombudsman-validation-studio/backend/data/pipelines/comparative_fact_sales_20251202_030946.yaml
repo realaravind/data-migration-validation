@@ -1,0 +1,301 @@
+metadata:
+  name: fact_sales_comparative_validation
+  description: Comparative validations from Query Store for fact.fact_sales
+  generated_from: workload_wl_20251202_030937_1b4ca400
+  project_id: dw_validation
+  created_at: '2025-12-02T03:09:46.476361'
+  validation_count: 14
+  validation_type: comparative
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: fact
+  table: fact_sales
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: FACT
+  table: FACT_SALES
+steps:
+- name: comparative_validation_1_query_4
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    4)'
+  enabled: true
+  config:
+    sql_server_query: SELECT COUNT(*) FROM fact.FACT_SALES
+    snowflake_query: SELECT COUNT(*) FROM FACT.FACT_SALES
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 4
+    total_executions: 2100
+    avg_duration_ms: 125.5
+    last_execution_time: '2024-12-01T12:00:00'
+- name: comparative_validation_2_query_9
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    9)'
+  enabled: true
+  config:
+    sql_server_query: SELECT SUM(TotalAmount) FROM fact.FACT_SALES
+    snowflake_query: SELECT SUM(TotalAmount) FROM FACT.FACT_SALES
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 9
+    total_executions: 1200
+    avg_duration_ms: 156.7
+    last_execution_time: '2024-12-01T14:30:00'
+- name: comparative_validation_3_query_11
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    11)'
+  enabled: true
+  config:
+    sql_server_query: SELECT MIN(SaleDate), MAX(SaleDate) FROM fact.FACT_SALES
+    snowflake_query: SELECT MIN(SaleDate), MAX(SaleDate) FROM FACT.FACT_SALES
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 11
+    total_executions: 560
+    avg_duration_ms: 134.2
+    last_execution_time: '2024-12-01T15:30:00'
+- name: comparative_validation_4_query_12
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    12)'
+  enabled: true
+  config:
+    sql_server_query: SELECT c.CustomerName, s.TotalAmount FROM dim.DIM_CUSTOMER c
+      INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID
+    snowflake_query: SELECT c.CustomerName, s.TotalAmount FROM DIM.DIM_CUSTOMER c
+      INNER JOIN FACT.FACT_SALES s ON c.CustomerID = s.CustomerID
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 12
+    total_executions: 1500
+    avg_duration_ms: 245.6
+    last_execution_time: '2024-12-01T16:00:00'
+- name: comparative_validation_5_query_13
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    13)'
+  enabled: true
+  config:
+    sql_server_query: SELECT p.ProductName, s.Quantity FROM dim.DIM_PRODUCT p INNER
+      JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID
+    snowflake_query: SELECT p.ProductName, s.Quantity FROM DIM.DIM_PRODUCT p INNER
+      JOIN FACT.FACT_SALES s ON p.ProductID = s.ProductID
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 13
+    total_executions: 1350
+    avg_duration_ms: 223.4
+    last_execution_time: '2024-12-01T16:30:00'
+- name: comparative_validation_6_query_14
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    14)'
+  enabled: true
+  config:
+    sql_server_query: SELECT * FROM fact.FACT_SALES WHERE SaleDate BETWEEN '2024-01-01'
+      AND '2024-12-31'
+    snowflake_query: SELECT * FROM FACT.FACT_SALES WHERE SaleDate BETWEEN '2024-01-01'
+      AND '2024-12-31'
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 14
+    total_executions: 780
+    avg_duration_ms: 189.5
+    last_execution_time: '2024-12-01T17:00:00'
+- name: comparative_validation_7_query_15
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    15)'
+  enabled: true
+  config:
+    sql_server_query: SELECT YEAR(SaleDate) AS Year, SUM(TotalAmount) AS YearlyTotal
+      FROM fact.FACT_SALES GROUP BY YEAR(SaleDate)
+    snowflake_query: SELECT YEAR(SaleDate) AS Year, SUM(TotalAmount) AS YearlyTotal
+      FROM FACT.FACT_SALES GROUP BY YEAR(SaleDate)
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 15
+    total_executions: 920
+    avg_duration_ms: 234.7
+    last_execution_time: '2024-12-01T17:30:00'
+- name: comparative_validation_8_query_17
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    17)'
+  enabled: true
+  config:
+    sql_server_query: SELECT StoreID, SUM(TotalAmount) FROM fact.FACT_SALES GROUP
+      BY StoreID HAVING SUM(TotalAmount) > 10000
+    snowflake_query: SELECT StoreID, SUM(TotalAmount) FROM FACT.FACT_SALES GROUP BY
+      StoreID HAVING SUM(TotalAmount) > 10000
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 17
+    total_executions: 540
+    avg_duration_ms: 178.3
+    last_execution_time: '2024-12-01T18:30:00'
+- name: comparative_validation_9_query_19
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    19)'
+  enabled: true
+  config:
+    sql_server_query: SELECT * FROM fact.FACT_SALES ORDER BY SaleDate DESC, TotalAmount
+      DESC
+    snowflake_query: SELECT * FROM FACT.FACT_SALES ORDER BY SaleDate DESC, TotalAmount
+      DESC
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 19
+    total_executions: 710
+    avg_duration_ms: 198.6
+    last_execution_time: '2024-12-01T19:30:00'
+- name: comparative_validation_10_query_20
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    20)'
+  enabled: true
+  config:
+    sql_server_query: SELECT c.CustomerName, p.ProductName, s.TotalAmount FROM dim.DIM_CUSTOMER
+      c INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID INNER JOIN dim.DIM_PRODUCT
+      p ON s.ProductID = p.ProductID WHERE s.TotalAmount > 1000
+    snowflake_query: SELECT c.CustomerName, p.ProductName, s.TotalAmount FROM DIM.DIM_CUSTOMER
+      c INNER JOIN FACT.FACT_SALES s ON c.CustomerID = s.CustomerID INNER JOIN DIM.DIM_PRODUCT
+      p ON s.ProductID = p.ProductID WHERE s.TotalAmount > 1000
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 20
+    total_executions: 890
+    avg_duration_ms: 312.8
+    last_execution_time: '2024-12-01T20:00:00'
+- name: comparative_validation_11_query_27
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    27)'
+  enabled: true
+  config:
+    sql_server_query: SELECT st.StoreName, SUM(s.TotalAmount) AS StoreRevenue FROM
+      dim.DIM_STORE st INNER JOIN fact.FACT_SALES s ON st.StoreID = s.StoreID GROUP
+      BY st.StoreName ORDER BY StoreRevenue DESC
+    snowflake_query: SELECT st.StoreName, SUM(s.TotalAmount) AS StoreRevenue FROM
+      DIM.DIM_STORE st INNER JOIN FACT.FACT_SALES s ON st.StoreID = s.StoreID GROUP
+      BY st.StoreName ORDER BY StoreRevenue DESC
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 27
+    total_executions: 810
+    avg_duration_ms: 245.3
+    last_execution_time: '2024-12-01T23:30:00'
+- name: comparative_validation_12_query_28
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    28)'
+  enabled: true
+  config:
+    sql_server_query: SELECT c.CustomerSegment, COUNT(DISTINCT c.CustomerID) AS CustomerCount,
+      SUM(s.TotalAmount) AS TotalRevenue FROM dim.DIM_CUSTOMER c LEFT JOIN fact.FACT_SALES
+      s ON c.CustomerID = s.CustomerID GROUP BY c.CustomerSegment
+    snowflake_query: SELECT c.CustomerSegment, COUNT(DISTINCT c.CustomerID) AS CustomerCount,
+      SUM(s.TotalAmount) AS TotalRevenue FROM DIM.DIM_CUSTOMER c LEFT JOIN FACT.FACT_SALES
+      s ON c.CustomerID = s.CustomerID GROUP BY c.CustomerSegment
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 28
+    total_executions: 530
+    avg_duration_ms: 267.8
+    last_execution_time: '2024-12-02T00:00:00'
+- name: comparative_validation_13_query_29
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    29)'
+  enabled: true
+  config:
+    sql_server_query: SELECT p.Category, COUNT(*) AS ProductCount, AVG(p.UnitPrice)
+      AS AvgPrice, SUM(ISNULL(s.Quantity, 0)) AS TotalSold FROM dim.DIM_PRODUCT p
+      LEFT JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID GROUP BY p.Category
+    snowflake_query: SELECT p.Category, COUNT(*) AS ProductCount, AVG(p.UnitPrice)
+      AS AvgPrice, SUM(COALESCE(s.Quantity, 0)) AS TotalSold FROM DIM.DIM_PRODUCT
+      p LEFT JOIN FACT.FACT_SALES s ON p.ProductID = s.ProductID GROUP BY p.Category
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 29
+    total_executions: 670
+    avg_duration_ms: 289.4
+    last_execution_time: '2024-12-02T00:30:00'
+- name: comparative_validation_14_query_30
+  type: comparative
+  validator: custom_sql
+  description: 'Compare query results between SQL Server and Snowflake (Query ID:
+    30)'
+  enabled: true
+  config:
+    sql_server_query: SELECT * FROM dim.DIM_CUSTOMER WHERE CustomerID IN (SELECT DISTINCT
+      CustomerID FROM fact.FACT_SALES WHERE TotalAmount > 5000)
+    snowflake_query: SELECT * FROM DIM.DIM_CUSTOMER WHERE CustomerID IN (SELECT DISTINCT
+      CustomerID FROM FACT.FACT_SALES WHERE TotalAmount > 5000)
+    compare_mode: result_set
+    tolerance: 0.0
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 30
+    total_executions: 380
+    avg_duration_ms: 156.2
+    last_execution_time: '2024-12-02T01:00:00'

@@ -1,0 +1,116 @@
+# =============================================================================
+# Unified Docker Compose - Builds Core + Studio Together
+# =============================================================================
+
+services:
+  # Azure SQL Edge (ARM64 compatible for Apple Silicon)
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    container_name: sqlserver
+    platform: linux/arm64
+    env_file:
+      - ./ombudsman_core/.env
+    environment:
+      - ACCEPT_EULA=1
+      - MSSQL_SA_PASSWORD=YourStrong!Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    networks:
+      - ovs-net
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/opt/mssql/log/errorlog || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Snowflake Emulator (DISABLED - requires LocalStack Pro license)
+  # NOTE: LocalStack Snowflake emulator requires LOCALSTACK_AUTH_TOKEN (paid feature)
+  # Original databrickslabs/snowflake-simulator image doesn't exist
+  # To use Snowflake: Either get LocalStack Pro OR use real Snowflake credentials
+  # snowflake-emulator:
+  #   image: localstack/snowflake:latest
+  #   container_name: snowflake-emulator
+  #   env_file:
+  #     - ./ombudsman_core/.env
+  #   ports:
+  #     - "4566:4566"
+  #   environment:
+  #     - SERVICES=snowflake
+  #     - LOCALSTACK_AUTH_TOKEN=your-token-here  # Get from https://app.localstack.cloud
+  #   networks:
+  #     - ovs-net
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-f", "http://localhost:4566/_localstack/health" ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 30s
+
+  # Backend service with unified core + studio
+  studio-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.unified
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount for development hot reload
+      - ./ombudsman_core:/core
+      - ./ombudsman-validation-studio/backend:/app
+      # Mount for projects persistence
+      - projects_data:/data/projects
+      # Mount for results persistence
+      - results_data:/data/results
+    env_file:
+      - ./ombudsman_core/.env
+    environment:
+      PYTHONPATH: "/app:/core/src"
+      PYTHONUNBUFFERED: "1"
+    networks:
+      - ovs-net
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      # snowflake-emulator:
+      #   condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend service
+  studio-frontend:
+    build:
+      context: ./ombudsman-validation-studio/frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./ombudsman-validation-studio/frontend:/app
+      - /app/node_modules
+    networks:
+      - ovs-net
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://studio-backend:8000
+    depends_on:
+      studio-backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  ovs-net:
+    driver: bridge
+
+volumes:
+  sql_data:
+  snowflake_data:
+  projects_data:
+  results_data:

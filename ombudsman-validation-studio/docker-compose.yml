@@ -1,24 +1,48 @@
-version: "3.9"
-
 services:
   studio-backend:
-    build: ./ombudsman-validation-studio/backend
+    build: ./backend
     ports:
       - "8000:8000"
     volumes:
-      - ./ombudsman_core:/core
-      - ./ombudsman-validation-studio/backend:/app
+      - ../ombudsman_core:/core
+      - ./backend:/app
+      - ./backend/data:/data  # Persistent data storage (projects, workloads, pipelines)
     environment:
       PYTHONPATH: "/app:/core/src"
+      # SQL Server connection (update these with your SQL Server details)
+      MSSQL_HOST: "${MSSQL_HOST:-host.docker.internal}"
+      MSSQL_PORT: "${MSSQL_PORT:-1433}"
+      MSSQL_USER: "${MSSQL_USER:-sa}"
+      MSSQL_PASSWORD: "${MSSQL_PASSWORD:-YourPassword123!}"
+      MSSQL_DATABASE: "${MSSQL_DATABASE:-SampleDW}"
+      SQLSERVER_CONN_STR: "${SQLSERVER_CONN_STR:-}"
+      # Snowflake connection (update these with your Snowflake details)
+      SNOWFLAKE_USER: "${SNOWFLAKE_USER:-your_user}"
+      SNOWFLAKE_PASSWORD: "${SNOWFLAKE_PASSWORD:-your_password}"
+      SNOWFLAKE_ACCOUNT: "${SNOWFLAKE_ACCOUNT:-your_account}"
+      SNOWFLAKE_WAREHOUSE: "${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
+      SNOWFLAKE_ROLE: "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}"
+      SNOWFLAKE_DATABASE: "${SNOWFLAKE_DATABASE:-SAMPLEDW}"
+      SNOWFLAKE_SCHEMA: "${SNOWFLAKE_SCHEMA:-PUBLIC}"
     networks:
       - ovs-net
+    # Add reload for development
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   studio-frontend:
-    build: ./ombudsman-validation-studio/frontend
+    build: ./frontend
     ports:
       - "3000:3000"
+    volumes:
+      # Mount source for hot reload in development
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
     networks:
       - ovs-net
+    environment:
+      - NODE_ENV=development
 
 networks:
   ovs-net:

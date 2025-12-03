@@ -1,0 +1,1774 @@
+{
+  "query_count": 30,
+  "total_executions": 24110,
+  "date_range": {
+    "start": "2024-12-01T10:30:00",
+    "end": "2024-12-02T01:00:00"
+  },
+  "queries": [
+    {
+      "query_id": 1,
+      "raw_text": "SELECT COUNT(*) FROM dim.DIM_CUSTOMER",
+      "stats": {
+        "total_executions": 1250,
+        "avg_duration": 45.3,
+        "last_execution_time": "2024-12-01T10:30:00"
+      }
+    },
+    {
+      "query_id": 2,
+      "raw_text": "SELECT COUNT(*) FROM dim.DIM_PRODUCT",
+      "stats": {
+        "total_executions": 980,
+        "avg_duration": 38.7,
+        "last_execution_time": "2024-12-01T11:15:00"
+      }
+    },
+    {
+      "query_id": 3,
+      "raw_text": "SELECT COUNT(*) FROM dim.DIM_STORE",
+      "stats": {
+        "total_executions": 850,
+        "avg_duration": 32.1,
+        "last_execution_time": "2024-12-01T11:45:00"
+      }
+    },
+    {
+      "query_id": 4,
+      "raw_text": "SELECT COUNT(*) FROM fact.FACT_SALES",
+      "stats": {
+        "total_executions": 2100,
+        "avg_duration": 125.5,
+        "last_execution_time": "2024-12-01T12:00:00"
+      }
+    },
+    {
+      "query_id": 5,
+      "raw_text": "SELECT COUNT(*) FROM fact.FACT_INVENTORY",
+      "stats": {
+        "total_executions": 1450,
+        "avg_duration": 98.2,
+        "last_execution_time": "2024-12-01T12:30:00"
+      }
+    },
+    {
+      "query_id": 6,
+      "raw_text": "SELECT * FROM dim.DIM_CUSTOMER WHERE CustomerID = 100",
+      "stats": {
+        "total_executions": 450,
+        "avg_duration": 12.5,
+        "last_execution_time": "2024-12-01T13:00:00"
+      }
+    },
+    {
+      "query_id": 7,
+      "raw_text": "SELECT * FROM dim.DIM_PRODUCT WHERE Category = 'Electronics'",
+      "stats": {
+        "total_executions": 680,
+        "avg_duration": 28.3,
+        "last_execution_time": "2024-12-01T13:30:00"
+      }
+    },
+    {
+      "query_id": 8,
+      "raw_text": "SELECT * FROM dim.DIM_CUSTOMER WHERE CustomerName LIKE 'John%'",
+      "stats": {
+        "total_executions": 320,
+        "avg_duration": 45.8,
+        "last_execution_time": "2024-12-01T14:00:00"
+      }
+    },
+    {
+      "query_id": 9,
+      "raw_text": "SELECT SUM(TotalAmount) FROM fact.FACT_SALES",
+      "stats": {
+        "total_executions": 1200,
+        "avg_duration": 156.7,
+        "last_execution_time": "2024-12-01T14:30:00"
+      }
+    },
+    {
+      "query_id": 10,
+      "raw_text": "SELECT AVG(UnitPrice) FROM dim.DIM_PRODUCT",
+      "stats": {
+        "total_executions": 890,
+        "avg_duration": 42.3,
+        "last_execution_time": "2024-12-01T15:00:00"
+      }
+    },
+    {
+      "query_id": 11,
+      "raw_text": "SELECT MIN(SaleDate), MAX(SaleDate) FROM fact.FACT_SALES",
+      "stats": {
+        "total_executions": 560,
+        "avg_duration": 134.2,
+        "last_execution_time": "2024-12-01T15:30:00"
+      }
+    },
+    {
+      "query_id": 12,
+      "raw_text": "SELECT c.CustomerName, s.TotalAmount FROM dim.DIM_CUSTOMER c INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID",
+      "stats": {
+        "total_executions": 1500,
+        "avg_duration": 245.6,
+        "last_execution_time": "2024-12-01T16:00:00"
+      }
+    },
+    {
+      "query_id": 13,
+      "raw_text": "SELECT p.ProductName, s.Quantity FROM dim.DIM_PRODUCT p INNER JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID",
+      "stats": {
+        "total_executions": 1350,
+        "avg_duration": 223.4,
+        "last_execution_time": "2024-12-01T16:30:00"
+      }
+    },
+    {
+      "query_id": 14,
+      "raw_text": "SELECT * FROM fact.FACT_SALES WHERE SaleDate BETWEEN '2024-01-01' AND '2024-12-31'",
+      "stats": {
+        "total_executions": 780,
+        "avg_duration": 189.5,
+        "last_execution_time": "2024-12-01T17:00:00"
+      }
+    },
+    {
+      "query_id": 15,
+      "raw_text": "SELECT YEAR(SaleDate) AS Year, SUM(TotalAmount) AS YearlyTotal FROM fact.FACT_SALES GROUP BY YEAR(SaleDate)",
+      "stats": {
+        "total_executions": 920,
+        "avg_duration": 234.7,
+        "last_execution_time": "2024-12-01T17:30:00"
+      }
+    },
+    {
+      "query_id": 16,
+      "raw_text": "SELECT Category, COUNT(*) FROM dim.DIM_PRODUCT GROUP BY Category",
+      "stats": {
+        "total_executions": 650,
+        "avg_duration": 56.8,
+        "last_execution_time": "2024-12-01T18:00:00"
+      }
+    },
+    {
+      "query_id": 17,
+      "raw_text": "SELECT StoreID, SUM(TotalAmount) FROM fact.FACT_SALES GROUP BY StoreID HAVING SUM(TotalAmount) > 10000",
+      "stats": {
+        "total_executions": 540,
+        "avg_duration": 178.3,
+        "last_execution_time": "2024-12-01T18:30:00"
+      }
+    },
+    {
+      "query_id": 18,
+      "raw_text": "SELECT * FROM dim.DIM_PRODUCT ORDER BY UnitPrice DESC",
+      "stats": {
+        "total_executions": 490,
+        "avg_duration": 67.4,
+        "last_execution_time": "2024-12-01T19:00:00"
+      }
+    },
+    {
+      "query_id": 19,
+      "raw_text": "SELECT * FROM fact.FACT_SALES ORDER BY SaleDate DESC, TotalAmount DESC",
+      "stats": {
+        "total_executions": 710,
+        "avg_duration": 198.6,
+        "last_execution_time": "2024-12-01T19:30:00"
+      }
+    },
+    {
+      "query_id": 20,
+      "raw_text": "SELECT c.CustomerName, p.ProductName, s.TotalAmount FROM dim.DIM_CUSTOMER c INNER JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID INNER JOIN dim.DIM_PRODUCT p ON s.ProductID = p.ProductID WHERE s.TotalAmount > 1000",
+      "stats": {
+        "total_executions": 890,
+        "avg_duration": 312.8,
+        "last_execution_time": "2024-12-01T20:00:00"
+      }
+    },
+    {
+      "query_id": 21,
+      "raw_text": "SELECT DISTINCT Category FROM dim.DIM_PRODUCT",
+      "stats": {
+        "total_executions": 420,
+        "avg_duration": 48.2,
+        "last_execution_time": "2024-12-01T20:30:00"
+      }
+    },
+    {
+      "query_id": 22,
+      "raw_text": "SELECT * FROM dim.DIM_PRODUCT WHERE UnitPrice > 100 AND UnitPrice < 500",
+      "stats": {
+        "total_executions": 580,
+        "avg_duration": 52.1,
+        "last_execution_time": "2024-12-01T21:00:00"
+      }
+    },
+    {
+      "query_id": 23,
+      "raw_text": "SELECT * FROM dim.DIM_CUSTOMER WHERE Email IS NOT NULL",
+      "stats": {
+        "total_executions": 340,
+        "avg_duration": 38.9,
+        "last_execution_time": "2024-12-01T21:30:00"
+      }
+    },
+    {
+      "query_id": 24,
+      "raw_text": "SELECT * FROM dim.DIM_PRODUCT WHERE Category IN ('Electronics', 'Clothing', 'Food')",
+      "stats": {
+        "total_executions": 460,
+        "avg_duration": 43.5,
+        "last_execution_time": "2024-12-01T22:00:00"
+      }
+    },
+    {
+      "query_id": 25,
+      "raw_text": "SELECT ProductID, SUM(QuantityOnHand) FROM fact.FACT_INVENTORY GROUP BY ProductID",
+      "stats": {
+        "total_executions": 720,
+        "avg_duration": 123.4,
+        "last_execution_time": "2024-12-01T22:30:00"
+      }
+    },
+    {
+      "query_id": 26,
+      "raw_text": "SELECT * FROM fact.FACT_INVENTORY WHERE QuantityOnHand < 10",
+      "stats": {
+        "total_executions": 640,
+        "avg_duration": 98.7,
+        "last_execution_time": "2024-12-01T23:00:00"
+      }
+    },
+    {
+      "query_id": 27,
+      "raw_text": "SELECT st.StoreName, SUM(s.TotalAmount) AS StoreRevenue FROM dim.DIM_STORE st INNER JOIN fact.FACT_SALES s ON st.StoreID = s.StoreID GROUP BY st.StoreName ORDER BY StoreRevenue DESC",
+      "stats": {
+        "total_executions": 810,
+        "avg_duration": 245.3,
+        "last_execution_time": "2024-12-01T23:30:00"
+      }
+    },
+    {
+      "query_id": 28,
+      "raw_text": "SELECT c.CustomerSegment, COUNT(DISTINCT c.CustomerID) AS CustomerCount, SUM(s.TotalAmount) AS TotalRevenue FROM dim.DIM_CUSTOMER c LEFT JOIN fact.FACT_SALES s ON c.CustomerID = s.CustomerID GROUP BY c.CustomerSegment",
+      "stats": {
+        "total_executions": 530,
+        "avg_duration": 267.8,
+        "last_execution_time": "2024-12-02T00:00:00"
+      }
+    },
+    {
+      "query_id": 29,
+      "raw_text": "SELECT p.Category, COUNT(*) AS ProductCount, AVG(p.UnitPrice) AS AvgPrice, SUM(ISNULL(s.Quantity, 0)) AS TotalSold FROM dim.DIM_PRODUCT p LEFT JOIN fact.FACT_SALES s ON p.ProductID = s.ProductID GROUP BY p.Category",
+      "stats": {
+        "total_executions": 670,
+        "avg_duration": 289.4,
+        "last_execution_time": "2024-12-02T00:30:00"
+      }
+    },
+    {
+      "query_id": 30,
+      "raw_text": "SELECT * FROM dim.DIM_CUSTOMER WHERE CustomerID IN (SELECT DISTINCT CustomerID FROM fact.FACT_SALES WHERE TotalAmount > 5000)",
+      "stats": {
+        "total_executions": 380,
+        "avg_duration": 156.2,
+        "last_execution_time": "2024-12-02T01:00:00"
+      }
+    }
+  ],
+  "patterns": [
+    {
+      "query_id": "1",
+      "tables": [
+        "DIM_CUSTOMER"
+      ],
+      "columns": {
+        "DIM_CUSTOMER": [
+          "COUNT(*)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 1250,
+      "avg_duration": 45.3
+    },
+    {
+      "query_id": "2",
+      "tables": [
+        "DIM_PRODUCT"
+      ],
+      "columns": {
+        "DIM_PRODUCT": [
+          "COUNT(*)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 980,
+      "avg_duration": 38.7
+    },
+    {
+      "query_id": "3",
+      "tables": [
+        "DIM_STORE"
+      ],
+      "columns": {
+        "DIM_STORE": [
+          "COUNT(*)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 850,
+      "avg_duration": 32.1
+    },
+    {
+      "query_id": "4",
+      "tables": [
+        "FACT_SALES"
+      ],
+      "columns": {
+        "FACT_SALES": [
+          "COUNT(*)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 2100,
+      "avg_duration": 125.5
+    },
+    {
+      "query_id": "5",
+      "tables": [
+        "FACT_INVENTORY"
+      ],
+      "columns": {
+        "FACT_INVENTORY": [
+          "COUNT(*)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 1450,
+      "avg_duration": 98.2
+    },
+    {
+      "query_id": "6",
+      "tables": [
+        "DIM_CUSTOMER"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 450,
+      "avg_duration": 12.5
+    },
+    {
+      "query_id": "7",
+      "tables": [
+        "DIM_PRODUCT"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 680,
+      "avg_duration": 28.3
+    },
+    {
+      "query_id": "8",
+      "tables": [
+        "DIM_CUSTOMER"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 320,
+      "avg_duration": 45.8
+    },
+    {
+      "query_id": "9",
+      "tables": [
+        "FACT_SALES"
+      ],
+      "columns": {
+        "FACT_SALES": [
+          "SUM(TotalAmount)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "",
+          "TotalAmount",
+          "SUM"
+        ]
+      ],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 1200,
+      "avg_duration": 156.7
+    },
+    {
+      "query_id": "10",
+      "tables": [
+        "DIM_PRODUCT"
+      ],
+      "columns": {
+        "DIM_PRODUCT": [
+          "AVG(UnitPrice)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "",
+          "UnitPrice",
+          "AVG"
+        ]
+      ],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 890,
+      "avg_duration": 42.3
+    },
+    {
+      "query_id": "11",
+      "tables": [
+        "FACT_SALES"
+      ],
+      "columns": {
+        "FACT_SALES": [
+          "MIN(SaleDate)",
+          "MAX(SaleDate)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "",
+          "SaleDate",
+          "MIN"
+        ],
+        [
+          "",
+          "SaleDate",
+          "MAX"
+        ]
+      ],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 560,
+      "avg_duration": 134.2
+    },
+    {
+      "query_id": "12",
+      "tables": [
+        "DIM_CUSTOMER",
+        "FACT_SALES"
+      ],
+      "columns": {
+        "c": [
+          "CustomerName"
+        ],
+        "s": [
+          "TotalAmount"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 1500,
+      "avg_duration": 245.6
+    },
+    {
+      "query_id": "13",
+      "tables": [
+        "FACT_SALES",
+        "DIM_PRODUCT"
+      ],
+      "columns": {
+        "p": [
+          "ProductName"
+        ],
+        "s": [
+          "Quantity"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 1350,
+      "avg_duration": 223.4
+    },
+    {
+      "query_id": "14",
+      "tables": [
+        "FACT_SALES"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 780,
+      "avg_duration": 189.5
+    },
+    {
+      "query_id": "15",
+      "tables": [
+        "FACT_SALES"
+      ],
+      "columns": {
+        "FACT_SALES": [
+          "YEAR(SaleDate)",
+          "SUM(TotalAmount)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "",
+          "TotalAmount",
+          "SUM"
+        ]
+      ],
+      "group_by_columns": [
+        [
+          "",
+          "YEAR(SaleDate)"
+        ]
+      ],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 920,
+      "avg_duration": 234.7
+    },
+    {
+      "query_id": "16",
+      "tables": [
+        "Category",
+        "DIM_PRODUCT"
+      ],
+      "columns": {
+        "Category": [
+          "Category",
+          "COUNT(*)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [
+        [
+          "",
+          "Category"
+        ]
+      ],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 650,
+      "avg_duration": 56.8
+    },
+    {
+      "query_id": "17",
+      "tables": [
+        "StoreID",
+        "FACT_SALES"
+      ],
+      "columns": {
+        "StoreID": [
+          "StoreID",
+          "SUM(TotalAmount)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "",
+          "TotalAmount",
+          "SUM"
+        ],
+        [
+          "",
+          "TotalAmount",
+          "SUM"
+        ]
+      ],
+      "group_by_columns": [
+        [
+          "",
+          "StoreID"
+        ]
+      ],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 540,
+      "avg_duration": 178.3
+    },
+    {
+      "query_id": "18",
+      "tables": [
+        "UnitPrice",
+        "DIM_PRODUCT"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [
+        [
+          "",
+          "UnitPrice"
+        ]
+      ],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 490,
+      "avg_duration": 67.4
+    },
+    {
+      "query_id": "19",
+      "tables": [
+        "SaleDate",
+        "TotalAmount",
+        "FACT_SALES"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [
+        [
+          "",
+          "SaleDate"
+        ],
+        [
+          "",
+          "TotalAmount"
+        ]
+      ],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 710,
+      "avg_duration": 198.6
+    },
+    {
+      "query_id": "20",
+      "tables": [
+        "DIM_PRODUCT",
+        "DIM_CUSTOMER",
+        "FACT_SALES"
+      ],
+      "columns": {
+        "c": [
+          "CustomerName"
+        ],
+        "p": [
+          "ProductName"
+        ],
+        "s": [
+          "TotalAmount"
+        ]
+      },
+      "joins": [],
+      "where_columns": [
+        [
+          "s",
+          "TotalAmount",
+          ">"
+        ]
+      ],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 890,
+      "avg_duration": 312.8
+    },
+    {
+      "query_id": "21",
+      "tables": [
+        "DIM_PRODUCT"
+      ],
+      "columns": {
+        "DIM_PRODUCT": [
+          "DISTINCT"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": true,
+      "query_type": "SELECT",
+      "total_executions": 420,
+      "avg_duration": 48.2
+    },
+    {
+      "query_id": "22",
+      "tables": [
+        "DIM_PRODUCT"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 580,
+      "avg_duration": 52.1
+    },
+    {
+      "query_id": "23",
+      "tables": [
+        "DIM_CUSTOMER"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 340,
+      "avg_duration": 38.9
+    },
+    {
+      "query_id": "24",
+      "tables": [
+        "DIM_PRODUCT"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 460,
+      "avg_duration": 43.5
+    },
+    {
+      "query_id": "25",
+      "tables": [
+        "FACT_INVENTORY",
+        "ProductID"
+      ],
+      "columns": {
+        "FACT_INVENTORY": [
+          "ProductID",
+          "SUM(QuantityOnHand)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "",
+          "QuantityOnHand",
+          "SUM"
+        ]
+      ],
+      "group_by_columns": [
+        [
+          "",
+          "ProductID"
+        ]
+      ],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 720,
+      "avg_duration": 123.4
+    },
+    {
+      "query_id": "26",
+      "tables": [
+        "FACT_INVENTORY"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 640,
+      "avg_duration": 98.7
+    },
+    {
+      "query_id": "27",
+      "tables": [
+        "DIM_STORE",
+        "StoreName",
+        "StoreRevenue",
+        "FACT_SALES"
+      ],
+      "columns": {
+        "st": [
+          "StoreName"
+        ],
+        "DIM_STORE": [
+          "SUM(s.TotalAmount)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "s",
+          "TotalAmount",
+          "SUM"
+        ]
+      ],
+      "group_by_columns": [
+        [
+          "st",
+          "StoreName"
+        ]
+      ],
+      "order_by_columns": [
+        [
+          "",
+          "StoreRevenue"
+        ]
+      ],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 810,
+      "avg_duration": 245.3
+    },
+    {
+      "query_id": "28",
+      "tables": [
+        "CustomerSegment",
+        "DIM_CUSTOMER",
+        "FACT_SALES"
+      ],
+      "columns": {
+        "c": [
+          "CustomerSegment"
+        ],
+        "CustomerSegment": [
+          "COUNT(DISTINCT",
+          "SUM(s.TotalAmount)"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "s",
+          "TotalAmount",
+          "SUM"
+        ]
+      ],
+      "group_by_columns": [
+        [
+          "c",
+          "CustomerSegment"
+        ]
+      ],
+      "order_by_columns": [],
+      "has_distinct": true,
+      "query_type": "SELECT",
+      "total_executions": 530,
+      "avg_duration": 267.8
+    },
+    {
+      "query_id": "29",
+      "tables": [
+        "FACT_SALES",
+        "Category",
+        "DIM_PRODUCT"
+      ],
+      "columns": {
+        "p": [
+          "Category"
+        ],
+        "FACT_SALES": [
+          "COUNT(*)",
+          "AVG(p.UnitPrice)",
+          "0))"
+        ],
+        "SUM(ISNULL(s": [
+          "Quantity"
+        ]
+      },
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [
+        [
+          "p",
+          "UnitPrice",
+          "AVG"
+        ]
+      ],
+      "group_by_columns": [
+        [
+          "p",
+          "Category"
+        ]
+      ],
+      "order_by_columns": [],
+      "has_distinct": false,
+      "query_type": "SELECT",
+      "total_executions": 670,
+      "avg_duration": 289.4
+    },
+    {
+      "query_id": "30",
+      "tables": [
+        "DIM_CUSTOMER"
+      ],
+      "columns": {},
+      "joins": [],
+      "where_columns": [],
+      "aggregations": [],
+      "group_by_columns": [],
+      "order_by_columns": [],
+      "has_distinct": true,
+      "query_type": "SELECT",
+      "total_executions": 380,
+      "avg_duration": 156.2
+    }
+  ],
+  "table_usage": {
+    "DIM_CUSTOMER": {
+      "table_name": "DIM_CUSTOMER",
+      "schema_name": "",
+      "access_count": 5660,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "DIM_PRODUCT": {
+      "table_name": "DIM_PRODUCT",
+      "schema_name": "",
+      "access_count": 8060,
+      "join_partners": [],
+      "columns_used": {
+        "UnitPrice": {
+          "column_name": "UnitPrice",
+          "table_name": "DIM_PRODUCT",
+          "usage_types": [
+            "aggregate"
+          ],
+          "aggregate_functions": [
+            "AVG"
+          ],
+          "operators": [],
+          "query_count": 1
+        },
+        "Category": {
+          "column_name": "Category",
+          "table_name": "DIM_PRODUCT",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        }
+      }
+    },
+    "DIM_STORE": {
+      "table_name": "DIM_STORE",
+      "schema_name": "",
+      "access_count": 1660,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "FACT_SALES": {
+      "table_name": "FACT_SALES",
+      "schema_name": "",
+      "access_count": 12560,
+      "join_partners": [],
+      "columns_used": {
+        "TotalAmount": {
+          "column_name": "TotalAmount",
+          "table_name": "FACT_SALES",
+          "usage_types": [
+            "aggregate"
+          ],
+          "aggregate_functions": [
+            "SUM"
+          ],
+          "operators": [],
+          "query_count": 4
+        },
+        "SaleDate": {
+          "column_name": "SaleDate",
+          "table_name": "FACT_SALES",
+          "usage_types": [
+            "aggregate"
+          ],
+          "aggregate_functions": [
+            "MIN",
+            "MAX"
+          ],
+          "operators": [],
+          "query_count": 2
+        },
+        "YEAR(SaleDate)": {
+          "column_name": "YEAR(SaleDate)",
+          "table_name": "FACT_SALES",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        },
+        "StoreID": {
+          "column_name": "StoreID",
+          "table_name": "FACT_SALES",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        }
+      }
+    },
+    "FACT_INVENTORY": {
+      "table_name": "FACT_INVENTORY",
+      "schema_name": "",
+      "access_count": 2810,
+      "join_partners": [],
+      "columns_used": {
+        "QuantityOnHand": {
+          "column_name": "QuantityOnHand",
+          "table_name": "FACT_INVENTORY",
+          "usage_types": [
+            "aggregate"
+          ],
+          "aggregate_functions": [
+            "SUM"
+          ],
+          "operators": [],
+          "query_count": 1
+        },
+        "ProductID": {
+          "column_name": "ProductID",
+          "table_name": "FACT_INVENTORY",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        }
+      }
+    },
+    "Category": {
+      "table_name": "Category",
+      "schema_name": "",
+      "access_count": 1320,
+      "join_partners": [],
+      "columns_used": {
+        "Category": {
+          "column_name": "Category",
+          "table_name": "Category",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        }
+      }
+    },
+    "StoreID": {
+      "table_name": "StoreID",
+      "schema_name": "",
+      "access_count": 540,
+      "join_partners": [],
+      "columns_used": {
+        "TotalAmount": {
+          "column_name": "TotalAmount",
+          "table_name": "StoreID",
+          "usage_types": [
+            "aggregate"
+          ],
+          "aggregate_functions": [
+            "SUM"
+          ],
+          "operators": [],
+          "query_count": 2
+        },
+        "StoreID": {
+          "column_name": "StoreID",
+          "table_name": "StoreID",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        }
+      }
+    },
+    "UnitPrice": {
+      "table_name": "UnitPrice",
+      "schema_name": "",
+      "access_count": 490,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "SaleDate": {
+      "table_name": "SaleDate",
+      "schema_name": "",
+      "access_count": 710,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "TotalAmount": {
+      "table_name": "TotalAmount",
+      "schema_name": "",
+      "access_count": 710,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "ProductID": {
+      "table_name": "ProductID",
+      "schema_name": "",
+      "access_count": 720,
+      "join_partners": [],
+      "columns_used": {
+        "QuantityOnHand": {
+          "column_name": "QuantityOnHand",
+          "table_name": "ProductID",
+          "usage_types": [
+            "aggregate"
+          ],
+          "aggregate_functions": [
+            "SUM"
+          ],
+          "operators": [],
+          "query_count": 1
+        },
+        "ProductID": {
+          "column_name": "ProductID",
+          "table_name": "ProductID",
+          "usage_types": [
+            "group_by"
+          ],
+          "aggregate_functions": [],
+          "operators": [],
+          "query_count": 1
+        }
+      }
+    },
+    "StoreName": {
+      "table_name": "StoreName",
+      "schema_name": "",
+      "access_count": 810,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "StoreRevenue": {
+      "table_name": "StoreRevenue",
+      "schema_name": "",
+      "access_count": 810,
+      "join_partners": [],
+      "columns_used": {}
+    },
+    "CustomerSegment": {
+      "table_name": "CustomerSegment",
+      "schema_name": "",
+      "access_count": 530,
+      "join_partners": [],
+      "columns_used": {}
+    }
+  },
+  "workload_id": "wl_20251202_051841_fd6898b8",
+  "project_id": "dw_validation",
+  "upload_date": "2025-12-02T05:18:41.598706",
+  "analysis": {
+    "tables": {
+      "DIM_CUSTOMER": {
+        "access_count": 5660,
+        "query_count": 8,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "DIM_PRODUCT": {
+        "access_count": 8060,
+        "query_count": 11,
+        "suggestions": [
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "DIM_PRODUCT",
+            "schema_name": "",
+            "columns": [
+              "Category"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 8060,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          }
+        ],
+        "join_partners": [],
+        "column_usage": {
+          "UnitPrice": {
+            "usage_types": [
+              "aggregate"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [
+              "AVG"
+            ],
+            "operators": []
+          },
+          "Category": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          }
+        }
+      },
+      "DIM_STORE": {
+        "access_count": 1660,
+        "query_count": 2,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "FACT_SALES": {
+        "access_count": 12560,
+        "query_count": 13,
+        "suggestions": [
+          {
+            "validator_name": "validate_composite_keys",
+            "table_name": "FACT_SALES",
+            "schema_name": "",
+            "columns": [
+              "YEAR(SaleDate)",
+              "StoreID"
+            ],
+            "confidence": 0.75,
+            "reason": "Columns frequently grouped together (2 columns)",
+            "query_count": 12560,
+            "total_executions": 12560,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "composite_grouping"
+            }
+          },
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "FACT_SALES",
+            "schema_name": "",
+            "columns": [
+              "YEAR(SaleDate)"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 12560,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          },
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "FACT_SALES",
+            "schema_name": "",
+            "columns": [
+              "StoreID"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 12560,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          }
+        ],
+        "join_partners": [],
+        "column_usage": {
+          "TotalAmount": {
+            "usage_types": [
+              "aggregate"
+            ],
+            "query_count": 4,
+            "aggregate_functions": [
+              "SUM"
+            ],
+            "operators": []
+          },
+          "SaleDate": {
+            "usage_types": [
+              "aggregate"
+            ],
+            "query_count": 2,
+            "aggregate_functions": [
+              "MIN",
+              "MAX"
+            ],
+            "operators": []
+          },
+          "YEAR(SaleDate)": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          },
+          "StoreID": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          }
+        }
+      },
+      "FACT_INVENTORY": {
+        "access_count": 2810,
+        "query_count": 3,
+        "suggestions": [
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "FACT_INVENTORY",
+            "schema_name": "",
+            "columns": [
+              "ProductID"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 2810,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          }
+        ],
+        "join_partners": [],
+        "column_usage": {
+          "QuantityOnHand": {
+            "usage_types": [
+              "aggregate"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [
+              "SUM"
+            ],
+            "operators": []
+          },
+          "ProductID": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          }
+        }
+      },
+      "Category": {
+        "access_count": 1320,
+        "query_count": 2,
+        "suggestions": [
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "Category",
+            "schema_name": "",
+            "columns": [
+              "Category"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 1320,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          }
+        ],
+        "join_partners": [],
+        "column_usage": {
+          "Category": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          }
+        }
+      },
+      "StoreID": {
+        "access_count": 540,
+        "query_count": 1,
+        "suggestions": [
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "StoreID",
+            "schema_name": "",
+            "columns": [
+              "StoreID"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 540,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          }
+        ],
+        "join_partners": [],
+        "column_usage": {
+          "TotalAmount": {
+            "usage_types": [
+              "aggregate"
+            ],
+            "query_count": 2,
+            "aggregate_functions": [
+              "SUM"
+            ],
+            "operators": []
+          },
+          "StoreID": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          }
+        }
+      },
+      "UnitPrice": {
+        "access_count": 490,
+        "query_count": 1,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "SaleDate": {
+        "access_count": 710,
+        "query_count": 1,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "TotalAmount": {
+        "access_count": 710,
+        "query_count": 1,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "ProductID": {
+        "access_count": 720,
+        "query_count": 1,
+        "suggestions": [
+          {
+            "validator_name": "validate_cardinality",
+            "table_name": "ProductID",
+            "schema_name": "",
+            "columns": [
+              "ProductID"
+            ],
+            "confidence": 0.5900000000000001,
+            "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+            "query_count": 1,
+            "total_executions": 720,
+            "source": "workload",
+            "metadata": {
+              "usage_type": "grouping"
+            }
+          }
+        ],
+        "join_partners": [],
+        "column_usage": {
+          "QuantityOnHand": {
+            "usage_types": [
+              "aggregate"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [
+              "SUM"
+            ],
+            "operators": []
+          },
+          "ProductID": {
+            "usage_types": [
+              "group_by"
+            ],
+            "query_count": 1,
+            "aggregate_functions": [],
+            "operators": []
+          }
+        }
+      },
+      "StoreName": {
+        "access_count": 810,
+        "query_count": 1,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "StoreRevenue": {
+        "access_count": 810,
+        "query_count": 1,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      },
+      "CustomerSegment": {
+        "access_count": 530,
+        "query_count": 1,
+        "suggestions": [],
+        "join_partners": [],
+        "column_usage": {}
+      }
+    },
+    "coverage": {
+      "total_queries": 30,
+      "queries_covered": 2,
+      "coverage_percentage": 6.67,
+      "total_executions_covered": 51130,
+      "validation_count": 8,
+      "high_confidence_count": 0,
+      "medium_confidence_count": 1,
+      "low_confidence_count": 7
+    },
+    "categories": {
+      "referential_integrity": [],
+      "data_quality": [],
+      "statistics": [],
+      "distribution": [],
+      "time_series": [
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "DIM_PRODUCT",
+          "schema_name": "",
+          "columns": [
+            "Category"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 8060,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        },
+        {
+          "validator_name": "validate_composite_keys",
+          "table_name": "FACT_SALES",
+          "schema_name": "",
+          "columns": [
+            "YEAR(SaleDate)",
+            "StoreID"
+          ],
+          "confidence": 0.75,
+          "reason": "Columns frequently grouped together (2 columns)",
+          "query_count": 12560,
+          "total_executions": 12560,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "composite_grouping"
+          }
+        },
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "FACT_SALES",
+          "schema_name": "",
+          "columns": [
+            "YEAR(SaleDate)"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 12560,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        },
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "FACT_SALES",
+          "schema_name": "",
+          "columns": [
+            "StoreID"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 12560,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        },
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "FACT_INVENTORY",
+          "schema_name": "",
+          "columns": [
+            "ProductID"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 2810,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        },
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "Category",
+          "schema_name": "",
+          "columns": [
+            "Category"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 1320,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        },
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "StoreID",
+          "schema_name": "",
+          "columns": [
+            "StoreID"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 540,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        },
+        {
+          "validator_name": "validate_cardinality",
+          "table_name": "ProductID",
+          "schema_name": "",
+          "columns": [
+            "ProductID"
+          ],
+          "confidence": 0.5900000000000001,
+          "reason": "Column used in GROUP BY of 1 queries (likely categorical/dimension key)",
+          "query_count": 1,
+          "total_executions": 720,
+          "source": "workload",
+          "metadata": {
+            "usage_type": "grouping"
+          }
+        }
+      ],
+      "cardinality": [],
+      "value_range": []
+    },
+    "analyzed_at": "2025-12-02T05:18:41.617981"
+  },
+  "last_updated": "2025-12-02T05:18:41.618242"
+}

@@ -3,23 +3,31 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.sessions import SessionMiddleware
-from ombudsman.connections.snowflake_conn import get_snowflake_conn
-from ombudsman.pipeline_runner import PipelineRunner
-from ombudsman.executor import Executor
-from ombudsman.logger import Logger
+from ombudsman.core.snowflake_conn import SnowflakeConn
+from ombudsman.pipeline.pipeline_runner import PipelineRunner
+# from ombudsman.executor import Executor  # TODO: Find correct path
+# from ombudsman.logger import Logger  # TODO: Find correct path
 import hashlib
 import yaml
 from fastapi import WebSocket, WebSocketDisconnect
+import logging
+
+# Setup basic logging
+logger = logging.getLogger(__name__)
 
 active_websockets = []
 
 
 def get_user_role(username):
-    conn = get_snowflake_conn()
-    cursor = conn.cursor()
-    cursor.execute("SELECT ROLE FROM OMBUDSMAN_USERS WHERE USERNAME=%s", (username,))
-    row = cursor.fetchone()
-    return row[0] if row else "viewer"
+    try:
+        conn = SnowflakeConn()
+        cursor = conn.cur
+        cursor.execute("SELECT ROLE FROM OMBUDSMAN_USERS WHERE USERNAME=%s", (username,))
+        row = cursor.fetchone()
+        return row[0] if row else "viewer"
+    except Exception as e:
+        logger.error(f"Error getting user role: {e}")
+        return "viewer"
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="CHANGE_ME")

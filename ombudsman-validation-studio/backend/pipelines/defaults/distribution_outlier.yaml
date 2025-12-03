@@ -1,0 +1,32 @@
+pipeline:
+  name: Distribution and Outlier Validation Pipeline
+  description: Validates numerical distribution patterns and detects outliers between SQL Server and Snowflake databases
+  type: dq
+  category: statistical_analysis
+
+  source:
+    connection: "${SQLSERVER_CONNECTION}"
+    database: "${SQL_DATABASE}"
+    schema: "${SQL_SCHEMA}"
+    table: "${SOURCE_TABLE}"
+
+  target:
+    connection: "${SNOWFLAKE_CONNECTION}"
+    database: "${SNOWFLAKE_DATABASE}"
+    schema: "${SNOWFLAKE_SCHEMA}"
+    table: "${TARGET_TABLE}"
+
+  steps:
+    - name: validate_distribution
+      config: {}
+    - name: validate_outliers
+      config: {}
+    - name: validate_statistics
+      config: {}
+
+execution:
+  write_results_to: "results/distribution_outlier/"
+  fail_on_error: false
+  notify:
+    email: []
+    slack: []

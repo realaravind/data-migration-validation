@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(for schema in Retail Finance Healthcare)",
+      "Bash(do echo \"=== $schema Schema ===\" curl -s \"http://localhost:8000/data/download-sample-workload?schema=$schema\")",
+      "Bash(xargs cat:*)",
+      "Bash(/Users/aravind/sourcecode/projects/data-migration-validator/ombudsman-validation-studio/backend/validation/__init__.py)",
+      "Bash(xargs docker exec:*)",
+      "Bash(echo:*)",
+      "Bash(workload_generator.py)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

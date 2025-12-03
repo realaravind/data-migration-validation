@@ -1,0 +1,40 @@
+# Development-optimized docker-compose with hot reload
+services:
+  studio-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../ombudsman_core:/core:ro
+      - ./backend:/app
+    environment:
+      PYTHONPATH: "/app:/core/src"
+      PYTHONUNBUFFERED: "1"
+    networks:
+      - ovs-net
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  studio-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - ovs-net
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://studio-backend:8000
+    depends_on:
+      - studio-backend
+    restart: unless-stopped
+
+networks:
+  ovs-net:
+    driver: bridge

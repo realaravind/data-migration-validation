@@ -9,6 +9,7 @@ ID format
 
 
 '''
+from ombudsman.validation.sql_utils import escape_sql_server_identifier, escape_snowflake_identifier
 
 
 def validate_regex_patterns(sql_conn, snow_conn, table, mapping, metadata):
@@ -16,8 +17,8 @@ def validate_regex_patterns(sql_conn, snow_conn, table, mapping, metadata):
     if not patterns:
         return {"status": "SKIPPED"}
 
-    sql_table = mapping[table]["sql"]
-    snow_table = mapping[table]["snow"]
+    sql_table = escape_sql_server_identifier(mapping[table]["sql"])
+    snow_table = escape_snowflake_identifier(mapping[table]["snow"])
 
     violations = []
 

@@ -1,0 +1,114 @@
+# =============================================================================
+# Production Unified Dockerfile for Complete Stack
+# Builds: ombudsman_core + backend + frontend in one image
+# =============================================================================
+
+# =============================================================================
+# Stage 1: Build Frontend
+# =============================================================================
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+# Copy frontend package files
+COPY ombudsman-validation-studio/frontend/package*.json ./
+RUN npm ci
+
+# Copy frontend source and build
+COPY ombudsman-validation-studio/frontend/ .
+RUN npm run build
+
+# =============================================================================
+# Stage 2: Build Backend with Core
+# =============================================================================
+FROM python:3.11-slim AS backend-builder
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    make \
+    curl \
+    gnupg \
+    default-libmysqlclient-dev \
+    unixodbc \
+    unixodbc-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Microsoft SQL Server ODBC driver
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/debian/11/prod.list \
+    > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && ACCEPT_EULA=Y apt-get install -y \
+    msodbcsql18 mssql-tools18 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install ombudsman_core
+WORKDIR /core
+COPY ombudsman_core/ .
+RUN pip install --upgrade pip && pip install -e .
+
+# Install studio backend
+WORKDIR /app
+COPY ombudsman-validation-studio/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ombudsman-validation-studio/backend/ .
+
+# =============================================================================
+# Stage 3: Production Runtime
+# =============================================================================
+FROM python:3.11-slim AS production
+
+# Install runtime dependencies only
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    default-libmysqlclient-dev \
+    unixodbc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ODBC driver
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/debian/11/prod.list \
+    > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && ACCEPT_EULA=Y apt-get install -y \
+    msodbcsql18 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install serve for frontend
+RUN apt-get update && apt-get install -y nodejs npm && \
+    npm install -g serve && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder
+COPY --from=backend-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=backend-builder /core /core
+COPY --from=backend-builder /app /app
+
+# Copy frontend build
+COPY --from=frontend-builder /frontend/dist /frontend/dist
+
+# Set environment
+ENV PYTHONPATH="/app:/core/src"
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Expose ports
+EXPOSE 8000 3000
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+    serve -s /frontend/dist -l 3000 &\n\
+    uvicorn main:app --host 0.0.0.0 --port 8000\n\
+    ' > /start.sh && chmod +x /start.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health && curl -f http://localhost:3000 || exit 1
+
+CMD ["/start.sh"]

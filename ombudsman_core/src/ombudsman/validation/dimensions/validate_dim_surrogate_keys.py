@@ -1,8 +1,9 @@
 # src/ombudsman/validation/dimensions/validate_dim_surrogate_keys.py
+from ombudsman.validation.sql_utils import escape_sql_server_identifier, escape_snowflake_identifier
 
 def validate_dim_surrogate_keys(sql_conn, snow_conn, dim, mapping, metadata):
-    sql_table = mapping[dim]["sql"]
-    snow_table = mapping[dim]["snow"]
+    sql_table = escape_sql_server_identifier(mapping[dim]["sql"])
+    snow_table = escape_snowflake_identifier(mapping[dim]["snow"])
 
     bk = metadata[dim]["business_key"]
     sk = metadata[dim]["surrogate_key"]

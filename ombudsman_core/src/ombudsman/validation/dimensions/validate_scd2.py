@@ -1,8 +1,9 @@
 # src/ombudsman/validation/dimensions/validate_scd2.py
+from ombudsman.validation.sql_utils import escape_sql_server_identifier, escape_snowflake_identifier
 
 def validate_scd2(sql_conn, snow_conn, dim, mapping, metadata):
-    sql_table = mapping[dim]["sql"]
-    snow_table = mapping[dim]["snow"]
+    sql_table = escape_sql_server_identifier(mapping[dim]["sql"])
+    snow_table = escape_snowflake_identifier(mapping[dim]["snow"])
 
     bk = metadata[dim]["business_key"]
     eff = metadata[dim]["effective_date"]

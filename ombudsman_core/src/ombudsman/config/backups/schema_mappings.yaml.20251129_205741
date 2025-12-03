@@ -1,0 +1,3 @@
+dbo: public
+dim: dim
+fact: fact
