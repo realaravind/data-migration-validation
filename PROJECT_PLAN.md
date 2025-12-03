@@ -1,0 +1,726 @@
+# Ombudsman Data Migration Validator - Project Plan & Progress Tracker
+
+**Project Start Date:** December 3, 2025
+**Last Updated:** December 3, 2025
+**Overall Progress:** 42% Complete
+
+---
+
+## 📊 Overall Status Dashboard
+
+| Category | Total Tasks | Completed | In Progress | Pending | % Complete |
+|----------|-------------|-----------|-------------|---------|------------|
+| **Critical** | 4 | 1 | 0 | 3 | 25% |
+| **High Priority** | 5 | 0 | 0 | 5 | 0% |
+| **Medium Priority** | 6 | 0 | 0 | 6 | 0% |
+| **Low Priority** | 6 | 0 | 0 | 6 | 0% |
+| **TOTAL** | 21 | 1 | 0 | 20 | 5% |
+
+---
+
+## 🎯 Sprint Planning
+
+### Current Sprint: Sprint 1 (Dec 3-10, 2025)
+**Goal:** Fix critical blockers and establish working pipeline execution
+**Capacity:** 40 hours
+
+#### Sprint Tasks:
+- [ ] Fix Pipeline Execution Parameter Handling (8 hours) - **IN SPRINT**
+- [ ] Fix Custom Pipeline Suggest Route (6 hours) - **IN SPRINT**
+- [ ] Complete Sample Data Generation (8 hours) - **IN SPRINT**
+- [ ] Improve Error Handling Standardization (6 hours) - **IN SPRINT**
+- [ ] Add basic test coverage for pipeline execution (8 hours) - **IN SPRINT**
+
+### Next Sprint: Sprint 2 (Dec 11-17, 2025)
+**Goal:** User management and real-time updates
+- User authentication system
+- WebSocket implementation
+- Results persistence to database
+
+---
+
+## 🔴 CRITICAL PRIORITY TASKS (Must Fix Immediately)
+
+### ✅ TASK 1: Fix validation suggestions error [COMPLETED]
+- **Status:** ✅ DONE
+- **Date Completed:** December 3, 2025
+- **Commit:** c65bbf6
+- **Description:** Fixed 'dict' object has no attribute 'lower' error
+- **Impact:** Users can now use "Analyze Table and Suggest Validations" feature
+- **Files Changed:**
+  - `ombudsman-validation-studio/backend/pipelines/intelligent_suggest.py`
+
+---
+
+### ⏳ TASK 2: Fix Pipeline Execution Parameter Handling
+- **Status:** 🔴 PENDING
+- **Priority:** CRITICAL
+- **Estimated Effort:** 8 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 5, 2025
+
+**Description:**
+Step executor expects individual keyword arguments, not config dict. Need to refactor parameter passing.
+
+**Files to Modify:**
+- `ombudsman-validation-studio/backend/pipelines/execute.py`
+- `ombudsman_core/src/ombudsman/pipeline/step_executor.py`
+
+**Acceptance Criteria:**
+- [ ] Pipeline execution works with YAML config
+- [ ] Parameters correctly passed to validators
+- [ ] All validator types supported
+- [ ] Error messages are clear
+- [ ] Integration tests pass
+
+**Dependencies:** None
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 3: Fix Custom Pipeline Suggest Route
+- **Status:** 🔴 PENDING
+- **Priority:** CRITICAL
+- **Estimated Effort:** 6 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 6, 2025
+
+**Description:**
+Currently returns fallback suggestions. Need to integrate with ombudsman_core's pipeline builder.
+
+**Files to Modify:**
+- `ombudsman-validation-studio/backend/pipelines/suggest.py` (line 41-51)
+
+**Acceptance Criteria:**
+- [ ] Analyzes table metadata intelligently
+- [ ] Uses ombudsman_core pipeline builder
+- [ ] Returns structured pipeline YAML
+- [ ] Handles edge cases (no metadata, empty tables)
+- [ ] Unit tests added
+
+**Dependencies:** None
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 4: Snowflake Connection Setup
+- **Status:** 🔴 PENDING
+- **Priority:** CRITICAL
+- **Estimated Effort:** 8 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 8, 2025
+
+**Description:**
+Need working Snowflake connection for cross-database validation. Options: LocalStack, real instance, or mock.
+
+**Files to Modify:**
+- `docker-compose.yml`
+- `docker-compose.unified.yml`
+- `ombudsman_core/.env`
+
+**Acceptance Criteria:**
+- [ ] Snowflake connection works from backend
+- [ ] Can execute queries
+- [ ] Metadata extraction works
+- [ ] Sample data can be loaded
+- [ ] Documentation updated
+
+**Dependencies:** None
+
+**Blockers:** Need to decide: LocalStack vs Real Snowflake vs Mock
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+- Decision needed: Which Snowflake option to use?
+
+---
+
+## 🟠 HIGH PRIORITY TASKS (Core Features)
+
+### ⏳ TASK 5: Complete Sample Data Generation
+- **Status:** 🔴 PENDING
+- **Priority:** HIGH
+- **Estimated Effort:** 8 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 7, 2025
+
+**Description:**
+Fix foreign key constraint errors when regenerating sample data.
+
+**Files to Modify:**
+- `ombudsman-validation-studio/backend/data/generate.py`
+- `ombudsman_core/src/ombudsman/scripts/generate_sample_data.py`
+
+**Acceptance Criteria:**
+- [ ] No FK constraint errors
+- [ ] Supports large datasets (10K+ rows)
+- [ ] Progress tracking implemented
+- [ ] Transaction management added
+- [ ] Rollback capability on failure
+- [ ] API endpoint returns progress
+
+**Dependencies:** None
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 6: Custom Query Result Handling
+- **Status:** 🔴 PENDING
+- **Priority:** HIGH
+- **Estimated Effort:** 10 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 9, 2025
+
+**Description:**
+Add caching, validation, timeout, and export for custom queries.
+
+**Files to Modify:**
+- `ombudsman-validation-studio/backend/queries/custom.py`
+
+**Acceptance Criteria:**
+- [ ] Query result caching implemented
+- [ ] Query validation before execution
+- [ ] Execution timeout (configurable)
+- [ ] Export to CSV/Excel
+- [ ] Query history tracking
+- [ ] Dangerous query detection (DELETE, DROP, etc.)
+
+**Dependencies:** None
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 7: Error Handling Standardization
+- **Status:** 🔴 PENDING
+- **Priority:** HIGH
+- **Estimated Effort:** 12 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 10, 2025
+
+**Description:**
+Project-wide error handling improvement with structured messages and context.
+
+**Files to Modify:**
+- All backend route handlers
+- Create: `backend/errors/exceptions.py`
+- Create: `backend/errors/handlers.py`
+- Create: `backend/middleware/error_handler.py`
+
+**Acceptance Criteria:**
+- [ ] Custom exception hierarchy created
+- [ ] All routes use structured error responses
+- [ ] Error codes documented
+- [ ] User-friendly messages vs technical details
+- [ ] Stack traces logged but not exposed to users
+- [ ] Error recovery mechanisms where applicable
+
+**Dependencies:** None
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 8: Results Persistence to Database
+- **Status:** 🔴 PENDING
+- **Priority:** HIGH
+- **Estimated Effort:** 16 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 12, 2025
+
+**Description:**
+Store validation results in database instead of just JSON files.
+
+**Files to Modify:**
+- Create: `backend/database/schema.sql`
+- Create: `backend/database/results_repository.py`
+- Modify: `backend/execution/results.py`
+- Modify: `backend/pipelines/execute.py`
+
+**Acceptance Criteria:**
+- [ ] Database schema created (results, runs, steps tables)
+- [ ] Results stored in database after execution
+- [ ] Query API for historical results
+- [ ] Filtering and search implemented
+- [ ] Trend analysis queries
+- [ ] Result retention policy configurable
+- [ ] Migration from JSON to DB
+
+**Dependencies:** None
+
+**Blockers:** Need to decide: SQL Server vs SQLite vs Postgres for results storage
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 9: Integration Test Suite
+- **Status:** 🔴 PENDING
+- **Priority:** HIGH
+- **Estimated Effort:** 12 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 11, 2025
+
+**Description:**
+Add comprehensive integration tests for pipeline execution flow.
+
+**Files to Create:**
+- `ombudsman-validation-studio/backend/tests/integration/test_pipeline_execution.py`
+- `ombudsman-validation-studio/backend/tests/integration/test_metadata_to_validation.py`
+- `ombudsman-validation-studio/backend/tests/integration/test_error_scenarios.py`
+
+**Acceptance Criteria:**
+- [ ] End-to-end pipeline execution tests
+- [ ] Multi-step validation tests
+- [ ] Error recovery tests
+- [ ] Database connection failure tests
+- [ ] Large dataset tests
+- [ ] Test coverage > 80%
+
+**Dependencies:** Task 2 (Pipeline Execution)
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+## 🟡 MEDIUM PRIORITY TASKS (Important Enhancements)
+
+### ⏳ TASK 10: User Authentication System
+- **Status:** 🔴 PENDING
+- **Priority:** MEDIUM
+- **Estimated Effort:** 24 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 15, 2025
+
+**Description:**
+Implement user authentication with JWT tokens and RBAC.
+
+**Files to Create:**
+- `backend/auth/jwt_handler.py`
+- `backend/auth/password_hasher.py`
+- `backend/auth/user_service.py`
+- `backend/middleware/auth.py`
+- `backend/database/users_schema.sql`
+- `frontend/src/pages/Login.tsx`
+- `frontend/src/contexts/AuthContext.tsx`
+
+**Acceptance Criteria:**
+- [ ] User registration endpoint
+- [ ] Login endpoint with JWT
+- [ ] Password hashing (bcrypt)
+- [ ] Token refresh mechanism
+- [ ] Role-based access control
+- [ ] Protected routes middleware
+- [ ] Frontend login page
+- [ ] Session management
+- [ ] Password reset flow
+
+**Dependencies:** Task 8 (Database schema)
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 11: WebSocket Real-time Updates
+- **Status:** 🔴 PENDING
+- **Priority:** MEDIUM
+- **Estimated Effort:** 20 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 17, 2025
+
+**Description:**
+Replace polling with WebSocket for real-time pipeline execution updates.
+
+**Files to Create:**
+- `backend/ws/connection_manager.py`
+- `backend/ws/pipeline_events.py`
+- `frontend/src/hooks/useWebSocket.ts`
+- `frontend/src/hooks/usePipelineUpdates.ts`
+
+**Acceptance Criteria:**
+- [ ] WebSocket server implementation
+- [ ] Connection management (connect/disconnect)
+- [ ] Pipeline execution event streaming
+- [ ] Validation result streaming
+- [ ] Frontend hook for WebSocket
+- [ ] Auto-reconnect on disconnect
+- [ ] Heartbeat/keepalive
+- [ ] Multiple concurrent clients supported
+
+**Dependencies:** Task 2 (Pipeline Execution)
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 12: Advanced Mapping Intelligence
+- **Status:** 🔴 PENDING
+- **Priority:** MEDIUM
+- **Estimated Effort:** 32 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 22, 2025
+
+**Description:**
+Add ML-based column mapping suggestions with user feedback loop.
+
+**Files to Create:**
+- `backend/mapping/ml_suggestions.py`
+- `backend/mapping/training_data.py`
+- `backend/mapping/feedback_loop.py`
+- `backend/database/mapping_history.sql`
+
+**Acceptance Criteria:**
+- [ ] Collect historical mapping data
+- [ ] Train ML model for suggestions
+- [ ] User feedback collection
+- [ ] Model retraining pipeline
+- [ ] Confidence scoring
+- [ ] Contextual awareness (schema relationships)
+- [ ] Batch column mapping
+- [ ] Mapping validation
+
+**Dependencies:** Task 8 (Database), Task 10 (User system for feedback)
+
+**Blockers:** Need to select ML framework (scikit-learn, TensorFlow, etc.)
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 13: Configuration & Secrets Management
+- **Status:** 🔴 PENDING
+- **Priority:** MEDIUM
+- **Estimated Effort:** 16 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 20, 2025
+
+**Description:**
+Replace hardcoded credentials with secure secrets management.
+
+**Files to Create:**
+- `backend/config/secrets_manager.py`
+- `backend/config/vault_client.py`
+- `docker-compose.vault.yml` (optional)
+
+**Acceptance Criteria:**
+- [ ] Integration with secrets provider (Vault/AWS/Azure)
+- [ ] Database credentials from secrets
+- [ ] API keys from secrets
+- [ ] Secrets rotation support
+- [ ] Encryption at rest
+- [ ] No credentials in code/env files
+- [ ] Documentation for setup
+
+**Dependencies:** None
+
+**Blockers:** Need to choose: HashiCorp Vault vs AWS Secrets Manager vs Azure Key Vault
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 14: Database Connection Pooling
+- **Status:** 🔴 PENDING
+- **Priority:** MEDIUM
+- **Estimated Effort:** 10 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 18, 2025
+
+**Description:**
+Implement connection pooling for SQL Server and Snowflake.
+
+**Files to Modify:**
+- `ombudsman_core/src/ombudsman/core/sqlserver_conn.py`
+- `ombudsman_core/src/ombudsman/core/snowflake_conn.py`
+- Create: `ombudsman_core/src/ombudsman/core/connection_pool.py`
+
+**Acceptance Criteria:**
+- [ ] Connection pool for SQL Server (pyodbc pooling or custom)
+- [ ] Connection pool for Snowflake
+- [ ] Configurable pool size
+- [ ] Connection timeout handling
+- [ ] Connection leak detection
+- [ ] Stale connection cleanup
+- [ ] Retry logic for failed connections
+- [ ] Monitoring/metrics for pool health
+
+**Dependencies:** None
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+### ⏳ TASK 15: Test Coverage Improvement
+- **Status:** 🔴 PENDING
+- **Priority:** MEDIUM
+- **Estimated Effort:** 20 hours
+- **Assigned To:** Unassigned
+- **Target Date:** December 19, 2025
+
+**Description:**
+Increase test coverage from 40% to 80%+.
+
+**Files to Create:**
+- Unit tests for all validators
+- Integration tests for APIs
+- End-to-end tests
+- Error scenario tests
+- Performance tests
+
+**Acceptance Criteria:**
+- [ ] Unit test coverage > 80%
+- [ ] Integration test coverage > 70%
+- [ ] All critical paths tested
+- [ ] Error scenarios tested
+- [ ] Performance benchmarks
+- [ ] CI/CD integration
+- [ ] Coverage reporting
+
+**Dependencies:** Task 2, 7 (Need stable APIs)
+
+**Blockers:** None
+
+**Progress Log:**
+- Dec 3, 2025: Task created
+
+---
+
+## 🔵 LOW PRIORITY TASKS (Future Enhancements)
+
+### ⏳ TASK 16: Schema Evolution Tracking
+- **Status:** 🔴 PENDING
+- **Priority:** LOW
+- **Estimated Effort:** 24 hours
+- **Target Date:** TBD
+
+**Description:** Track schema changes over time and detect breaking changes.
+
+**Progress Log:**
+- Dec 3, 2025: Task created (backlog)
+
+---
+
+### ⏳ TASK 17: Performance Optimization
+- **Status:** 🔴 PENDING
+- **Priority:** LOW
+- **Estimated Effort:** 28 hours
+- **Target Date:** TBD
+
+**Description:** Query optimization, caching, index recommendations.
+
+**Progress Log:**
+- Dec 3, 2025: Task created (backlog)
+
+---
+
+### ⏳ TASK 18: Standalone Data Profiler
+- **Status:** 🔴 PENDING
+- **Priority:** LOW
+- **Estimated Effort:** 32 hours
+- **Target Date:** TBD
+
+**Description:** Column statistics, pattern detection, anomaly scoring.
+
+**Progress Log:**
+- Dec 3, 2025: Task created (backlog)
+
+---
+
+### ⏳ TASK 19: Notification System (Email/Slack)
+- **Status:** 🔴 PENDING
+- **Priority:** LOW
+- **Estimated Effort:** 18 hours
+- **Target Date:** TBD
+
+**Description:** Email and Slack integration for alerts.
+
+**Progress Log:**
+- Dec 3, 2025: Task created (backlog)
+
+---
+
+### ⏳ TASK 20: Audit & Compliance Logging
+- **Status:** 🔴 PENDING
+- **Priority:** LOW
+- **Estimated Effort:** 20 hours
+- **Target Date:** TBD
+
+**Description:** Audit trails, compliance reports, GDPR support.
+
+**Progress Log:**
+- Dec 3, 2025: Task created (backlog)
+
+---
+
+### ⏳ TASK 21: Multi-Database Support
+- **Status:** 🔴 PENDING
+- **Priority:** LOW
+- **Estimated Effort:** 60+ hours
+- **Target Date:** TBD
+
+**Description:** Add PostgreSQL, MySQL, Oracle, Redshift, BigQuery support.
+
+**Progress Log:**
+- Dec 3, 2025: Task created (backlog)
+
+---
+
+## 📈 Velocity & Burn-down
+
+### Sprint 1 Metrics
+- **Planned Capacity:** 40 hours
+- **Committed Tasks:** 5 tasks (36 hours)
+- **Completed:** 0 hours
+- **Remaining:** 36 hours
+- **Velocity:** TBD (end of sprint)
+
+### Historical Velocity
+- Sprint 0 (Pre-planning): 1 task completed (2 hours) - Bug fix
+
+---
+
+## 🚀 Milestones
+
+### Milestone 1: Core Stability (Target: Dec 12, 2025)
+**Status:** 🔴 0% Complete
+**Goals:**
+- [ ] All critical bugs fixed
+- [ ] Pipeline execution working end-to-end
+- [ ] Sample data generation stable
+- [ ] Basic test coverage in place
+
+**Progress:** 1/4 critical tasks done
+
+---
+
+### Milestone 2: Production Ready (Target: Dec 20, 2025)
+**Status:** 🔴 0% Complete
+**Goals:**
+- [ ] User authentication implemented
+- [ ] Error handling standardized
+- [ ] Results persisted to database
+- [ ] WebSocket real-time updates
+- [ ] Connection pooling
+- [ ] Secrets management
+
+**Progress:** 0/6 tasks done
+
+---
+
+### Milestone 3: Enterprise Features (Target: Jan 15, 2026)
+**Status:** 🔴 0% Complete
+**Goals:**
+- [ ] Advanced ML-based mapping
+- [ ] Comprehensive test coverage (>80%)
+- [ ] Performance optimizations
+- [ ] Audit logging
+- [ ] Multi-database support initiated
+
+**Progress:** 0/5 tasks done
+
+---
+
+## 📝 Daily Progress Log
+
+### December 3, 2025
+- ✅ Fixed critical bug: 'dict' object has no attribute 'lower' error
+- ✅ Committed fix (c65bbf6) and pushed to GitHub
+- ✅ Created comprehensive project plan
+- ✅ Identified 21 pending tasks across 4 priority levels
+- 📋 Planned Sprint 1 with 5 tasks (36 hours)
+
+**Next Steps:**
+1. Start Task 2: Fix Pipeline Execution Parameter Handling
+2. Review and validate Sprint 1 commitments
+3. Set up CI/CD for automated testing
+
+---
+
+## 🎯 Success Metrics
+
+| Metric | Current | Target | Status |
+|--------|---------|--------|--------|
+| Feature Completeness | 42% | 90% | 🔴 |
+| Test Coverage | 40% | 80% | 🔴 |
+| Bug Count (Critical) | 3 | 0 | 🔴 |
+| Bug Count (High) | 5 | 2 | 🔴 |
+| API Response Time | N/A | <500ms | ⚪ |
+| User Satisfaction | N/A | 4.5/5 | ⚪ |
+| Production Uptime | N/A | 99.5% | ⚪ |
+
+---
+
+## 📚 Resources & References
+
+### Documentation
+- [README.md](./README.md) - Quick start guide
+- [QUICKSTART.md](./QUICKSTART.md) - 2-minute setup
+- [DOCKER_UNIFIED_GUIDE.md](./DOCKER_UNIFIED_GUIDE.md) - Docker deployment
+- [INTELLIGENT_WORKLOAD_ANALYSIS.md](./INTELLIGENT_WORKLOAD_ANALYSIS.md) - Feature guide
+- [COMPARISON_VIEWER_GUIDE.md](./COMPARISON_VIEWER_GUIDE.md) - Comparison viewer
+
+### Code Repositories
+- GitHub: https://github.com/realaravind/data-migration-validation
+- Main Branch: `main`
+- Latest Commit: `c65bbf6`
+
+### Team Contacts
+- Developer: Aravind (realaravind)
+- AI Assistant: Claude Code
+
+---
+
+## 🔄 Plan Maintenance
+
+**This plan is a living document.** It will be updated:
+- Daily: Progress log, task status updates
+- Weekly: Sprint reviews, velocity calculations
+- Bi-weekly: Milestone progress, priority adjustments
+- Monthly: Success metrics review
+
+**Last Review Date:** December 3, 2025
+**Next Review Date:** December 10, 2025
+
+---
+
+**Legend:**
+- ✅ Completed
+- 🟢 In Progress
+- 🔴 Pending
+- ⚪ Not Started
+- ⏳ Scheduled
+- ⚠️ Blocked
+- 🔥 Urgent
