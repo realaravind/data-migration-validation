@@ -1,4 +1,4 @@
-DIM.dim_customer:
+dim.dim_customer:
   mappings:
   - auto_mapped: true
     confidence: 94.0
@@ -40,7 +40,7 @@ DIM.dim_customer:
   target_table: DIM.DIM_CUSTOMER
   unmatched_source: []
   unmatched_target: []
-DIM.dim_date:
+dim.dim_date:
   mappings:
   - auto_mapped: true
     confidence: 94.0
@@ -122,7 +122,7 @@ DIM.dim_date:
   target_table: DIM.DIM_DATE
   unmatched_source: []
   unmatched_target: []
-DIM.dim_product:
+dim.dim_product:
   mappings:
   - auto_mapped: true
     confidence: 94.0
@@ -164,7 +164,7 @@ DIM.dim_product:
   target_table: DIM.DIM_PRODUCT
   unmatched_source: []
   unmatched_target: []
-DIM.dim_store:
+dim.dim_store:
   mappings:
   - auto_mapped: true
     confidence: 94.0
@@ -206,7 +206,7 @@ DIM.dim_store:
   target_table: DIM.DIM_STORE
   unmatched_source: []
   unmatched_target: []
-FACT.fact_sales:
+fact.fact_sales:
   mappings:
   - auto_mapped: true
     confidence: 94.0

@@ -1,2 +1,3 @@
-DIM: DIM
-FACT: FACT
+dbo: PUBLIC
+dim: DIM
+fact: FACT

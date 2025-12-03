@@ -1,0 +1,134 @@
+snow:
+  DIM.DIM_CUSTOMER:
+    columns:
+      CUSTOMER_ID: VARCHAR
+      CUSTOMER_KEY: NUMBER
+      CUSTOMER_NAME: VARCHAR
+      EMAIL: VARCHAR
+      REGION: VARCHAR
+      SEGMENT: VARCHAR
+    object_type: TABLE
+  DIM.DIM_DATE:
+    columns:
+      DATE: DATE
+      DATE_KEY: NUMBER
+      DAY_NAME: VARCHAR
+      DAY_OF_MONTH: NUMBER
+      DAY_OF_WEEK: NUMBER
+      FISCAL_QUARTER: NUMBER
+      FISCAL_YEAR: NUMBER
+      IS_HOLIDAY: NUMBER
+      IS_WEEKEND: NUMBER
+      MONTH: NUMBER
+      MONTH_NAME: VARCHAR
+      QUARTER: NUMBER
+      WEEK: NUMBER
+      YEAR: NUMBER
+    object_type: TABLE
+  DIM.DIM_PRODUCT:
+    columns:
+      CATEGORY: VARCHAR
+      PRODUCT_ID: VARCHAR
+      PRODUCT_KEY: NUMBER
+      PRODUCT_NAME: VARCHAR
+      SUBCATEGORY: VARCHAR
+      UNIT_PRICE: NUMBER
+    object_type: TABLE
+  DIM.DIM_STORE:
+    columns:
+      CITY: VARCHAR
+      STATE: VARCHAR
+      STORE_ID: VARCHAR
+      STORE_KEY: NUMBER
+      STORE_NAME: VARCHAR
+      STORE_TYPE: VARCHAR
+    object_type: TABLE
+  FACT.FACT_SALES:
+    columns:
+      COST_AMOUNT: NUMBER
+      DIM_CUSTOMER_KEY: NUMBER
+      DIM_DATE_KEY: NUMBER
+      DIM_PRODUCT_KEY: NUMBER
+      DIM_STORE_KEY: NUMBER
+      DISCOUNT_AMOUNT: NUMBER
+      QUANTITY: NUMBER
+      SALES_AMOUNT: NUMBER
+      SALES_KEY: NUMBER
+      UNIT_PRICE: NUMBER
+    object_type: TABLE
+  FACT.OMBUDSMAN_RESULTS:
+    columns:
+      ID: NUMBER
+      MESSAGE: VARCHAR
+      PIPELINE_NAME: VARCHAR
+      RUN_TIMESTAMP: TIMESTAMP_LTZ
+      STATUS: VARCHAR
+      STEP_NAME: VARCHAR
+    object_type: TABLE
+  PUBLIC.OMBUDSMAN_RESULTS:
+    columns:
+      ID: NUMBER
+      MESSAGE: VARCHAR
+      PIPELINE_NAME: VARCHAR
+      RUN_TIMESTAMP: TIMESTAMP_LTZ
+      STATUS: VARCHAR
+      STEP_NAME: VARCHAR
+    object_type: TABLE
+sql:
+  dim.dim_customer:
+    columns:
+      customer_id: NVARCHAR(50)
+      customer_key: INT
+      customer_name: NVARCHAR(100)
+      email: NVARCHAR(100)
+      region: NVARCHAR(50)
+      segment: NVARCHAR(20)
+    object_type: TABLE
+  dim.dim_date:
+    columns:
+      date: DATE
+      date_key: INT
+      day_name: VARCHAR(20)
+      day_of_month: INT
+      day_of_week: INT
+      fiscal_quarter: INT
+      fiscal_year: INT
+      is_holiday: INT
+      is_weekend: INT
+      month: INT
+      month_name: VARCHAR(20)
+      quarter: INT
+      week: INT
+      year: INT
+    object_type: TABLE
+  dim.dim_product:
+    columns:
+      category: NVARCHAR(50)
+      product_id: NVARCHAR(50)
+      product_key: INT
+      product_name: NVARCHAR(200)
+      subcategory: NVARCHAR(50)
+      unit_price: DECIMAL(10,2)
+    object_type: TABLE
+  dim.dim_store:
+    columns:
+      city: NVARCHAR(50)
+      state: NVARCHAR(2)
+      store_id: NVARCHAR(20)
+      store_key: INT
+      store_name: NVARCHAR(100)
+      store_type: NVARCHAR(20)
+    object_type: TABLE
+  fact.fact_sales:
+    columns:
+      cost_amount: DECIMAL(12,2)
+      dim_customer_key: INT
+      dim_date_key: INT
+      dim_product_key: INT
+      dim_store_key: INT
+      discount_amount: DECIMAL(10,2)
+      quantity: INT
+      sales_amount: DECIMAL(12,2)
+      sales_key: INT
+      unit_price: DECIMAL(10,2)
+    object_type: TABLE

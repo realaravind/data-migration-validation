@@ -40,6 +40,61 @@ def load_existing_runs():
 load_existing_runs()
 
 
+def validate_pipeline_config(pipeline_def):
+    """
+    Validate pipeline configuration before execution.
+
+    Returns: (is_valid, error_message)
+    """
+    try:
+        # Handle both formats: direct keys or nested under "pipeline"
+        pipeline = pipeline_def.get("pipeline", pipeline_def)
+
+        # Check required fields
+        if not isinstance(pipeline, dict):
+            return False, "Pipeline configuration must be a dictionary"
+
+        # Get steps
+        steps = pipeline.get("steps", [])
+        custom_queries = pipeline.get("custom_queries", [])
+
+        if not steps and not custom_queries:
+            return False, "Pipeline must have either 'steps' or 'custom_queries'"
+
+        # Validate steps structure
+        if steps:
+            if not isinstance(steps, list):
+                return False, "'steps' must be a list"
+
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    return False, f"Step {i+1} must be a dictionary"
+
+                if "name" not in step:
+                    return False, f"Step {i+1} missing required 'name' field"
+
+                # Config is optional but should be dict if present
+                if "config" in step and not isinstance(step["config"], dict):
+                    return False, f"Step {i+1} 'config' must be a dictionary"
+
+        # Validate custom_queries structure
+        if custom_queries:
+            if not isinstance(custom_queries, list):
+                return False, "'custom_queries' must be a list"
+
+            for i, query in enumerate(custom_queries):
+                if not isinstance(query, dict):
+                    return False, f"Custom query {i+1} must be a dictionary"
+
+                if "sql_query" not in query and "snow_query" not in query:
+                    return False, f"Custom query {i+1} must have either 'sql_query' or 'snow_query'"
+
+        return True, None
+
+    except Exception as e:
+        return False, f"Pipeline validation error: {str(e)}"
+
+
 def enrich_metadata(metadata):
     """
     Enrich metadata by analyzing column data types and categorizing them.
@@ -147,6 +202,11 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
         # Parse YAML
         pipeline_def = yaml.safe_load(request.pipeline_yaml)
 
+        # Validate pipeline configuration
+        is_valid, error_msg = validate_pipeline_config(pipeline_def)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=f"Invalid pipeline configuration: {error_msg}")
+
         # Generate run ID
         run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -167,11 +227,14 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
         return {
             "run_id": run_id,
             "status": "pending",
-            "message": "Pipeline execution started"
+            "message": "Pipeline execution started",
+            "validation": "passed"
         }
 
     except yaml.YAMLError as e:
         raise HTTPException(status_code=400, detail=f"Invalid YAML: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
