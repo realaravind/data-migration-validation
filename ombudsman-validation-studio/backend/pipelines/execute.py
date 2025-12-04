@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import yaml
 import os
 import json
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -13,6 +14,8 @@ from errors import (
     ProjectNotFoundError,
     InvalidQueryError
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -258,9 +261,38 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
 
 async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str):
     """Execute pipeline asynchronously"""
+    # Import database repository
+    from database import (
+        ResultsRepository, PipelineRunCreate, PipelineRunUpdate,
+        ValidationStepCreate, ValidationStepUpdate,
+        PipelineStatus as DBPipelineStatus, StepStatus, LogLevel
+    )
+
+    # Initialize repository (optional - only if database is configured)
+    repo = None
+    try:
+        repo = ResultsRepository()
+        logger.info("Database repository initialized for results persistence")
+    except Exception as e:
+        logger.warning(f"Database repository not available: {e}. Results will only be saved to JSON files.")
+
     try:
         # Update status
         pipeline_runs[run_id]["status"] = "running"
+
+        # Create pipeline run in database
+        if repo:
+            try:
+                repo.create_pipeline_run(PipelineRunCreate(
+                    run_id=run_id,
+                    project_id=None,  # TODO: Extract from request if available
+                    pipeline_name=pipeline_name,
+                    pipeline_config=pipeline_def,
+                    executed_by="system"  # TODO: Get from auth context
+                ))
+                repo.update_pipeline_run(run_id, PipelineRunUpdate(status=DBPipelineStatus.RUNNING))
+            except Exception as e:
+                logger.error(f"Failed to create pipeline run in database: {e}")
 
         # Import ombudsman core libraries
         from ombudsman.pipeline.pipeline_runner import PipelineRunner
@@ -420,10 +452,72 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         # Convert results to dict
         results_dict = [r.to_dict() if hasattr(r, 'to_dict') else r for r in results]
 
+        # Calculate summary statistics
+        start_time = datetime.fromisoformat(pipeline_runs[run_id]["started_at"])
+        end_time = datetime.now()
+        duration_seconds = int((end_time - start_time).total_seconds())
+
+        successful_steps = sum(1 for r in results_dict if r.get('status') == 'passed')
+        failed_steps = sum(1 for r in results_dict if r.get('status') == 'failed')
+        warnings_count = sum(1 for r in results_dict if r.get('status') == 'warning')
+
         # Update status
         pipeline_runs[run_id]["status"] = "completed"
-        pipeline_runs[run_id]["completed_at"] = datetime.now().isoformat()
+        pipeline_runs[run_id]["completed_at"] = end_time.isoformat()
         pipeline_runs[run_id]["results"] = results_dict
+
+        # Save to database
+        if repo:
+            try:
+                # Update pipeline run
+                repo.update_pipeline_run(run_id, PipelineRunUpdate(
+                    status=DBPipelineStatus.COMPLETED,
+                    completed_at=end_time,
+                    duration_seconds=duration_seconds,
+                    total_steps=len(results_dict),
+                    successful_steps=successful_steps,
+                    failed_steps=failed_steps,
+                    warnings_count=warnings_count,
+                    errors_count=failed_steps
+                ))
+
+                # Save validation steps
+                for i, result in enumerate(results_dict):
+                    step_status = StepStatus.PASSED
+                    if result.get('status') == 'failed':
+                        step_status = StepStatus.FAILED
+                    elif result.get('status') == 'warning':
+                        step_status = StepStatus.WARNING
+
+                    # Create step
+                    step = repo.create_validation_step(ValidationStepCreate(
+                        run_id=run_id,
+                        step_name=result.get('name', f'Step {i+1}'),
+                        step_order=i,
+                        validator_type=result.get('validator_type'),
+                        step_config=result.get('config')
+                    ))
+
+                    # Update with results
+                    repo.update_validation_step(step.step_id, ValidationStepUpdate(
+                        status=step_status,
+                        completed_at=end_time,
+                        duration_milliseconds=result.get('duration_ms'),
+                        result_message=result.get('message'),
+                        difference_type=result.get('difference_type'),
+                        total_rows=result.get('total_rows'),
+                        differing_rows_count=result.get('differing_rows'),
+                        affected_columns=result.get('affected_columns'),
+                        comparison_details=result.get('comparison_details'),
+                        sql_row_count=result.get('sql_row_count'),
+                        snowflake_row_count=result.get('snowflake_row_count'),
+                        match_percentage=result.get('match_percentage'),
+                        error_message=result.get('error')
+                    ))
+
+                logger.info(f"Pipeline run {run_id} saved to database successfully")
+            except Exception as e:
+                logger.error(f"Failed to save pipeline results to database: {e}")
 
         # Save results to file
         os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -434,6 +528,24 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         pipeline_runs[run_id]["status"] = "failed"
         pipeline_runs[run_id]["completed_at"] = datetime.now().isoformat()
         pipeline_runs[run_id]["error"] = str(e)
+
+        # Update database
+        if repo:
+            try:
+                repo.update_pipeline_run(run_id, PipelineRunUpdate(
+                    status=DBPipelineStatus.FAILED,
+                    completed_at=datetime.now(),
+                    error_message=str(e)
+                ))
+                repo.add_execution_log(
+                    run_id=run_id,
+                    log_level=LogLevel.ERROR,
+                    message=f"Pipeline execution failed: {str(e)}",
+                    context={"error_type": type(e).__name__}
+                )
+            except Exception as db_error:
+                logger.error(f"Failed to update database with error status: {db_error}")
+
         print(f"Pipeline execution failed: {e}")
 
 

@@ -45,6 +45,7 @@ from .exceptions import (
     ConnectionError,
     QueryExecutionError,
     TransactionError,
+    DatabaseConnectionError,
 
     # Pipeline Execution Errors (500)
     PipelineExecutionError,
@@ -100,6 +101,7 @@ __all__ = [
     "ConnectionError",
     "QueryExecutionError",
     "TransactionError",
+    "DatabaseConnectionError",
 
     # Pipeline Execution Errors
     "PipelineExecutionError",
