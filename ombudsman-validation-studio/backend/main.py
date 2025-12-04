@@ -20,6 +20,7 @@ from projects.manager import router as projects_router
 from queries.custom import router as custom_queries_router
 from workload.api import router as workload_router
 from results.history import router as results_history_router
+from ws.router import router as websocket_router
 
 # Error handling
 from errors import register_error_handlers
@@ -60,6 +61,7 @@ app.include_router(projects_router, prefix="/projects", tags=["Projects"])
 app.include_router(custom_queries_router, prefix="/custom-queries", tags=["Custom Business Queries"])
 app.include_router(workload_router, prefix="/workload", tags=["Workload Analysis"])
 app.include_router(results_history_router, prefix="/history", tags=["Results History"])
+app.include_router(websocket_router, tags=["WebSocket Real-time Updates"])
 
 
 @app.get("/")

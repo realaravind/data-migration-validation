@@ -268,6 +268,9 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         PipelineStatus as DBPipelineStatus, StepStatus, LogLevel
     )
 
+    # Import WebSocket event emitter
+    from ws.pipeline_events import PipelineEventEmitter
+
     # Initialize repository (optional - only if database is configured)
     repo = None
     try:
@@ -276,9 +279,19 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
     except Exception as e:
         logger.warning(f"Database repository not available: {e}. Results will only be saved to JSON files.")
 
+    # Initialize event emitter for real-time updates
+    emitter = PipelineEventEmitter(run_id)
+
     try:
         # Update status
         pipeline_runs[run_id]["status"] = "running"
+
+        # Emit pipeline started event
+        await emitter.pipeline_started(
+            pipeline_name=pipeline_name,
+            total_steps=len(pipeline_def.get("pipeline", pipeline_def).get("steps", [])),
+            config=pipeline_def
+        )
 
         # Create pipeline run in database
         if repo:
@@ -445,9 +458,45 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         # Create logger
         logger = JsonLogger()
 
-        # Run pipeline
+        # Run pipeline with real-time event emission
         runner = PipelineRunner(executor, logger, cfg)
-        results = runner.run(steps, pipeline_name)
+
+        # Emit step events during execution
+        results = []
+        for i, step in enumerate(steps):
+            step_name = step.get("name", f"Step {i+1}")
+            validator_type = step.get("validator", step.get("name"))
+
+            # Emit step started
+            await emitter.step_started(
+                step_name=step_name,
+                step_order=i,
+                validator_type=validator_type,
+                config=step.get("config")
+            )
+
+            # Execute step
+            try:
+                result = executor.run_step(step)
+                results.append(result)
+
+                # Emit step completed
+                result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+                await emitter.step_completed(
+                    step_name=step_name,
+                    step_order=i,
+                    status=result_dict.get("status", "passed"),
+                    result=result_dict
+                )
+
+            except Exception as step_error:
+                # Emit step failed
+                await emitter.step_failed(
+                    step_name=step_name,
+                    step_order=i,
+                    error_message=str(step_error)
+                )
+                raise
 
         # Convert results to dict
         results_dict = [r.to_dict() if hasattr(r, 'to_dict') else r for r in results]
@@ -465,6 +514,16 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         pipeline_runs[run_id]["status"] = "completed"
         pipeline_runs[run_id]["completed_at"] = end_time.isoformat()
         pipeline_runs[run_id]["results"] = results_dict
+
+        # Emit pipeline completed event
+        await emitter.pipeline_completed(
+            pipeline_name=pipeline_name,
+            duration_seconds=duration_seconds,
+            total_steps=len(results_dict),
+            successful_steps=successful_steps,
+            failed_steps=failed_steps,
+            warnings_count=warnings_count
+        )
 
         # Save to database
         if repo:
@@ -528,6 +587,18 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         pipeline_runs[run_id]["status"] = "failed"
         pipeline_runs[run_id]["completed_at"] = datetime.now().isoformat()
         pipeline_runs[run_id]["error"] = str(e)
+
+        # Emit pipeline failed event
+        try:
+            start_time = datetime.fromisoformat(pipeline_runs[run_id]["started_at"])
+            duration_seconds = int((datetime.now() - start_time).total_seconds())
+            await emitter.pipeline_failed(
+                pipeline_name=pipeline_name,
+                error_message=str(e),
+                duration_seconds=duration_seconds
+            )
+        except Exception as emit_error:
+            logger.error(f"Failed to emit pipeline failed event: {emit_error}")
 
         # Update database
         if repo:
