@@ -7,13 +7,30 @@ This directory contains all tests for the Ombudsman Validation Studio backend AP
 ```
 tests/
 ├── unit/                           # Unit tests (fast, no external dependencies)
-│   ├── test_exceptions.py         # Custom exception hierarchy tests
-│   └── test_error_handlers.py     # Error handler middleware tests
+│   ├── test_exceptions.py         # Custom exception hierarchy tests (31 tests)
+│   └── test_error_handlers.py     # Error handler middleware tests (6 tests)
 ├── integration/                    # Integration tests (slower, may need database)
-│   └── test_pipeline_execution.py # Pipeline execution API tests
+│   ├── test_pipeline_execution.py        # Pipeline execution API tests (50+ tests)
+│   ├── test_metadata_to_validation.py    # End-to-end workflow tests (40+ tests)
+│   ├── test_error_scenarios.py           # Error handling & recovery (60+ tests)
+│   └── test_websocket.py                 # WebSocket real-time updates (30+ tests)
 ├── conftest.py                    # Shared fixtures and configuration
 └── README.md                      # This file
 ```
+
+## Test Categories Summary
+
+### Unit Tests: 37 tests
+- Custom exceptions (31 tests)
+- Error handlers (6 tests)
+
+### Integration Tests: 180+ tests
+- Pipeline execution (50+ tests)
+- Metadata-to-validation workflow (40+ tests)
+- Error scenarios & recovery (60+ tests)
+- WebSocket real-time updates (30+ tests)
+
+**Total: 217+ tests**
 
 ## Running Tests
 
