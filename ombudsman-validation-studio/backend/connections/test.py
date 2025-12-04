@@ -68,26 +68,48 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
     """Test Snowflake connection"""
     try:
         import os
-        from ombudsman.core.snowflake_conn import SnowflakeConn
+        import sys
+        sys.path.insert(0, "/core/src")
+        from ombudsman.core.connections import test_snowflake_connection as test_snow_conn
 
-        # Test connection
-        conn = SnowflakeConn()
-        cursor = conn.cur
-        cursor.execute("SELECT CURRENT_VERSION()")
-        version = cursor.fetchone()[0]
-        cursor.close()
+        # Build config from environment or request
+        if request.use_env:
+            cfg = {
+                "snowflake": {
+                    "user": os.getenv('SNOWFLAKE_USER', ''),
+                    "password": os.getenv('SNOWFLAKE_PASSWORD', ''),
+                    "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                    "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                    "database": os.getenv('SNOWFLAKE_DATABASE', ''),
+                    "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                    "role": os.getenv('SNOWFLAKE_ROLE', '')
+                }
+            }
+        else:
+            cfg = {
+                "snowflake": {
+                    "user": request.username,
+                    "password": request.password,
+                    "account": request.host,  # account is stored in host field
+                    "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                    "database": request.database,
+                    "schema": "PUBLIC"
+                }
+            }
 
-        return {
-            "status": "success",
-            "message": "Snowflake connection successful",
-            "server_version": version,
-            "account": os.getenv('SNOWFLAKE_ACCOUNT', 'N/A')
-        }
+        # Test connection using core function
+        result = test_snow_conn(cfg)
+
+        return result
 
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Snowflake connection failed: {str(e)}"
+            "message": f"Snowflake connection failed: {str(e)}",
+            "details": {
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
         }
 
 

@@ -1,14 +1,25 @@
 '''
-Centralized SQL + Snowflake creation.
+Centralized SQL + Snowflake connection management.
 
+Provides:
+- Connection pooling
+- Retry logic
+- Health checks
+- Consistent interface via ConnectionWrapper
 '''
 
 # src/ombudsman/core/connections.py
 
 import pyodbc
 import snowflake.connector
+from snowflake.connector import DictCursor
 import os
+import time
+import logging
 from decimal import Decimal
+from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionWrapper:
@@ -100,15 +111,143 @@ def get_sql_conn(cfg):
 
     raise ValueError("No SQL connection config found")
 
-def get_snow_conn(cfg=None):
+def get_snow_conn(cfg=None, retries=3, retry_delay=2):
+    """
+    Get Snowflake connection with retry logic.
+
+    Args:
+        cfg: Configuration dictionary with snowflake credentials
+        retries: Number of connection attempts (default: 3)
+        retry_delay: Seconds to wait between retries (default: 2)
+
+    Returns:
+        ConnectionWrapper: Wrapped Snowflake connection
+
+    Raises:
+        ValueError: If configuration is missing
+        snowflake.connector.Error: If connection fails after retries
+    """
+    if cfg is None:
+        raise ValueError("Snowflake configuration is required")
+
     c = cfg.get("snowflake")
-    raw_conn = snowflake.connector.connect(
-        user=c["user"],
-        password=c["password"],
-        account=c["account"],
-        warehouse=c["warehouse"],
-        database=c["database"],
-        schema=c["schema"]
-    )
-    return ConnectionWrapper(raw_conn)
-    
+    if not c:
+        raise ValueError("No Snowflake configuration found in cfg")
+
+    # Validate required fields
+    required_fields = ["user", "password", "account", "warehouse", "database", "schema"]
+    missing_fields = [field for field in required_fields if not c.get(field)]
+    if missing_fields:
+        raise ValueError(f"Missing required Snowflake config fields: {', '.join(missing_fields)}")
+
+    # Build connection parameters
+    connection_params = {
+        "user": c["user"],
+        "password": c["password"],
+        "account": c["account"],
+        "warehouse": c["warehouse"],
+        "database": c["database"],
+        "schema": c["schema"],
+        "client_session_keep_alive": True,  # Keep session alive
+        "network_timeout": 60,  # Network timeout in seconds
+        "login_timeout": 30,  # Login timeout in seconds
+    }
+
+    # Add optional parameters
+    if c.get("role"):
+        connection_params["role"] = c["role"]
+
+    # Retry logic
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            logger.info(f"Attempting Snowflake connection (attempt {attempt}/{retries})...")
+            raw_conn = snowflake.connector.connect(**connection_params)
+
+            # Test connection with a simple query
+            cursor = raw_conn.cursor()
+            cursor.execute("SELECT CURRENT_VERSION()")
+            version = cursor.fetchone()[0]
+            cursor.close()
+
+            logger.info(f"Successfully connected to Snowflake (version: {version})")
+            return ConnectionWrapper(raw_conn)
+
+        except snowflake.connector.Error as e:
+            last_error = e
+            logger.warning(f"Snowflake connection attempt {attempt} failed: {str(e)}")
+
+            if attempt < retries:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                logger.error(f"Failed to connect to Snowflake after {retries} attempts")
+                raise
+
+        except Exception as e:
+            last_error = e
+            logger.error(f"Unexpected error during Snowflake connection: {str(e)}")
+            raise
+
+    # This should never be reached due to raise in loop, but just in case
+    raise last_error if last_error else Exception("Unknown error during Snowflake connection")
+
+
+def test_snowflake_connection(cfg=None):
+    """
+    Test Snowflake connection and return status information.
+
+    Args:
+        cfg: Configuration dictionary with snowflake credentials
+
+    Returns:
+        dict: Connection status with details
+    """
+    try:
+        conn = get_snow_conn(cfg, retries=1)
+        cursor = conn.cursor()
+
+        # Get connection info
+        cursor.execute("SELECT CURRENT_VERSION()")
+        version = cursor.fetchone()[0]
+
+        cursor.execute("SELECT CURRENT_WAREHOUSE()")
+        warehouse = cursor.fetchone()[0]
+
+        cursor.execute("SELECT CURRENT_DATABASE()")
+        database = cursor.fetchone()[0]
+
+        cursor.execute("SELECT CURRENT_SCHEMA()")
+        schema = cursor.fetchone()[0]
+
+        cursor.execute("SELECT CURRENT_USER()")
+        user = cursor.fetchone()[0]
+
+        cursor.execute("SELECT CURRENT_ROLE()")
+        role = cursor.fetchone()[0]
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "status": "success",
+            "message": "Snowflake connection successful",
+            "details": {
+                "version": version,
+                "warehouse": warehouse,
+                "database": database,
+                "schema": schema,
+                "user": user,
+                "role": role
+            }
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Snowflake connection failed: {str(e)}",
+            "details": {
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        }
