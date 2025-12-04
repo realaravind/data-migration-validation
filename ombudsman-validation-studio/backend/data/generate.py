@@ -50,9 +50,19 @@ async def generate_sample_data(request: SampleDataRequest, background_tasks: Bac
 
 
 async def generate_data_async(job_id: str, request: SampleDataRequest):
-    """Generate sample data asynchronously"""
+    """Generate sample data asynchronously with progress tracking"""
     try:
         generation_status[job_id]["status"] = "running"
+        generation_status[job_id]["progress"] = 0
+        generation_status[job_id]["stage"] = "initializing"
+
+        # Progress callback to update status
+        def progress_callback(stage, progress, message):
+            """Update generation status with progress"""
+            generation_status[job_id]["stage"] = stage
+            generation_status[job_id]["progress"] = progress
+            generation_status[job_id]["message"] = message
+            print(f"[{job_id}] {stage} {progress}%: {message}")
 
         # Set common environment variables
         os.environ["SAMPLE_DIM_COUNT"] = str(request.num_dimensions)
@@ -77,21 +87,37 @@ async def generate_data_async(job_id: str, request: SampleDataRequest):
         for target in targets:
             try:
                 os.environ["SAMPLE_SOURCE"] = target
-                generate_main()
+                progress_callback("starting", 0, f"Starting generation for {target.upper()}")
+
+                # Call with progress callback
+                generate_main(progress_callback=progress_callback)
+
                 results.append(f"{target.upper()}: Success")
+                progress_callback("completed", 100, f"{target.upper()} generation complete")
             except Exception as e:
                 results.append(f"{target.upper()}: Failed - {str(e)}")
+                progress_callback("error", 0, f"{target.upper()} failed: {str(e)}")
+                print(f"Generation error for {target}: {e}")
 
         generation_status[job_id]["status"] = "completed"
+        generation_status[job_id]["progress"] = 100
+        generation_status[job_id]["stage"] = "complete"
         generation_status[job_id]["message"] = (
             f"Generated {request.num_dimensions} dimensions with {request.rows_per_dim} rows each, "
-            f"and {request.num_facts} facts with {request.rows_per_fact} rows each in: {', '.join(results)}"
+            f"and {request.num_facts} facts with {request.rows_per_fact} rows each. "
+            f"Results: {', '.join(results)}"
         )
+        generation_status[job_id]["results"] = results
 
     except Exception as e:
         generation_status[job_id]["status"] = "failed"
+        generation_status[job_id]["progress"] = 0
+        generation_status[job_id]["stage"] = "error"
         generation_status[job_id]["message"] = f"Data generation failed: {str(e)}"
+        generation_status[job_id]["error"] = str(e)
         print(f"Data generation error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 @router.get("/status/{job_id}")

@@ -228,115 +228,182 @@ def generate_schema_data(schema_name="retail",
 # DATABASE LOADERS
 # -----------------------------------------------------------
 
-def load_to_sqlserver(data, schema_def):
-    """Load generated data to SQL Server"""
+def load_to_sqlserver(data, schema_def, progress_callback=None):
+    """
+    Load generated data to SQL Server with transaction management.
+
+    Args:
+        data: Generated data dictionary
+        schema_def: Schema definition
+        progress_callback: Optional callback function(stage, progress, message)
+    """
     conn_str = os.getenv("SQLSERVER_CONN_STR")
     if not conn_str:
         raise Exception("SQLSERVER_CONN_STR not set")
 
-    conn = pyodbc.connect(conn_str, autocommit=True)
+    # Connect WITHOUT autocommit for transaction support
+    conn = pyodbc.connect(conn_str, autocommit=False)
     cursor = conn.cursor()
 
-    cursor.execute("IF DB_ID('SampleDW') IS NULL CREATE DATABASE SampleDW;")
-    cursor.execute("USE SampleDW;")
+    def report_progress(stage, progress, message):
+        """Helper to report progress"""
+        if progress_callback:
+            progress_callback(stage, progress, message)
+        print(f"[{stage}] {progress}% - {message}")
 
-    # Create schemas
-    print("Creating schemas...")
-    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'DIM') EXEC('CREATE SCHEMA DIM');")
-    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'FACT') EXEC('CREATE SCHEMA FACT');")
+    try:
+        report_progress("init", 0, "Initializing database")
+        cursor.execute("IF DB_ID('SampleDW') IS NULL CREATE DATABASE SampleDW;")
+        conn.commit()  # Commit database creation separately
 
-    # Drop existing tables (facts first)
-    print("Dropping existing tables...")
-    for fact_name in data["facts"]:
-        cursor.execute(f"IF OBJECT_ID('FACT.{fact_name}') IS NOT NULL DROP TABLE FACT.{fact_name};")
+        cursor.execute("USE SampleDW;")
+        conn.commit()
 
-    for dim_name in data["dimensions"]:
-        cursor.execute(f"IF OBJECT_ID('DIM.{dim_name}') IS NOT NULL DROP TABLE DIM.{dim_name};")
+        # Create schemas
+        report_progress("schema", 5, "Creating schemas...")
+        cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'DIM') EXEC('CREATE SCHEMA DIM');")
+        cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'FACT') EXEC('CREATE SCHEMA FACT');")
+        conn.commit()
 
-    # Create and populate date dimension
-    print("Creating dim_date...")
-    cursor.execute("""
-        CREATE TABLE DIM.dim_date(
-            date_key INT PRIMARY KEY,
-            date DATE,
-            year INT,
-            quarter INT,
-            month INT,
-            month_name VARCHAR(20),
-            week INT,
-            day_of_month INT,
-            day_of_week INT,
-            day_name VARCHAR(20),
-            is_weekend INT,
-            is_holiday INT,
-            fiscal_year INT,
-            fiscal_quarter INT
-        );
-    """)
+        # Drop existing tables (facts first to avoid FK issues)
+        report_progress("cleanup", 10, "Dropping existing tables...")
+        for fact_name in data["facts"]:
+            cursor.execute(f"IF OBJECT_ID('FACT.{fact_name}') IS NOT NULL DROP TABLE FACT.{fact_name};")
 
-    for row in data["dimensions"]["dim_date"]:
+        for dim_name in data["dimensions"]:
+            cursor.execute(f"IF OBJECT_ID('DIM.{dim_name}') IS NOT NULL DROP TABLE DIM.{dim_name};")
+
+        conn.commit()  # Commit table drops
+
+        # Create and populate date dimension
+        report_progress("dimensions", 15, "Creating dim_date...")
         cursor.execute("""
-            INSERT INTO DIM.dim_date VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-        """, (
-            row["date_key"], row["date"], row["year"], row["quarter"], row["month"],
-            row["month_name"], row["week"], row["day_of_month"], row["day_of_week"],
-            row["day_name"], row["is_weekend"], row["is_holiday"], row["fiscal_year"],
-            row["fiscal_quarter"]
-        ))
+            CREATE TABLE DIM.dim_date(
+                date_key INT PRIMARY KEY,
+                date DATE,
+                year INT,
+                quarter INT,
+                month INT,
+                month_name VARCHAR(20),
+                week INT,
+                day_of_month INT,
+                day_of_week INT,
+                day_name VARCHAR(20),
+                is_weekend INT,
+                is_holiday INT,
+                fiscal_year INT,
+                fiscal_quarter INT
+            );
+        """)
 
-    # Create other dimensions
-    for dim_name, dim_data in data["dimensions"].items():
-        if dim_name == "dim_date":
-            continue
+        date_rows = data["dimensions"]["dim_date"]
+        total_date_rows = len(date_rows)
+        for idx, row in enumerate(date_rows):
+            cursor.execute("""
+                INSERT INTO DIM.dim_date VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, (
+                row["date_key"], row["date"], row["year"], row["quarter"], row["month"],
+                row["month_name"], row["week"], row["day_of_month"], row["day_of_week"],
+                row["day_name"], row["is_weekend"], row["is_holiday"], row["fiscal_year"],
+                row["fiscal_quarter"]
+            ))
+            # Report progress every 100 rows
+            if idx % 100 == 0:
+                progress = 15 + int((idx / total_date_rows) * 10)
+                report_progress("dimensions", progress, f"Inserting dim_date: {idx}/{total_date_rows}")
 
-        dim_def = schema_def["dimensions"][dim_name]
-        columns = []
-        for col_name, col_type in dim_def["columns"].items():
-            # Convert to SQL Server types
-            sql_type = col_type.replace("VARCHAR", "NVARCHAR")
-            columns.append(f"{col_name} {sql_type}")
+        conn.commit()  # Commit date dimension
+        report_progress("dimensions", 25, f"dim_date complete ({total_date_rows} rows)")
 
-        pk_col = dim_def["pk"]
-        columns_str = f"{pk_col} INT PRIMARY KEY, " + ", ".join(columns)
+        # Create other dimensions
+        dim_count = len([d for d in data["dimensions"].keys() if d != "dim_date"])
+        for dim_idx, (dim_name, dim_data) in enumerate(data["dimensions"].items()):
+            if dim_name == "dim_date":
+                continue
 
-        print(f"Creating {dim_name}...")
-        cursor.execute(f"CREATE TABLE DIM.{dim_name}({columns_str});")
+            dim_progress_base = 25 + int((dim_idx / dim_count) * 25)
 
-        for row in dim_data:
-            cols = [pk_col] + list(dim_def["columns"].keys())
-            values = [row[c] for c in cols]
-            placeholders = ", ".join(["?"] * len(values))
-            cursor.execute(f"INSERT INTO DIM.{dim_name} VALUES ({placeholders});", values)
+            dim_def = schema_def["dimensions"][dim_name]
+            columns = []
+            for col_name, col_type in dim_def["columns"].items():
+                # Convert to SQL Server types
+                sql_type = col_type.replace("VARCHAR", "NVARCHAR")
+                columns.append(f"{col_name} {sql_type}")
 
-    # Create fact tables
-    for fact_name, fact_data in data["facts"].items():
-        fact_def = schema_def["facts"][fact_name]
-        pk_col = fact_def["pk"]
+            pk_col = dim_def["pk"]
+            columns_str = f"{pk_col} INT PRIMARY KEY, " + ", ".join(columns)
 
-        # Build column list
-        columns = [f"{pk_col} INT PRIMARY KEY"]
+            report_progress("dimensions", dim_progress_base, f"Creating {dim_name}...")
+            cursor.execute(f"CREATE TABLE DIM.{dim_name}({columns_str});")
 
-        # Add dimension FK columns
-        for dim in fact_def["dimensions"]:
-            columns.append(f"{dim}_key INT")
+            total_rows = len(dim_data)
+            for row_idx, row in enumerate(dim_data):
+                cols = [pk_col] + list(dim_def["columns"].keys())
+                values = [row[c] for c in cols]
+                placeholders = ", ".join(["?"] * len(values))
+                cursor.execute(f"INSERT INTO DIM.{dim_name} VALUES ({placeholders});", values)
 
-        # Add metric columns
-        for metric_name, metric_type in fact_def["metrics"].items():
-            sql_type = metric_type.replace("VARCHAR", "NVARCHAR")
-            columns.append(f"{metric_name} {sql_type}")
+                # Report progress every 20 rows
+                if row_idx % 20 == 0:
+                    report_progress("dimensions", dim_progress_base, f"{dim_name}: {row_idx}/{total_rows}")
 
-        columns_str = ", ".join(columns)
+            conn.commit()  # Commit each dimension
+            report_progress("dimensions", dim_progress_base + 5, f"{dim_name} complete ({total_rows} rows)")
 
-        print(f"Creating {fact_name}...")
-        cursor.execute(f"CREATE TABLE FACT.{fact_name}({columns_str});")
+        # Create fact tables
+        fact_count = len(data["facts"])
+        for fact_idx, (fact_name, fact_data) in enumerate(data["facts"].items()):
+            fact_progress_base = 50 + int((fact_idx / fact_count) * 45)
 
-        for row in fact_data:
-            cols = [pk_col] + [f"{d}_key" for d in fact_def["dimensions"]] + list(fact_def["metrics"].keys())
-            values = [row[c] for c in cols]
-            placeholders = ", ".join(["?"] * len(values))
-            cursor.execute(f"INSERT INTO FACT.{fact_name} VALUES ({placeholders});", values)
+            fact_def = schema_def["facts"][fact_name]
+            pk_col = fact_def["pk"]
 
-    print("SQL Server data load complete!")
+            # Build column list
+            columns = [f"{pk_col} INT PRIMARY KEY"]
+
+            # Add dimension FK columns
+            for dim in fact_def["dimensions"]:
+                columns.append(f"{dim}_key INT")
+
+            # Add metric columns
+            for metric_name, metric_type in fact_def["metrics"].items():
+                sql_type = metric_type.replace("VARCHAR", "NVARCHAR")
+                columns.append(f"{metric_name} {sql_type}")
+
+            columns_str = ", ".join(columns)
+
+            report_progress("facts", fact_progress_base, f"Creating {fact_name}...")
+            cursor.execute(f"CREATE TABLE FACT.{fact_name}({columns_str});")
+
+            total_rows = len(fact_data)
+            for row_idx, row in enumerate(fact_data):
+                cols = [pk_col] + [f"{d}_key" for d in fact_def["dimensions"]] + list(fact_def["metrics"].keys())
+                values = [row[c] for c in cols]
+                placeholders = ", ".join(["?"] * len(values))
+                cursor.execute(f"INSERT INTO FACT.{fact_name} VALUES ({placeholders});", values)
+
+                # Report progress every 50 rows
+                if row_idx % 50 == 0:
+                    report_progress("facts", fact_progress_base, f"{fact_name}: {row_idx}/{total_rows}")
+
+            conn.commit()  # Commit each fact table
+            report_progress("facts", fact_progress_base + 10, f"{fact_name} complete ({total_rows} rows)")
+
+        report_progress("complete", 100, "SQL Server data load complete!")
+        conn.close()
+
+    except Exception as e:
+        # Rollback on error
+        print(f"[ERROR] Data generation failed: {str(e)}")
+        report_progress("error", 0, f"Rolling back due to error: {str(e)}")
+        try:
+            conn.rollback()
+            print("[ROLLBACK] Transaction rolled back successfully")
+        except Exception as rb_error:
+            print(f"[ROLLBACK ERROR] Failed to rollback: {rb_error}")
+        finally:
+            conn.close()
+        raise  # Re-raise the exception
 
 
 def load_to_snowflake(data, schema_def):
@@ -463,7 +530,14 @@ def load_to_snowflake(data, schema_def):
 # MAIN
 # -----------------------------------------------------------
 
-def main():
+def main(progress_callback=None):
+    """
+    Main entry point for sample data generation.
+
+    Args:
+        progress_callback: Optional callback function(stage, progress, message)
+                          for progress tracking
+    """
     mode = os.getenv("SAMPLE_SOURCE", "sqlserver").lower()
     schema_name = os.getenv("SAMPLE_SCHEMA", "retail")
     rows_per_dim = int(os.getenv("SAMPLE_DIM_ROWS", "100"))
@@ -471,6 +545,7 @@ def main():
     broken_fk_rate = float(os.getenv("BROKEN_FK_RATE", "0.0"))
 
     # Generate data
+    print(f"Generating {schema_name} schema with {rows_per_dim} rows/dimension, {rows_per_fact} rows/fact...")
     data, schema_def = generate_schema_data(
         schema_name=schema_name,
         rows_per_dim=rows_per_dim,
@@ -480,11 +555,11 @@ def main():
 
     # Load to target
     if mode == "sqlserver":
-        load_to_sqlserver(data, schema_def)
+        load_to_sqlserver(data, schema_def, progress_callback)
     elif mode == "snowflake":
         load_to_snowflake(data, schema_def)
     elif mode == "both":
-        load_to_sqlserver(data, schema_def)
+        load_to_sqlserver(data, schema_def, progress_callback)
         load_to_snowflake(data, schema_def)
     else:
         raise ValueError(f"Unknown mode: {mode}")
