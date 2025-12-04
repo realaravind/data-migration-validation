@@ -1,10 +1,18 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 import yaml
 import os
 import json
 from datetime import datetime
 from typing import Dict, List, Optional
+
+from errors import (
+    InvalidPipelineConfigError,
+    PipelineNotFoundError,
+    PipelineExecutionError,
+    ProjectNotFoundError,
+    InvalidQueryError
+)
 
 router = APIRouter()
 
@@ -205,7 +213,10 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
         # Validate pipeline configuration
         is_valid, error_msg = validate_pipeline_config(pipeline_def)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=f"Invalid pipeline configuration: {error_msg}")
+            raise InvalidPipelineConfigError(
+                message=error_msg,
+                details={"pipeline_yaml": request.pipeline_yaml[:500]}  # First 500 chars for context
+            )
 
         # Generate run ID
         run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -232,11 +243,17 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
         }
 
     except yaml.YAMLError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid YAML: {str(e)}")
-    except HTTPException:
+        raise InvalidQueryError(
+            message=f"Invalid YAML syntax: {str(e)}",
+            query=request.pipeline_yaml[:500]
+        )
+    except InvalidPipelineConfigError:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+        raise PipelineExecutionError(
+            message=f"Failed to start pipeline execution: {str(e)}",
+            details={"pipeline_name": request.pipeline_name}
+        )
 
 
 async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str):
@@ -424,7 +441,7 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 async def get_pipeline_status(run_id: str):
     """Get status of a pipeline execution"""
     if run_id not in pipeline_runs:
-        raise HTTPException(status_code=404, detail="Pipeline run not found")
+        raise PipelineNotFoundError(pipeline_id=run_id)
 
     return pipeline_runs[run_id]
 
@@ -507,7 +524,7 @@ async def get_default_pipeline(pipeline_id: str):
         filepath = os.path.join(defaults_dir, f"{pipeline_id}.yml")
 
     if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail=f"Default pipeline '{pipeline_id}' not found")
+        raise PipelineNotFoundError(pipeline_id=pipeline_id)
 
     with open(filepath) as f:
         content = f.read()
@@ -537,7 +554,7 @@ async def delete_pipeline_run(run_id: str):
 
         return {"message": "Pipeline run deleted"}
 
-    raise HTTPException(status_code=404, detail="Pipeline run not found")
+    raise PipelineNotFoundError(pipeline_id=run_id)
 
 
 # ========================================
@@ -566,7 +583,7 @@ async def save_custom_pipeline(request: SavePipelineRequest):
             print(f"[Pipeline Save] Projects found: {os.listdir(PROJECTS_DIR)}")
 
         if not os.path.exists(project_dir):
-            raise HTTPException(status_code=404, detail=f"Project not found at {project_dir}")
+            raise ProjectNotFoundError(project_id=request.project_id)
 
         # Create pipelines directory for project
         pipelines_dir = f"{project_dir}/pipelines"
@@ -576,7 +593,10 @@ async def save_custom_pipeline(request: SavePipelineRequest):
         try:
             pipeline_def = yaml.safe_load(request.pipeline_yaml)
         except yaml.YAMLError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid YAML: {str(e)}")
+            raise InvalidQueryError(
+                message=f"Invalid YAML syntax: {str(e)}",
+                query=request.pipeline_yaml[:500]
+            )
 
         # Save pipeline
         pipeline_file = f"{pipelines_dir}/{request.pipeline_name}.yaml"
@@ -601,8 +621,13 @@ async def save_custom_pipeline(request: SavePipelineRequest):
             "pipeline_file": pipeline_file
         }
 
+    except (ProjectNotFoundError, InvalidQueryError):
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save pipeline: {str(e)}")
+        raise PipelineExecutionError(
+            message=f"Failed to save pipeline: {str(e)}",
+            details={"project_id": request.project_id, "pipeline_name": request.pipeline_name}
+        )
 
 
 @router.get("/custom/project/{project_id}")
@@ -656,7 +681,7 @@ async def get_custom_pipeline(project_id: str, pipeline_name: str):
             pipeline_file = f"{pipelines_dir}/{pipeline_name}.yml"
 
         if not os.path.exists(pipeline_file):
-            raise HTTPException(status_code=404, detail="Pipeline not found")
+            raise PipelineNotFoundError(pipeline_id=f"{project_id}/{pipeline_name}")
 
         # Load pipeline YAML
         with open(pipeline_file) as f:
@@ -677,10 +702,13 @@ async def get_custom_pipeline(project_id: str, pipeline_name: str):
             "metadata": metadata
         }
 
-    except HTTPException:
+    except PipelineNotFoundError:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load pipeline: {str(e)}")
+        raise PipelineExecutionError(
+            message=f"Failed to load pipeline: {str(e)}",
+            details={"project_id": project_id, "pipeline_name": pipeline_name}
+        )
 
 
 @router.delete("/custom/project/{project_id}/{pipeline_name}")
@@ -695,7 +723,7 @@ async def delete_custom_pipeline(project_id: str, pipeline_name: str):
             pipeline_file = f"{pipelines_dir}/{pipeline_name}.yml"
 
         if not os.path.exists(pipeline_file):
-            raise HTTPException(status_code=404, detail="Pipeline not found")
+            raise PipelineNotFoundError(pipeline_id=f"{project_id}/{pipeline_name}")
 
         # Delete files
         os.remove(pipeline_file)
@@ -707,7 +735,10 @@ async def delete_custom_pipeline(project_id: str, pipeline_name: str):
             "message": f"Pipeline '{pipeline_name}' deleted successfully"
         }
 
-    except HTTPException:
+    except PipelineNotFoundError:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete pipeline: {str(e)}")
+        raise PipelineExecutionError(
+            message=f"Failed to delete pipeline: {str(e)}",
+            details={"project_id": project_id, "pipeline_name": pipeline_name}
+        )

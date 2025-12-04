@@ -20,11 +20,17 @@ from projects.manager import router as projects_router
 from queries.custom import router as custom_queries_router
 from workload.api import router as workload_router
 
+# Error handling
+from errors import register_error_handlers
+
 app = FastAPI(
     title="Ombudsman Validation Studio API",
     description="Complete API exposing all Ombudsman Core features - by Plural Insight",
     version="2.0.0"
 )
+
+# Register error handlers
+register_error_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
