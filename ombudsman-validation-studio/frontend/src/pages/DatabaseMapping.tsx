@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -24,18 +25,26 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
-    IconButton
+    IconButton,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
+import HomeIcon from '@mui/icons-material/Home';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import mermaid from 'mermaid';
 
 interface DatabaseMappingProps {
     currentProject?: any;
 }
 
-export default function DatabaseMapping({ currentProject }: DatabaseMappingProps) {
+export default function DatabaseMapping({ currentProject: currentProjectProp }: DatabaseMappingProps) {
+    const navigate = useNavigate();
     const [sqlDatabase, setSqlDatabase] = useState('SampleDW');
     const [snowflakeDatabase, setSnowflakeDatabase] = useState('SAMPLEDW');
 
@@ -44,11 +53,11 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
     const [extractionResult, setExtractionResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
+    // Internal project state - use prop if provided, otherwise load from storage
+    const [currentProject, setCurrentProject] = useState<any>(currentProjectProp || null);
+
     // New state for existing mappings and editing
     const [existingMappings, setExistingMappings] = useState<any>(null);
-    const [editMode, setEditMode] = useState(false);
-    const [overrides, setOverrides] = useState<{[key: string]: string}>({});
-    const [editedMappings, setEditedMappings] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
 
     // Schema mapping state
@@ -67,6 +76,13 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
     const [relationshipEditMode, setRelationshipEditMode] = useState(false);
     const [availableTables, setAvailableTables] = useState<string[]>([]);
 
+    // Project automation state
+    const [projectMetadata, setProjectMetadata] = useState<any>(null);
+    const [projectRelationships, setProjectRelationships] = useState<any[]>([]);
+    const [setupLoading, setSetupLoading] = useState(false);
+    const [automationLoading, setAutomationLoading] = useState(false);
+    const [automationResult, setAutomationResult] = useState<any>(null);
+
     // Computed values based on selected database
     const inferredRelationships = selectedDatabase === 'sql' ? sqlRelationships?.relationships : snowRelationships?.relationships;
     const relationshipMetrics = selectedDatabase === 'sql' ? sqlRelationships?.metrics : snowRelationships?.metrics;
@@ -83,6 +99,44 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
     const [columnFilter, setColumnFilter] = useState<string>('all'); // all, unmapped, low_confidence
     const [columnEditingTable, setColumnEditingTable] = useState<string | null>(null);
     const [editedColumnMappings, setEditedColumnMappings] = useState<any>({});
+
+    // Project creation dialog state
+    const [showProjectDialog, setShowProjectDialog] = useState(false);
+    const [newProjectName, setNewProjectName] = useState('');
+    const [newProjectDescription, setNewProjectDescription] = useState('');
+    const [projectError, setProjectError] = useState<string | null>(null);
+
+    // Update project when prop changes or load from storage
+    useEffect(() => {
+        if (currentProjectProp) {
+            // Use prop if provided (from parent App.tsx)
+            setCurrentProject(currentProjectProp);
+        } else {
+            // Try sessionStorage first (App.tsx stores here)
+            const sessionProject = sessionStorage.getItem('currentProject');
+            if (sessionProject) {
+                try {
+                    setCurrentProject(JSON.parse(sessionProject));
+                    return;
+                } catch (err) {
+                    console.error('Failed to parse session project:', err);
+                }
+            }
+
+            // Fallback to localStorage
+            const savedProjectId = localStorage.getItem('current_project_id');
+            const savedProjectName = localStorage.getItem('current_project_name');
+            const savedProjectDesc = localStorage.getItem('current_project_description');
+
+            if (savedProjectId && savedProjectName) {
+                setCurrentProject({
+                    project_id: savedProjectId,
+                    name: savedProjectName,
+                    description: savedProjectDesc || ''
+                });
+            }
+        }
+    }, [currentProjectProp]);
 
     useEffect(() => {
         fetchAvailableDatabases();
@@ -221,8 +275,6 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
 
             if (data.status === 'success') {
                 setExistingMappings(data);
-                setOverrides(data.overrides || {});
-                setEditedMappings(data.mappings || []);
 
                 // Load project config if available
                 if (data.project_config) {
@@ -348,7 +400,6 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
 
             if (response.ok) {
                 setMappingEditMode(false);
-                setEditMode(false);
                 await loadExistingMappings(); // Reload to show updated data
                 setError(null);
             } else {
@@ -363,7 +414,8 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
 
     const saveProject = async () => {
         if (!currentProject) {
-            setError('No project loaded. Please create or load a project first.');
+            // Open dialog to create new project
+            setShowProjectDialog(true);
             return;
         }
 
@@ -371,9 +423,16 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
         setError(null);
 
         try {
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/save`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers
             });
 
             const data = await response.json();
@@ -382,7 +441,7 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                 setError(null);
                 alert(`Project "${currentProject.name}" saved successfully!`);
             } else {
-                setError(data.detail || 'Failed to save project');
+                setError(data.detail || data.error?.message || 'Failed to save project');
             }
         } catch (err) {
             setError(`Failed to save project: ${err}`);
@@ -391,29 +450,75 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
         setSaving(false);
     };
 
-    const updateSnowflakeTableMapping = (sqlTable: string, newSnowTable: string) => {
-        // Update overrides
-        const newOverrides = { ...overrides };
-        if (newSnowTable) {
-            newOverrides[sqlTable] = newSnowTable;
-        } else {
-            delete newOverrides[sqlTable];
+    const handleCreateProject = async () => {
+        if (!newProjectName.trim()) {
+            setProjectError('Project name is required');
+            return;
         }
-        setOverrides(newOverrides);
 
-        // Update the mapping in editedMappings
-        const newMappings = editedMappings.map(mapping => {
-            if (mapping.sql_server_table === sqlTable) {
-                return {
-                    ...mapping,
-                    snowflake_table: newSnowTable,
-                    is_custom_mapping: true,
-                    match_status: newSnowTable ? 'found_in_both' : 'only_in_sql_server'
-                };
+        setSaving(true);
+        setProjectError(null);
+
+        try {
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
-            return mapping;
-        });
-        setEditedMappings(newMappings);
+
+            // Create new project
+            const response = await fetch('http://localhost:8000/projects/create', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    name: newProjectName,
+                    description: newProjectDescription,
+                    sql_database: sqlDatabase,
+                    snowflake_database: snowflakeDatabase
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Use project_id from response
+                const project_id = data.project_id || newProjectName.toLowerCase().replace(/\s+/g, '_');
+                const project_name = data.metadata?.name || newProjectName;
+                const project_desc = data.metadata?.description || newProjectDescription;
+
+                // Save to both localStorage and sessionStorage
+                localStorage.setItem('current_project_id', project_id);
+                localStorage.setItem('current_project_name', project_name);
+                if (project_desc) {
+                    localStorage.setItem('current_project_description', project_desc);
+                }
+
+                const projectData = {
+                    project_id: project_id,
+                    name: project_name,
+                    description: project_desc || ''
+                };
+
+                sessionStorage.setItem('currentProject', JSON.stringify(projectData));
+
+                // Update current project state
+                setCurrentProject(projectData);
+
+                setShowProjectDialog(false);
+                setNewProjectName('');
+                setNewProjectDescription('');
+                setProjectError(null);  // Clear any previous errors
+                alert(`Project "${project_name}" created successfully and is now active!`);
+            } else {
+                const errorMsg = data.detail || data.error?.message || 'Failed to create project';
+                setProjectError(errorMsg);
+            }
+        } catch (err) {
+            setProjectError(`Failed to create project: ${err}`);
+        }
+
+        setSaving(false);
     };
 
     // Initialize editing mappings when extraction result changes
@@ -517,6 +622,12 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
         setInferring(true);
         setError(null);
 
+        if (!currentProject) {
+            setError('No project selected. Please select a project first.');
+            setInferring(false);
+            return;
+        }
+
         try {
             // Infer relationships for BOTH SQL and Snowflake
             const [sqlResponse, snowResponse] = await Promise.all([
@@ -524,6 +635,7 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        project_name: currentProject.name,
                         use_existing_mappings: true,
                         source_database: 'sql'
                     })
@@ -532,6 +644,7 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        project_name: currentProject.name,
                         use_existing_mappings: true,
                         source_database: 'snow'
                     })
@@ -622,34 +735,6 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
             console.error('Failed to generate diagram:', err);
             return '';
         }
-    };
-
-    const saveInferredRelationships = async () => {
-        setSaving(true);
-        setError(null);
-
-        try {
-            const response = await fetch('http://localhost:8000/metadata/save-relationships', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    relationships: editedRelationships
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                setRelationshipEditMode(false);
-                setError(null);
-            } else {
-                setError(data.detail || 'Failed to save relationships');
-            }
-        } catch (err) {
-            setError(`Failed to save relationships: ${err}`);
-        }
-
-        setSaving(false);
     };
 
     const removeRelationship = async (index: number) => {
@@ -790,6 +875,141 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
         return [];
     };
 
+    // Project automation functions
+    const setupProjectAutomation = async () => {
+        if (!currentProject) {
+            setError('Please create or select a project first');
+            return;
+        }
+
+        setSetupLoading(true);
+        setError(null);
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/setup`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    connection: 'sqlserver',
+                    schema: 'dbo'
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setProjectMetadata(data.metadata);
+                setProjectRelationships(data.relationships);
+                alert(`Success! Extracted ${data.table_count} tables and inferred ${data.relationship_count} relationships.`);
+            } else {
+                setError(data.detail || 'Failed to setup project automation');
+            }
+        } catch (err) {
+            setError(`Failed to setup project: ${err}`);
+        }
+
+        setSetupLoading(false);
+    };
+
+    const loadProjectRelationships = async () => {
+        if (!currentProject) return;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const headers: any = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships`, {
+                headers
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setProjectRelationships(data.relationships);
+            }
+        } catch (err) {
+            console.error('Failed to load project relationships:', err);
+        }
+    };
+
+    const saveProjectRelationships = async () => {
+        if (!currentProject) return;
+
+        setSaving(true);
+        setError(null);
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(projectRelationships)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert('Relationships saved successfully!');
+            } else {
+                setError(data.detail || 'Failed to save relationships');
+            }
+        } catch (err) {
+            setError(`Failed to save relationships: ${err}`);
+        }
+
+        setSaving(false);
+    };
+
+    const proceedToAutomation = async () => {
+        if (!currentProject) {
+            setError('Please create or select a project first');
+            return;
+        }
+
+        setAutomationLoading(true);
+        setError(null);
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/automate`, {
+                method: 'POST',
+                headers
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setAutomationResult(data);
+                alert(`Success! Created ${data.pipelines_created} pipelines.\nBatch: ${data.batch_name}`);
+            } else {
+                setError(data.detail || 'Failed to automate project');
+            }
+        } catch (err) {
+            setError(`Failed to automate project: ${err}`);
+        }
+
+        setAutomationLoading(false);
+    };
+
     const extractMetadata = async () => {
         setLoading(true);
         setError(null);
@@ -841,14 +1061,16 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                         Configure database and schema mappings for metadata extraction and validation
                     </Typography>
                 </Box>
-                {currentProject && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Box sx={{ textAlign: 'right' }}>
-                            <Chip label={currentProject.name} color="primary" />
-                            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                                Last updated: {new Date(currentProject.updated_at).toLocaleString()}
-                            </Typography>
-                        </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        color="primary"
+                        startIcon={<HomeIcon />}
+                        onClick={() => navigate('/')}
+                    >
+                        Home
+                    </Button>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <Button
                             variant="contained"
                             color="success"
@@ -858,8 +1080,13 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                         >
                             {saving ? <CircularProgress size={20} /> : 'Save Project'}
                         </Button>
+                        {currentProject && (
+                            <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                                Last updated: {new Date(currentProject.updated_at).toLocaleString()}
+                            </Typography>
+                        )}
                     </Box>
-                )}
+                </Box>
             </Box>
 
             {/* KPI Metrics */}
@@ -1976,6 +2203,208 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                 </Box>
             )}
 
+            {/* Project Automation Section */}
+            {currentProject && extractionResult && (
+                <Box sx={{ mt: 3 }}>
+                    <Card>
+                        <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h6">
+                                    Intelligence Automation
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                    {!projectMetadata && (
+                                        <Button
+                                            variant="outlined"
+                                            color="primary"
+                                            startIcon={<AutoFixHighIcon />}
+                                            onClick={setupProjectAutomation}
+                                            disabled={setupLoading}
+                                        >
+                                            {setupLoading ? <CircularProgress size={20} /> : 'Setup Project Automation'}
+                                        </Button>
+                                    )}
+                                    {projectMetadata && !automationResult && (
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            size="large"
+                                            startIcon={automationLoading ? <CircularProgress size={20} /> : <PlayArrowIcon />}
+                                            onClick={proceedToAutomation}
+                                            disabled={automationLoading}
+                                        >
+                                            {automationLoading ? 'Creating Pipelines...' : 'Proceed to Intelligence Automation'}
+                                        </Button>
+                                    )}
+                                </Box>
+                            </Box>
+
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                                <strong>Automated Pipeline Creation:</strong> This feature will automatically create validation pipelines
+                                for ALL tables in your project using intelligent inference. All pipelines will be prefixed with your project name.
+                            </Alert>
+
+                            {/* Project Setup Status */}
+                            {projectMetadata && (
+                                <Box sx={{ mb: 3 }}>
+                                    <Alert severity="success">
+                                        <Typography variant="body2" gutterBottom>
+                                            <strong>Project Setup Complete</strong>
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                            <Chip
+                                                label={`${Object.keys(projectMetadata).length} tables extracted`}
+                                                size="small"
+                                                color="primary"
+                                            />
+                                            <Chip
+                                                label={`${projectRelationships.length} relationships inferred`}
+                                                size="small"
+                                                color="secondary"
+                                            />
+                                        </Box>
+                                    </Alert>
+                                </Box>
+                            )}
+
+                            {/* Project Relationships Validation Table */}
+                            {projectRelationships && projectRelationships.length > 0 && !automationResult && (
+                                <Box sx={{ mb: 3 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                        <Typography variant="subtitle1">
+                                            Inferred Relationships ({projectRelationships.length})
+                                        </Typography>
+                                        <Button
+                                            variant="outlined"
+                                            size="small"
+                                            onClick={saveProjectRelationships}
+                                            startIcon={<SaveIcon />}
+                                            disabled={saving}
+                                        >
+                                            Save Changes
+                                        </Button>
+                                    </Box>
+
+                                    <Alert severity="warning" sx={{ mb: 2 }}>
+                                        <Typography variant="body2">
+                                            <strong>Review & Validate:</strong> Please review the relationships below before proceeding to automation.
+                                            You can edit or delete relationships as needed.
+                                        </Typography>
+                                    </Alert>
+
+                                    <TableContainer component={Paper} variant="outlined">
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell><strong>Fact Table</strong></TableCell>
+                                                    <TableCell><strong>FK Column</strong></TableCell>
+                                                    <TableCell><strong>Dim Table</strong></TableCell>
+                                                    <TableCell><strong>Dim Column</strong></TableCell>
+                                                    <TableCell><strong>Confidence</strong></TableCell>
+                                                    <TableCell><strong>Reason</strong></TableCell>
+                                                    <TableCell><strong>Actions</strong></TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {projectRelationships.map((rel: any, idx: number) => (
+                                                    <TableRow key={idx}>
+                                                        <TableCell>{rel.fact_table}</TableCell>
+                                                        <TableCell><Chip label={rel.fk_column} size="small" /></TableCell>
+                                                        <TableCell>{rel.dim_table}</TableCell>
+                                                        <TableCell><Chip label={rel.dim_column} size="small" /></TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={rel.confidence}
+                                                                size="small"
+                                                                color={
+                                                                    rel.confidence === 'high' ? 'success' :
+                                                                    rel.confidence === 'medium' ? 'warning' : 'error'
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="caption">{rel.reason}</Typography>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => {
+                                                                    const updated = projectRelationships.filter((_, i) => i !== idx);
+                                                                    setProjectRelationships(updated);
+                                                                }}
+                                                            >
+                                                                <DeleteIcon fontSize="small" />
+                                                            </IconButton>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                </Box>
+                            )}
+
+                            {/* Automation Results */}
+                            {automationResult && (
+                                <Box>
+                                    <Alert severity="success" sx={{ mb: 2 }}>
+                                        <Typography variant="body1" gutterBottom>
+                                            <strong>Automation Complete!</strong>
+                                        </Typography>
+                                        <Typography variant="body2">
+                                            Created {automationResult.pipelines_created} pipelines with batch file: {automationResult.batch_name}
+                                        </Typography>
+                                    </Alert>
+
+                                    <Typography variant="subtitle1" gutterBottom>
+                                        Created Pipelines ({automationResult.pipelines?.length || 0})
+                                    </Typography>
+
+                                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+                                        <Table size="small" stickyHeader>
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell><strong>Pipeline Name</strong></TableCell>
+                                                    <TableCell><strong>Table</strong></TableCell>
+                                                    <TableCell><strong>Schema</strong></TableCell>
+                                                    <TableCell><strong>File</strong></TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {automationResult.pipelines?.map((pipeline: any, idx: number) => (
+                                                    <TableRow key={idx}>
+                                                        <TableCell>
+                                                            <Chip label={pipeline.pipeline_name} size="small" color="primary" />
+                                                        </TableCell>
+                                                        <TableCell>{pipeline.table}</TableCell>
+                                                        <TableCell>{pipeline.schema}</TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                                                {pipeline.file}
+                                                            </Typography>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+
+                                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            onClick={() => navigate('/pipeline-execution')}
+                                        >
+                                            Go to Pipeline Execution
+                                        </Button>
+                                    </Box>
+                                </Box>
+                            )}
+                        </CardContent>
+                    </Card>
+                </Box>
+            )}
+
             {/* Information Box */}
             <Box sx={{ mt: 3 }}>
                 <Alert severity="info">
@@ -1986,6 +2415,54 @@ export default function DatabaseMapping({ currentProject }: DatabaseMappingProps
                     </Typography>
                 </Alert>
             </Box>
+
+            {/* Create Project Dialog */}
+            <Dialog open={showProjectDialog} onClose={() => setShowProjectDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Create New Project</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ pt: 2 }}>
+                        <TextField
+                            fullWidth
+                            label="Project Name"
+                            value={newProjectName}
+                            onChange={(e) => setNewProjectName(e.target.value)}
+                            margin="normal"
+                            required
+                            autoFocus
+                        />
+                        <TextField
+                            fullWidth
+                            label="Description"
+                            value={newProjectDescription}
+                            onChange={(e) => setNewProjectDescription(e.target.value)}
+                            margin="normal"
+                            multiline
+                            rows={3}
+                        />
+                        {projectError && (
+                            <Alert severity="error" sx={{ mt: 2 }}>
+                                {projectError}
+                            </Alert>
+                        )}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => {
+                        setShowProjectDialog(false);
+                        setProjectError(null);
+                    }} disabled={saving}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleCreateProject}
+                        variant="contained"
+                        color="primary"
+                        disabled={saving || !newProjectName.trim()}
+                    >
+                        {saving ? <CircularProgress size={20} /> : 'Create Project'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }
