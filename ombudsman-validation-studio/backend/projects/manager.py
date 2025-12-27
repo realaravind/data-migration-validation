@@ -596,3 +596,177 @@ async def get_setup_status(project_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get setup status: {str(e)}")
+
+
+@router.post("/{project_id}/automate")
+async def automate_project(
+    project_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Automate pipeline creation and execution for all tables in a project.
+
+    This endpoint:
+    1. Loads metadata and relationships from the project
+    2. Creates intelligent pipelines for ALL tables (fact and dimension)
+    3. Prefixes all pipelines with {project_name}_
+    4. Creates a batch file with {project_name}_batch naming
+    5. Executes the batch
+
+    Requires: User or Admin role
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        project_name = project_metadata["name"]
+        safe_project_name = project_name.lower().replace(" ", "_")
+
+        # Create automation instance
+        automation = ProjectAutomation(project_id, project_name)
+
+        # Check if setup is complete
+        status = automation.get_setup_status()
+        if not status["ready_for_automation"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Project not ready for automation. has_metadata: {status['has_metadata']}, has_relationships: {status['has_relationships']}"
+            )
+
+        # Get metadata and relationships
+        metadata = automation.get_metadata()
+        relationships = automation.get_relationships()
+
+        print(f"[PROJECT_AUTOMATE] Starting automation for project '{project_name}'")
+        print(f"[PROJECT_AUTOMATE] Found {len(metadata)} tables and {len(relationships)} relationships")
+
+        # Import pipeline generation logic
+        from pipelines.intelligent_suggest import suggest_fact_validations, FactAnalysisRequest
+
+        # Create pipelines directory
+        pipelines_dir = f"{project_dir}/pipelines"
+        os.makedirs(pipelines_dir, exist_ok=True)
+
+        # Generate pipelines for ALL tables
+        created_pipelines = []
+
+        for table_key, table_meta in metadata.items():
+            # Parse schema and table name
+            parts = table_key.split('.')
+            if len(parts) == 2:
+                schema, table_name = parts
+            else:
+                schema = "dbo"
+                table_name = table_key
+
+            print(f"[PROJECT_AUTOMATE] Generating pipeline for {schema}.{table_name}")
+
+            # Get columns for this table
+            columns_dict = table_meta.get("columns", {})
+
+            # Convert columns dict to list format expected by intelligent_suggest
+            columns_list = [
+                {"name": "columns", "type": columns_dict},
+                {"name": "object_type", "type": table_meta.get("object_type", "TABLE")}
+            ]
+
+            # Get relationships for this table
+            table_relationships = [
+                rel for rel in relationships
+                if rel.get("fact_table", "").lower() == table_name.lower()
+            ]
+
+            # Create request for pipeline generation
+            request = FactAnalysisRequest(
+                fact_table=table_name,
+                fact_schema=schema,
+                database_type="sql",
+                columns=columns_list,
+                relationships=table_relationships
+            )
+
+            # Generate pipeline YAML using existing logic
+            # Note: This is a synchronous function, we need to call it directly
+            try:
+                pipeline_yaml_content = await suggest_fact_validations(request)
+
+                # Save pipeline with project prefix
+                pipeline_name = f"{safe_project_name}_{table_name}"
+                pipeline_file = f"{pipelines_dir}/{pipeline_name}.yaml"
+
+                with open(pipeline_file, "w") as f:
+                    f.write(pipeline_yaml_content["yaml"])
+
+                # Save metadata
+                metadata_file = f"{pipelines_dir}/{pipeline_name}.meta.json"
+                pipeline_metadata = {
+                    "pipeline_name": pipeline_name,
+                    "description": f"Automated validation pipeline for {schema}.{table_name}",
+                    "tags": ["automated", "project", schema, table_name],
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                    "table": table_name,
+                    "schema": schema
+                }
+                with open(metadata_file, "w") as f:
+                    json.dump(pipeline_metadata, f, indent=2)
+
+                created_pipelines.append({
+                    "pipeline_name": pipeline_name,
+                    "table": table_name,
+                    "schema": schema,
+                    "file": pipeline_file
+                })
+
+                print(f"[PROJECT_AUTOMATE] Created pipeline: {pipeline_name}")
+
+            except Exception as e:
+                print(f"[PROJECT_AUTOMATE] Warning: Could not create pipeline for {table_name}: {e}")
+                continue
+
+        # Create batch file
+        batch_name = f"{safe_project_name}_batch"
+        batch_file = f"{project_dir}/{batch_name}.yaml"
+
+        batch_yaml = {
+            "batch": {
+                "name": batch_name,
+                "description": f"Automated batch execution for {project_name}",
+                "pipelines": [p["pipeline_name"] for p in created_pipelines]
+            }
+        }
+
+        with open(batch_file, "w") as f:
+            yaml.dump(batch_yaml, f, default_flow_style=False, sort_keys=False)
+
+        print(f"[PROJECT_AUTOMATE] Created batch file: {batch_file}")
+
+        # Update project metadata
+        project_metadata["updated_at"] = datetime.now().isoformat()
+        project_metadata["automation_completed"] = True
+        project_metadata["batch_name"] = batch_name
+        project_metadata["pipeline_count"] = len(created_pipelines)
+
+        with open(f"{project_dir}/project.json", "w") as f:
+            json.dump(project_metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Automation completed for project '{project_name}'",
+            "batch_name": batch_name,
+            "batch_file": batch_file,
+            "pipelines_created": len(created_pipelines),
+            "pipelines": created_pipelines
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to automate project: {str(e)}")
