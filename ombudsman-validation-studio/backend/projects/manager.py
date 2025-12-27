@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
 import os
@@ -6,6 +6,10 @@ import json
 import yaml
 from datetime import datetime
 import shutil
+
+from auth.dependencies import require_user_or_admin, optional_authentication
+from auth.models import UserInDB
+from .automation import ProjectAutomation
 
 router = APIRouter()
 
@@ -36,8 +40,15 @@ class ProjectCreate(BaseModel):
 
 
 @router.post("/create")
-async def create_project(project: ProjectCreate):
-    """Create a new project"""
+async def create_project(
+    project: ProjectCreate,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Create a new project.
+
+    Requires: User or Admin role
+    """
     try:
         os.makedirs(PROJECTS_DIR, exist_ok=True)
 
@@ -184,13 +195,52 @@ async def load_project(project_id: str):
             with open(f"{config_dir}/snow_relationships.yaml", "r") as f:
                 config["snow_relationships"] = yaml.safe_load(f)
 
-        # Copy config files to core engine
+        # Merge SQL and Snowflake relationships into main relationships.yaml for core engine
         core_config_dir = "/core/src/ombudsman/config"
-        for filename in ["tables.yaml", "relationships.yaml", "column_mappings.yaml", "schema_mappings.yaml", "sql_relationships.yaml", "snow_relationships.yaml"]:
+        merged_relationships = []
+
+        # Load SQL relationships
+        if os.path.exists(f"{config_dir}/sql_relationships.yaml"):
+            with open(f"{config_dir}/sql_relationships.yaml", "r") as f:
+                sql_rels = yaml.safe_load(f) or {}
+                if isinstance(sql_rels, dict) and "relationships" in sql_rels:
+                    merged_relationships.extend(sql_rels["relationships"])
+                elif isinstance(sql_rels, list):
+                    merged_relationships.extend(sql_rels)
+
+        # Load Snowflake relationships
+        if os.path.exists(f"{config_dir}/snow_relationships.yaml"):
+            with open(f"{config_dir}/snow_relationships.yaml", "r") as f:
+                snow_rels = yaml.safe_load(f) or {}
+                if isinstance(snow_rels, dict) and "relationships" in snow_rels:
+                    merged_relationships.extend(snow_rels["relationships"])
+                elif isinstance(snow_rels, list):
+                    merged_relationships.extend(snow_rels)
+
+        # Write merged relationships to core config
+        os.makedirs(core_config_dir, exist_ok=True)
+        with open(f"{core_config_dir}/relationships.yaml", "w") as f:
+            yaml.dump(merged_relationships, f, default_flow_style=False, sort_keys=False)
+
+        print(f"[PROJECT_LOAD] Merged {len(merged_relationships)} relationships to core config")
+
+        # Copy other config files to core engine
+        for filename in ["tables.yaml", "column_mappings.yaml", "schema_mappings.yaml", "sql_relationships.yaml", "snow_relationships.yaml"]:
             src = f"{config_dir}/{filename}"
             dst = f"{core_config_dir}/{filename}"
             if os.path.exists(src):
                 shutil.copy2(src, dst)
+
+        # Build Snowflake connection config from project metadata
+        config["snowflake"] = {
+            "user": os.getenv("SNOWFLAKE_USER", ""),
+            "password": os.getenv("SNOWFLAKE_PASSWORD", ""),
+            "account": os.getenv("SNOWFLAKE_ACCOUNT", ""),
+            "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
+            "database": metadata.get("snowflake_database", "SAMPLEDW"),
+            "schema": metadata.get("snowflake_schemas", ["PUBLIC"])[0] if metadata.get("snowflake_schemas") else "PUBLIC",
+            "role": os.getenv("SNOWFLAKE_ROLE", "")
+        }
 
         return {
             "status": "success",
@@ -204,8 +254,15 @@ async def load_project(project_id: str):
 
 
 @router.post("/{project_id}/save")
-async def save_project(project_id: str):
-    """Save current state to project"""
+async def save_project(
+    project_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Save current state to project.
+
+    Requires: User or Admin role
+    """
     try:
         project_dir = f"{PROJECTS_DIR}/{project_id}"
 
@@ -243,8 +300,15 @@ async def save_project(project_id: str):
 
 
 @router.delete("/{project_id}")
-async def delete_project(project_id: str):
-    """Delete a project"""
+async def delete_project(
+    project_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Delete a project.
+
+    Requires: User or Admin role
+    """
     try:
         project_dir = f"{PROJECTS_DIR}/{project_id}"
 
@@ -299,10 +363,7 @@ async def save_relationships(project_id: str, database_type: str, relationships_
         with open(f"{project_config_dir}/{filename}", "w") as f:
             yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
 
-        # Also save to core engine for immediate use
-        core_config_dir = "/core/src/ombudsman/config"
-        with open(f"{core_config_dir}/{filename}", "w") as f:
-            yaml.dump(yaml_data, f, default_flow_style=False, sort_keys=False)
+        # NOTE: No longer saving to core config - everything is project-specific now
 
         # Update project metadata
         metadata_file = f"{project_dir}/project.json"
@@ -354,3 +415,184 @@ def auto_map_schemas(sql_schemas: List[str], snowflake_schemas: List[str]) -> Di
                 mappings[sql_schema] = snowflake_schemas[0] if snowflake_schemas else sql_schema.upper()
 
     return mappings
+
+
+# ============================================================================
+# PROJECT AUTOMATION ENDPOINTS
+# ============================================================================
+
+class SetupRequest(BaseModel):
+    """Request to extract metadata and infer relationships"""
+    connection: str  # "sqlserver" or "snowflake"
+    schema: Optional[str] = None
+
+
+@router.post("/{project_id}/setup")
+async def setup_project(
+    project_id: str,
+    payload: SetupRequest,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Extract metadata and infer relationships for a project.
+
+    This is the first step after project creation:
+    1. Extracts metadata for all tables
+    2. Infers relationships between tables
+    3. Saves both to project directory
+
+    Requires: User or Admin role
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        # Create automation instance
+        automation = ProjectAutomation(project_id, project_metadata["name"])
+
+        # Extract metadata
+        print(f"[PROJECT_SETUP] Extracting metadata for {project_id} from {payload.connection}")
+        metadata = automation.extract_all_metadata(payload.connection, payload.schema)
+
+        # Infer relationships
+        print(f"[PROJECT_SETUP] Inferring relationships for {project_id}")
+        relationships = automation.infer_relationships(metadata)
+
+        # Update project metadata
+        project_metadata["updated_at"] = datetime.now().isoformat()
+        project_metadata["has_metadata"] = True
+        project_metadata["has_relationships"] = True
+
+        with open(f"{project_dir}/project.json", "w") as f:
+            json.dump(project_metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Metadata extracted and relationships inferred for {project_metadata['name']}",
+            "table_count": len(metadata),
+            "relationship_count": len(relationships),
+            "metadata": metadata,
+            "relationships": relationships
+        }
+
+    except Exception as e:
+        print(f"[PROJECT_SETUP] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to setup project: {str(e)}")
+
+
+@router.get("/{project_id}/relationships")
+async def get_relationships(project_id: str):
+    """
+    Get inferred relationships for a project.
+
+    Returns the relationships that were inferred during setup.
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Create automation instance
+        automation = ProjectAutomation(project_id, "")
+
+        # Get relationships
+        relationships = automation.get_relationships()
+
+        if relationships is None:
+            return {
+                "status": "not_ready",
+                "message": "No relationships found. Run setup first.",
+                "relationships": []
+            }
+
+        return {
+            "status": "success",
+            "relationship_count": len(relationships),
+            "relationships": relationships
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get relationships: {str(e)}")
+
+
+@router.put("/{project_id}/relationships")
+async def update_relationships(
+    project_id: str,
+    relationships: List[Dict[str, Any]],
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Update relationships after user validation/editing.
+
+    This allows users to validate and correct the inferred relationships
+    before proceeding to automation.
+
+    Requires: User or Admin role
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        # Create automation instance
+        automation = ProjectAutomation(project_id, project_metadata["name"])
+
+        # Save updated relationships
+        automation.save_relationships(relationships)
+
+        # Update project metadata
+        project_metadata["updated_at"] = datetime.now().isoformat()
+
+        with open(f"{project_dir}/project.json", "w") as f:
+            json.dump(project_metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Relationships updated for {project_metadata['name']}",
+            "relationship_count": len(relationships)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update relationships: {str(e)}")
+
+
+@router.get("/{project_id}/status")
+async def get_setup_status(project_id: str):
+    """
+    Get project setup status.
+
+    Returns whether the project has metadata and relationships,
+    and whether it's ready for automation.
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        # Create automation instance
+        automation = ProjectAutomation(project_id, project_metadata["name"])
+
+        # Get setup status
+        status = automation.get_setup_status()
+
+        return {
+            "status": "success",
+            "project_name": project_metadata["name"],
+            **status
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get setup status: {str(e)}")
