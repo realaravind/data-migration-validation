@@ -21,35 +21,15 @@ export default function LandingPage() {
             badge: 'NEW'
         },
         {
-            title: '3. Pipeline Execution',
-            description: 'Execute YAML-based validation pipelines with real-time status tracking',
-            path: '/execution',
-            color: '#ed6c02',
-            status: 'active'
+            title: '3. Batch Operations',
+            description: 'Execute multiple pipelines, generate data, and validate across projects in coordinated batch jobs',
+            path: '/batch',
+            color: '#d32f2f',
+            status: 'active',
+            badge: 'NEW'
         },
         {
-            title: '4. Connection Testing',
-            description: 'Test and monitor SQL Server and Snowflake database connections',
-            path: '/connections',
-            color: '#9c27b0',
-            status: 'active'
-        },
-        {
-            title: '5. Sample Data Generation',
-            description: 'Generate synthetic test data for dimensions and facts with customizable schemas',
-            path: '/sample-data',
-            color: '#0288d1',
-            status: 'active'
-        },
-        {
-            title: '6. Mermaid Diagrams',
-            description: 'Generate visual pipeline diagrams for better understanding',
-            path: '/diagram',
-            color: '#00796b',
-            status: 'active'
-        },
-        {
-            title: '7. Workload Analysis',
+            title: '4. Workload Analysis',
             description: 'Upload Query Store workload and auto-generate validations based on actual query patterns',
             path: '/workload',
             color: '#f57c00',
@@ -57,15 +37,7 @@ export default function LandingPage() {
             badge: 'NEW'
         },
         {
-            title: '8. Project Summary',
-            description: 'Tech Lead dashboard showing project health, error trends, and actionable recommendations',
-            path: '/project-summary',
-            color: '#673ab7',
-            status: 'active',
-            badge: 'NEW'
-        },
-        {
-            title: '9. Run Comparison',
+            title: '5. Run Comparison',
             description: 'Compare two pipeline runs to analyze improvements, regressions, and error deltas',
             path: '/run-comparison',
             color: '#00897b',
@@ -73,25 +45,59 @@ export default function LandingPage() {
             badge: 'NEW'
         },
         {
-            title: '10. Interactive API Docs',
-            description: 'Explore all API endpoints with interactive documentation and testing interface',
-            path: 'http://localhost:8000/docs',
-            color: '#2e7d32',
+            title: '6. Project Summary',
+            description: 'Tech Lead dashboard showing project health, error trends, and actionable recommendations',
+            path: '/project-summary',
+            color: '#673ab7',
             status: 'active',
-            isExternal: true
+            badge: 'NEW'
+        },
+        {
+            title: '7. User Manual',
+            description: 'Complete end-user guide with step-by-step instructions for all features, best practices, and troubleshooting',
+            path: 'http://localhost:8000/docs/user-manual',
+            color: '#5e35b1',
+            status: 'active',
+            isExternal: true,
+            badge: 'DOCS'
+        },
+        {
+            title: '8. Technical Manual',
+            description: 'Developer documentation with architecture details, API reference, and implementation guides',
+            path: 'http://localhost:8000/docs/technical-manual',
+            color: '#1565c0',
+            status: 'active',
+            isExternal: true,
+            badge: 'DOCS'
+        },
+        {
+            title: '9. Architecture Diagrams',
+            description: '12 interactive Mermaid diagrams visualizing system architecture, data flows, and component relationships',
+            path: 'http://localhost:8000/docs/architecture-diagrams',
+            color: '#00897b',
+            status: 'active',
+            isExternal: true,
+            badge: 'DIAGRAMS'
+        },
+        {
+            title: '10. Connection Testing',
+            description: 'Test and monitor SQL Server and Snowflake database connections',
+            path: '/connections',
+            color: '#9c27b0',
+            status: 'active'
+        },
+        {
+            title: '11. Sample Data Generation',
+            description: 'Generate synthetic test data for dimensions and facts with customizable schemas',
+            path: '/sample-data',
+            color: '#0288d1',
+            status: 'active'
         }
     ];
 
     return (
         <Box>
-            <Typography variant="h3" gutterBottom>
-                Ombudsman Validation Studio
-            </Typography>
-            <Typography variant="h6" paragraph color="text.secondary">
-                Complete Data Migration Validation Platform - All Ombudsman Core Features Available
-            </Typography>
-
-            <Grid container spacing={3} sx={{ mt: 2 }}>
+            <Grid container spacing={3}>
                 {features.map((feature, index) => (
                     <Grid item xs={12} md={6} lg={3} key={index}>
                         <Card
