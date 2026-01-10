@@ -2,9 +2,9 @@
 
 This repository contains:
 
-- **Ombudsman Core** — validation engine  
-- **Validation Studio** — UI + API for building pipelines  
-- **YAML pipelines**  
+- **Ombudsman Core** — validation engine
+- **Validation Studio** — UI + API for building pipelines
+- **YAML pipelines**
 - **Dashboard + Execution Engine**
 
 ## Core Features
@@ -24,5 +24,11 @@ This repository contains:
 - YAML editor
 - Pipeline executor
 - Validation dashboard
+
+## Documentation
+
+- [Database Configuration Guide](DATABASE_CONFIGURATION.md) - How to configure SQL Server and Snowflake connections
+- [Quick Start Guide](QUICKSTART.md) - Get up and running quickly (if available)
+- [Deployment Guide](DEPLOYMENT_GUIDE.md) - Production deployment instructions (if available)
 
 ## Run Locally
