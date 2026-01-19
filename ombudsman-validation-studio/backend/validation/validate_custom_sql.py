@@ -287,14 +287,6 @@ def validate_custom_sql(
         else:
             snow_df = pd.DataFrame(columns=snow_columns)
 
-        # Debug: Check what's actually in the DataFrames
-        print(f"[DEBUG] SQL DataFrame shape: {sql_df.shape}, dtypes: {sql_df.dtypes.to_dict() if not sql_df.empty else 'empty'}")
-        if not sql_df.empty:
-            print(f"[DEBUG] SQL first cell type: {type(sql_df.iloc[0, 0])}, value: {sql_df.iloc[0, 0]}")
-        print(f"[DEBUG] Snow DataFrame shape: {snow_df.shape}, dtypes: {snow_df.dtypes.to_dict() if not snow_df.empty else 'empty'}")
-        if not snow_df.empty:
-            print(f"[DEBUG] Snow first cell type: {type(snow_df.iloc[0, 0])}, value: {snow_df.iloc[0, 0]}")
-
         # Normalize column names - replace empty strings with generic names
         sql_df.columns = [f'col_{i}' if c == '' else c for i, c in enumerate(sql_df.columns)]
         snow_df.columns = [f'col_{i}' if c == '' else c for i, c in enumerate(snow_df.columns)]

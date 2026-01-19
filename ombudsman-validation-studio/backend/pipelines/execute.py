@@ -285,11 +285,11 @@ async def execute_pipeline(
         # Parse YAML
         pipeline_def = yaml.safe_load(request.pipeline_yaml)
 
-        # Debug: Check what's in the pipeline
+        # Extract pipeline info for validation
         pipeline = pipeline_def.get("pipeline", pipeline_def)
         num_steps = len(pipeline.get("steps", []))
         num_custom_queries = len(pipeline.get("custom_queries", []))
-        print(f"[DEBUG ENDPOINT] Received pipeline '{request.pipeline_name}' with {num_steps} steps and {num_custom_queries} custom_queries")
+        logger.info(f"Received pipeline '{request.pipeline_name}' with {num_steps} steps and {num_custom_queries} custom_queries")
 
         # Validate pipeline configuration
         is_valid, error_msg = validate_pipeline_config(pipeline_def)
@@ -345,7 +345,6 @@ async def execute_pipeline(
 def run_pipeline_background(run_id: str, pipeline_def: dict, pipeline_name: str):
     """Sync wrapper to run async pipeline execution in background"""
     logger.info(f"[BACKGROUND] Starting pipeline execution wrapper for run_id: {run_id}")
-    print(f"[BACKGROUND DEBUG] Starting pipeline execution wrapper for run_id: {run_id}", flush=True)
 
     # Create and run the async task
     try:
@@ -358,13 +357,11 @@ def run_pipeline_background(run_id: str, pipeline_def: dict, pipeline_name: str)
         error_details = traceback.format_exc()
         logger.error(f"[BACKGROUND] Pipeline wrapper failed for {run_id}: {e}")
         logger.error(f"[BACKGROUND] Traceback:\n{error_details}")
-        print(f"[BACKGROUND ERROR] Pipeline {run_id} wrapper failed: {e}\n{error_details}", flush=True)
 
 
 async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str, project_id: Optional[str] = None, batch_id: Optional[str] = None):
     """Execute pipeline asynchronously"""
     logger.info(f"[ASYNC] Starting pipeline execution for run_id: {run_id}, project_id: {project_id}, batch_id: {batch_id}")
-    print(f"[ASYNC DEBUG] Starting pipeline execution for run_id: {run_id}, project_id: {project_id}, batch_id: {batch_id}", flush=True)
 
     # Import database repository
     from database import (
@@ -507,12 +504,7 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         # Register custom_sql validator for workload-based comparative validations
         from validation.validate_custom_sql import validate_custom_sql
         registry.register("custom_sql", validate_custom_sql, "comparative")
-        print(f"[DEBUG] Custom SQL validator registered successfully")
-
-        # Debug: Log registered validators
-        print(f"[DEBUG] Registry initialized with {len(registry.registry)} validators")
-        print(f"[DEBUG] Registered validator names: {sorted(list(registry.registry.keys()))}")
-        print(f"[DEBUG] custom_sql in registry: {'custom_sql' in registry.registry}")
+        logger.debug(f"Registry initialized with {len(registry.registry)} validators")
 
         # Extract pipeline components
         # Handle both formats: direct keys or nested under "pipeline"
@@ -523,9 +515,8 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
         # Convert custom_queries to steps and append to existing steps
         custom_queries = pipeline.get("custom_queries", [])
-        print(f"[DEBUG RUN {run_id}] Found {len(custom_queries)} custom_queries, {len(steps)} regular steps")
+        logger.debug(f"[RUN {run_id}] Found {len(custom_queries)} custom_queries, {len(steps)} regular steps")
         if custom_queries:
-            print(f"[DEBUG RUN {run_id}] Converting {len(custom_queries)} custom_queries to steps")
             for query in custom_queries:
                 # Build config object with all parameters for the validator
                 config = {
@@ -546,7 +537,6 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                     "config": config
                 }
                 steps.append(step)
-            print(f"[DEBUG RUN {run_id}] Converted custom_queries - total steps now: {len(steps)}")
 
         # Load actual datatypes from tables.yaml if metadata only has column names
         # This is needed because intelligent_suggest only provides column names, not datatypes
@@ -566,37 +556,12 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
                     # Merge: start with new metadata, then overlay existing metadata (so existing wins)
                     metadata[table_name] = {**new_metadata, **existing_metadata}
-
-                    print(f"[DEBUG] Merged datatypes for '{table_name}' from tables.yaml (preserved foreign_keys if present)")
-                else:
-                    print(f"[DEBUG] Table '{table_name}' not found in tables.yaml")
         except Exception as e:
-            print(f"[DEBUG] Could not load tables.yaml using metadata_loader: {e}")
+            logger.debug(f"Could not load tables.yaml using metadata_loader: {e}")
 
         # Enrich metadata with numeric_columns, date_columns, and all_columns
-        # This analyzes the column data types and categorizes them
-        print(f"[DEBUG] Metadata BEFORE enrichment: {list(metadata.keys()) if metadata else 'None'}")
-        if metadata:
-            first_table = list(metadata.keys())[0] if metadata else None
-            if first_table:
-                print(f"[DEBUG] First table '{first_table}' metadata structure: {list(metadata[first_table].keys()) if isinstance(metadata[first_table], dict) else type(metadata[first_table])}")
-
         metadata = enrich_metadata(metadata)
-
-        print(f"[DEBUG] Metadata AFTER enrichment: {list(metadata.keys()) if metadata else 'None'}")
-        if metadata:
-            first_table = list(metadata.keys())[0] if metadata else None
-            if first_table:
-                print(f"[DEBUG] First table '{first_table}' metadata after enrichment: {list(metadata[first_table].keys()) if isinstance(metadata[first_table], dict) else type(metadata[first_table])}")
-                if isinstance(metadata[first_table], dict) and 'numeric_columns' in metadata[first_table]:
-                    print(f"[DEBUG] numeric_columns for '{first_table}': {metadata[first_table]['numeric_columns']}")
-
-        # Debug: Log steps to execute
-        print(f"[DEBUG RUN {run_id}] About to execute pipeline with {len(steps)} steps")
-        for i, step in enumerate(steps):
-            step_name = step.get("name", "UNKNOWN")
-            validator_type = step.get("validator", step.get("name"))
-            print(f"[DEBUG RUN {run_id}] Step {i+1}: {step_name} (validator: {validator_type})")
+        logger.debug(f"[RUN {run_id}] Executing pipeline with {len(steps)} steps")
 
         # Monkey-patch StepExecutor.run_step to support 'validator' field
         original_run_step = StepExecutor.run_step
@@ -1086,16 +1051,10 @@ async def get_custom_pipeline(project_id: str, pipeline_name: str):
             raise PipelineNotFoundError(pipeline_id=f"{project_id}/{pipeline_name}")
 
         # Load pipeline YAML
-        print(f"[DEBUG LOAD] Loading pipeline from file: {pipeline_file}")
+        logger.debug(f"Loading pipeline from file: {pipeline_file}")
         with open(pipeline_file) as f:
             content = f.read()
             pipeline_def = yaml.safe_load(content)
-
-        # Debug: Check what we loaded
-        pipeline = pipeline_def.get("pipeline", pipeline_def)
-        num_steps = len(pipeline.get("steps", []))
-        num_custom_queries = len(pipeline.get("custom_queries", []))
-        print(f"[DEBUG LOAD] Loaded pipeline has {num_steps} steps and {num_custom_queries} custom_queries")
 
         # Load metadata
         meta_file = f"{pipelines_dir}/{pipeline_name}.meta.json"
