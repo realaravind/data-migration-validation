@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,13 +15,25 @@ from execution.results import router as results_router
 from pipelines.execute import router as pipeline_execute_router
 from pipelines.intelligent_suggest import router as intelligent_suggest_router
 from connections.test import router as connections_router
+from connections.pool_stats import router as pool_stats_router
 from data.generate import router as data_router
 from mapping.database_mapping import router as database_mapping_router
+from mapping.intelligent_router import router as intelligent_mapping_router
 from projects.manager import router as projects_router
 from queries.custom import router as custom_queries_router
+from queries.results_api import router as query_results_router
 from workload.api import router as workload_router
 from results.history import router as results_history_router
 from ws.router import router as websocket_router
+from auth.router import router as auth_router
+from audit.router import router as audit_router
+from audit.middleware import AuditMiddleware
+from audit.audit_logger import audit_logger
+from notifications.router import router as notifications_router
+from batch.router import router as batch_router
+from docs.serve import router as docs_router
+from automation.auto_setup import router as automation_router
+from bugs.router import router as bugs_router
 
 # Error handling
 from errors import register_error_handlers
@@ -34,12 +47,24 @@ app = FastAPI(
 # Register error handlers
 register_error_handlers(app)
 
+# Add CORS middleware
+# Note: In production, restrict allow_origins to your actual frontend domains
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add audit logging middleware
+app.add_middleware(AuditMiddleware)
+
+# Log application startup
+audit_logger.log_system_event(
+    action="application_startup",
+    details={"version": "2.0.0"}
 )
 
 # Original routers
@@ -51,17 +76,31 @@ app.include_router(pipeline_router, prefix="/pipeline", tags=["Pipeline"])
 app.include_router(execution_router, prefix="/execution", tags=["Execution"])
 app.include_router(results_router, prefix="/results", tags=["Results"])
 
+# Authentication router (must be first for security)
+app.include_router(auth_router, tags=["Authentication"])
+
+# Audit logging router
+app.include_router(audit_router, tags=["Audit Logs"])
+
 # NEW comprehensive routers
 app.include_router(pipeline_execute_router, prefix="/pipelines", tags=["Pipeline Execution"])
 app.include_router(intelligent_suggest_router, prefix="/pipelines", tags=["Intelligent Pipeline Suggestions"])
 app.include_router(connections_router, prefix="/connections", tags=["Connections"])
+app.include_router(pool_stats_router, prefix="/connections", tags=["Connection Pools"])
 app.include_router(data_router, prefix="/data", tags=["Sample Data"])
 app.include_router(database_mapping_router, prefix="/database-mapping", tags=["Database Mapping"])
+app.include_router(intelligent_mapping_router, prefix="/mapping", tags=["Intelligent Mapping"])
 app.include_router(projects_router, prefix="/projects", tags=["Projects"])
 app.include_router(custom_queries_router, prefix="/custom-queries", tags=["Custom Business Queries"])
+app.include_router(query_results_router, prefix="/custom-queries/results", tags=["Query Results Management"])
 app.include_router(workload_router, prefix="/workload", tags=["Workload Analysis"])
 app.include_router(results_history_router, prefix="/history", tags=["Results History"])
 app.include_router(websocket_router, tags=["WebSocket Real-time Updates"])
+app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+app.include_router(batch_router, prefix="/batch", tags=["Batch Operations"])
+app.include_router(bugs_router, tags=["Bug Reports"])
+app.include_router(docs_router, prefix="/docs", tags=["Documentation"])
+app.include_router(automation_router, tags=["Automation"])
 
 
 @app.get("/")

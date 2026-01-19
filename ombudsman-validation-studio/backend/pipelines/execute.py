@@ -1,10 +1,12 @@
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
 import yaml
 import os
 import json
 import logging
-from datetime import datetime
+import asyncio
+from datetime import datetime, date
+from decimal import Decimal
 from typing import Dict, List, Optional
 
 from errors import (
@@ -14,6 +16,8 @@ from errors import (
     ProjectNotFoundError,
     InvalidQueryError
 )
+from auth.dependencies import get_current_user, require_user_or_admin, optional_authentication
+from auth.models import UserInDB
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,15 @@ RESULTS_DIR = "results"
 
 # Store pipeline executions in memory (in production, use a database)
 pipeline_runs = {}
+
+# Custom JSON encoder to handle datetime, date, and Decimal objects
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        elif isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 def load_existing_runs():
     """Load existing pipeline runs from disk on startup"""
@@ -158,13 +171,15 @@ def enrich_metadata(metadata):
             }
             continue
 
-        # Case 2: columns is a flat dictionary of column_name: data_type
-        if isinstance(columns, dict):
+        # Case 2: New structure with 'columns' dict and 'object_type' keys
+        # metadata: {TABLE: {columns: {COL1: TYPE1, COL2: TYPE2}, object_type: TABLE}}
+        if isinstance(columns, dict) and 'columns' in columns and isinstance(columns['columns'], dict):
             numeric_columns = []
             date_columns = []
             all_columns = []
 
-            for col_name, data_type in columns.items():
+            # Iterate over the actual columns dict, not the parent dict
+            for col_name, data_type in columns['columns'].items():
                 if not isinstance(data_type, str):
                     continue
 
@@ -180,7 +195,53 @@ def enrich_metadata(metadata):
                     date_columns.append(col_name)
 
             # Create enriched metadata for this table
+            # IMPORTANT: Preserve existing keys like foreign_keys, business_key, object_type, etc.
             enriched[table_name] = {
+                **columns,  # Preserve all existing keys
+                "columns": all_columns,  # For backward compatibility (validate_nulls)
+                "numeric_columns": numeric_columns,
+                "date_columns": date_columns,
+                "all_columns": all_columns
+            }
+            continue
+
+        # Case 3: Old flat dictionary of column_name: data_type (no 'columns' wrapper)
+        if isinstance(columns, dict):
+            numeric_columns = []
+            date_columns = []
+            all_columns = []
+
+            # First pass: collect metadata keys that are NOT column definitions
+            # (like foreign_keys, business_key, object_type, etc.)
+            special_keys = {}
+            column_data = {}
+
+            for key, value in columns.items():
+                # If value is a string, it's likely a column datatype
+                if isinstance(value, str):
+                    column_data[key] = value
+                # If it's a dict or other structure, it's metadata (like foreign_keys)
+                else:
+                    special_keys[key] = value
+
+            # Analyze column data types
+            for col_name, data_type in column_data.items():
+                data_type_lower = data_type.lower()
+                all_columns.append(col_name)
+
+                # Check if numeric
+                if any(t in data_type_lower for t in numeric_types):
+                    numeric_columns.append(col_name)
+
+                # Check if date/time
+                elif any(t in data_type_lower for t in date_types):
+                    date_columns.append(col_name)
+
+            # Create enriched metadata for this table
+            # IMPORTANT: Preserve special keys like foreign_keys, business_key, etc.
+            enriched[table_name] = {
+                **special_keys,  # Preserve foreign_keys, business_key, etc.
+                **column_data,  # Preserve original column datatypes
                 "columns": all_columns,  # For backward compatibility (validate_nulls)
                 "numeric_columns": numeric_columns,
                 "date_columns": date_columns,
@@ -196,6 +257,9 @@ def enrich_metadata(metadata):
 class PipelineExecuteRequest(BaseModel):
     pipeline_yaml: str
     pipeline_name: Optional[str] = "unnamed_pipeline"
+    project_id: Optional[str] = None
+    batch_id: Optional[str] = None
+    run_async: Optional[bool] = False
 
 class PipelineStatus(BaseModel):
     run_id: str
@@ -207,11 +271,25 @@ class PipelineStatus(BaseModel):
 
 
 @router.post("/execute")
-async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: BackgroundTasks):
-    """Execute a validation pipeline"""
+async def execute_pipeline(
+    request: PipelineExecuteRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Optional[UserInDB] = Depends(optional_authentication)
+):
+    """
+    Execute a validation pipeline.
+
+    Optional authentication - allows both authenticated users and internal batch executor calls.
+    """
     try:
         # Parse YAML
         pipeline_def = yaml.safe_load(request.pipeline_yaml)
+
+        # Debug: Check what's in the pipeline
+        pipeline = pipeline_def.get("pipeline", pipeline_def)
+        num_steps = len(pipeline.get("steps", []))
+        num_custom_queries = len(pipeline.get("custom_queries", []))
+        print(f"[DEBUG ENDPOINT] Received pipeline '{request.pipeline_name}' with {num_steps} steps and {num_custom_queries} custom_queries")
 
         # Validate pipeline configuration
         is_valid, error_msg = validate_pipeline_config(pipeline_def)
@@ -228,15 +306,20 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
         pipeline_runs[run_id] = {
             "run_id": run_id,
             "pipeline_name": request.pipeline_name,
+            "project_id": request.project_id,
+            "batch_id": request.batch_id,
             "status": "pending",
             "started_at": datetime.now().isoformat(),
             "completed_at": None,
             "results": [],
-            "pipeline_def": pipeline_def
+            "pipeline_def": pipeline_def,
+            "current_step": 0,
+            "total_steps": len(pipeline_def.get("pipeline", pipeline_def).get("steps", [])),
+            "current_step_name": None
         }
 
-        # Execute in background
-        background_tasks.add_task(run_pipeline_async, run_id, pipeline_def, request.pipeline_name)
+        # Execute in background using asyncio task (not BackgroundTasks which doesn't work well with async)
+        asyncio.create_task(run_pipeline_async(run_id, pipeline_def, request.pipeline_name, request.project_id, request.batch_id))
 
         return {
             "run_id": run_id,
@@ -259,8 +342,30 @@ async def execute_pipeline(request: PipelineExecuteRequest, background_tasks: Ba
         )
 
 
-async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str):
+def run_pipeline_background(run_id: str, pipeline_def: dict, pipeline_name: str):
+    """Sync wrapper to run async pipeline execution in background"""
+    logger.info(f"[BACKGROUND] Starting pipeline execution wrapper for run_id: {run_id}")
+    print(f"[BACKGROUND DEBUG] Starting pipeline execution wrapper for run_id: {run_id}", flush=True)
+
+    # Create and run the async task
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_pipeline_async(run_id, pipeline_def, pipeline_name))
+        loop.close()
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"[BACKGROUND] Pipeline wrapper failed for {run_id}: {e}")
+        logger.error(f"[BACKGROUND] Traceback:\n{error_details}")
+        print(f"[BACKGROUND ERROR] Pipeline {run_id} wrapper failed: {e}\n{error_details}", flush=True)
+
+
+async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str, project_id: Optional[str] = None, batch_id: Optional[str] = None):
     """Execute pipeline asynchronously"""
+    logger.info(f"[ASYNC] Starting pipeline execution for run_id: {run_id}, project_id: {project_id}, batch_id: {batch_id}")
+    print(f"[ASYNC DEBUG] Starting pipeline execution for run_id: {run_id}, project_id: {project_id}, batch_id: {batch_id}", flush=True)
+
     # Import database repository
     from database import (
         ResultsRepository, PipelineRunCreate, PipelineRunUpdate,
@@ -298,7 +403,7 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
             try:
                 repo.create_pipeline_run(PipelineRunCreate(
                     run_id=run_id,
-                    project_id=None,  # TODO: Extract from request if available
+                    project_id=project_id,
                     pipeline_name=pipeline_name,
                     pipeline_config=pipeline_def,
                     executed_by="system"  # TODO: Get from auth context
@@ -314,26 +419,85 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         from ombudsman.core.registry import ValidationRegistry
         from ombudsman.core.connections import get_sql_conn, get_snow_conn
 
-        # Build config from environment variables (no config file needed)
-        cfg = {
-            "connections": {
-                "sql": {
-                    "host": os.getenv("SQL_SERVER_HOST", "sqlserver"),
-                    "port": os.getenv("SQL_SERVER_PORT", "1433"),
-                    "user": os.getenv("SQL_SERVER_USER", "sa"),
-                    "password": os.getenv("SQL_SERVER_PASSWORD", "YourStrong!Passw0rd"),
-                    "database": os.getenv("SQL_DATABASE", "SampleDW")
+        # Build config - use pipeline_def connections if provided, otherwise check active project, then fall back to environment variables
+        pipeline = pipeline_def.get("pipeline", pipeline_def)
+
+        # Check if pipeline definition includes connection config
+        if "connections" in pipeline_def and "snowflake" in pipeline_def:
+            cfg = pipeline_def
+            print(f"[CONFIG] Using connections from pipeline_def root")
+        elif "connections" in pipeline and "snowflake" in pipeline:
+            cfg = pipeline
+            print(f"[CONFIG] Using connections from pipeline nested")
+        else:
+            # Check if there's an active project
+            print(f"[CONFIG] No connection config in pipeline, checking for active project")
+            try:
+                from projects.context import get_active_project
+                active_project = get_active_project()
+
+                if active_project:
+                    # get_active_project returns the full metadata dict, not just project_id
+                    if isinstance(active_project, dict):
+                        metadata = active_project
+                        print(f"[CONFIG] Found active project: {metadata.get('name')} (ID: {metadata.get('project_id')})")
+                    else:
+                        # If it's just a string (project_id), load the metadata
+                        print(f"[CONFIG] Found active project ID: {active_project}")
+                        project_dir = f"/data/projects/{active_project}"
+                        if os.path.exists(f"{project_dir}/project.json"):
+                            with open(f"{project_dir}/project.json", "r") as f:
+                                metadata = json.load(f)
+                        else:
+                            raise Exception("Project metadata not found")
+
+                    print(f"[CONFIG] Using active project config - Snowflake DB: {metadata.get('snowflake_database')}")
+                    cfg = {
+                        "connections": {
+                            "sql": {
+                                "host": os.getenv("MSSQL_HOST", "host.docker.internal"),
+                                "port": os.getenv("MSSQL_PORT", "1433"),
+                                "user": os.getenv("MSSQL_USER", "sa"),
+                                "password": os.getenv("MSSQL_PASSWORD", ""),
+                                "database": metadata.get("sql_database", "SampleDW")
+                            }
+                        },
+                        "snowflake": {
+                            "user": os.getenv("SNOWFLAKE_USER", ""),
+                            "password": os.getenv("SNOWFLAKE_PASSWORD", ""),
+                            "account": os.getenv("SNOWFLAKE_ACCOUNT", ""),
+                            "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
+                            "database": metadata.get("snowflake_database", "SAMPLEDW"),
+                            "schema": metadata.get("snowflake_schemas", ["PUBLIC"])[0] if metadata.get("snowflake_schemas") else "PUBLIC",
+                            "role": os.getenv("SNOWFLAKE_ROLE", "")
+                        }
+                    }
+                else:
+                    raise Exception("No active project")
+
+            except Exception as e:
+                # Fall back to environment variables
+                print(f"[CONFIG] No active project or error loading project ({e}), using environment variables")
+                print(f"[CONFIG] SNOWFLAKE_DATABASE from env: {os.getenv('SNOWFLAKE_DATABASE', 'SAMPLEDW')}")
+                cfg = {
+                    "connections": {
+                        "sql": {
+                            "host": os.getenv("MSSQL_HOST", "host.docker.internal"),
+                            "port": os.getenv("MSSQL_PORT", "1433"),
+                            "user": os.getenv("MSSQL_USER", "sa"),
+                            "password": os.getenv("MSSQL_PASSWORD", ""),
+                            "database": os.getenv("MSSQL_DATABASE", "SampleDW")
+                        }
+                    },
+                    "snowflake": {
+                        "user": os.getenv("SNOWFLAKE_USER", ""),
+                        "password": os.getenv("SNOWFLAKE_PASSWORD", ""),
+                        "account": os.getenv("SNOWFLAKE_ACCOUNT", ""),
+                        "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
+                        "database": os.getenv("SNOWFLAKE_DATABASE", "SAMPLEDW"),
+                        "schema": os.getenv("SNOWFLAKE_SCHEMA", "PUBLIC")
+                    }
                 }
-            },
-            "snowflake": {
-                "user": os.getenv("SNOWFLAKE_USER", ""),
-                "password": os.getenv("SNOWFLAKE_PASSWORD", ""),
-                "account": os.getenv("SNOWFLAKE_ACCOUNT", ""),
-                "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
-                "database": os.getenv("SNOWFLAKE_DATABASE", "SAMPLEDW"),
-                "schema": os.getenv("SNOWFLAKE_SCHEMA", "PUBLIC")
-            }
-        }
 
         # Initialize registry
         registry = ValidationRegistry()
@@ -350,10 +514,6 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         print(f"[DEBUG] Registered validator names: {sorted(list(registry.registry.keys()))}")
         print(f"[DEBUG] custom_sql in registry: {'custom_sql' in registry.registry}")
 
-        # Create connections
-        sql_conn = get_sql_conn(cfg)
-        snow_conn = get_snow_conn(cfg)
-
         # Extract pipeline components
         # Handle both formats: direct keys or nested under "pipeline"
         pipeline = pipeline_def.get("pipeline", pipeline_def)
@@ -361,11 +521,11 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         metadata = pipeline.get("metadata", {})
         steps = pipeline.get("steps", [])
 
-        # Convert custom_queries to steps if present
+        # Convert custom_queries to steps and append to existing steps
         custom_queries = pipeline.get("custom_queries", [])
-        if custom_queries and not steps:
-            print(f"[DEBUG] Converting {len(custom_queries)} custom_queries to steps")
-            steps = []
+        print(f"[DEBUG RUN {run_id}] Found {len(custom_queries)} custom_queries, {len(steps)} regular steps")
+        if custom_queries:
+            print(f"[DEBUG RUN {run_id}] Converting {len(custom_queries)} custom_queries to steps")
             for query in custom_queries:
                 # Build config object with all parameters for the validator
                 config = {
@@ -386,7 +546,7 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                     "config": config
                 }
                 steps.append(step)
-            print(f"[DEBUG] Converted custom_queries to {len(steps)} steps")
+            print(f"[DEBUG RUN {run_id}] Converted custom_queries - total steps now: {len(steps)}")
 
         # Load actual datatypes from tables.yaml if metadata only has column names
         # This is needed because intelligent_suggest only provides column names, not datatypes
@@ -394,12 +554,20 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
             from ombudsman.core.metadata_loader import load_metadata as load_tables_yaml
             tables_metadata = load_tables_yaml()
 
-            # Merge datatype information into metadata
+            # MERGE datatype information into metadata (DO NOT REPLACE)
+            # This preserves foreign_keys and business_key from pipeline YAML
             for table_name in list(metadata.keys()):
                 if table_name in tables_metadata:
-                    # Replace the metadata with the full datatype info from tables.yaml
-                    metadata[table_name] = tables_metadata[table_name]
-                    print(f"[DEBUG] Loaded datatypes for '{table_name}' from tables.yaml")
+                    # Store the existing metadata (which may have foreign_keys, business_key, etc.)
+                    existing_metadata = metadata[table_name] if isinstance(metadata[table_name], dict) else {}
+
+                    # Get new metadata from tables.yaml
+                    new_metadata = tables_metadata[table_name] if isinstance(tables_metadata[table_name], dict) else {}
+
+                    # Merge: start with new metadata, then overlay existing metadata (so existing wins)
+                    metadata[table_name] = {**new_metadata, **existing_metadata}
+
+                    print(f"[DEBUG] Merged datatypes for '{table_name}' from tables.yaml (preserved foreign_keys if present)")
                 else:
                     print(f"[DEBUG] Table '{table_name}' not found in tables.yaml")
         except Exception as e:
@@ -424,10 +592,11 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                     print(f"[DEBUG] numeric_columns for '{first_table}': {metadata[first_table]['numeric_columns']}")
 
         # Debug: Log steps to execute
-        print(f"[DEBUG] Pipeline has {len(steps)} steps to execute")
+        print(f"[DEBUG RUN {run_id}] About to execute pipeline with {len(steps)} steps")
         for i, step in enumerate(steps):
             step_name = step.get("name", "UNKNOWN")
-            print(f"[DEBUG] Step {i+1}: {step_name}")
+            validator_type = step.get("validator", step.get("name"))
+            print(f"[DEBUG RUN {run_id}] Step {i+1}: {step_name} (validator: {validator_type})")
 
         # Monkey-patch StepExecutor.run_step to support 'validator' field
         original_run_step = StepExecutor.run_step
@@ -446,57 +615,63 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
         StepExecutor.run_step = patched_run_step
 
-        # Create executor
-        executor = StepExecutor(
-            registry=registry,
-            sql_conn=sql_conn,
-            snow_conn=snow_conn,
-            mapping=mapping,
-            metadata=metadata
-        )
-
-        # Create logger
-        logger = JsonLogger()
-
-        # Run pipeline with real-time event emission
-        runner = PipelineRunner(executor, logger, cfg)
-
-        # Emit step events during execution
-        results = []
-        for i, step in enumerate(steps):
-            step_name = step.get("name", f"Step {i+1}")
-            validator_type = step.get("validator", step.get("name"))
-
-            # Emit step started
-            await emitter.step_started(
-                step_name=step_name,
-                step_order=i,
-                validator_type=validator_type,
-                config=step.get("config")
+        # Create connections and execute pipeline
+        with get_sql_conn(cfg) as sql_conn, get_snow_conn(cfg) as snow_conn:
+            # Create executor
+            executor = StepExecutor(
+                registry=registry,
+                sql_conn=sql_conn,
+                snow_conn=snow_conn,
+                mapping=mapping,
+                metadata=metadata
             )
 
-            # Execute step
-            try:
-                result = executor.run_step(step)
-                results.append(result)
+            # Create JSON logger for pipeline execution
+            json_logger = JsonLogger()
 
-                # Emit step completed
-                result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
-                await emitter.step_completed(
+            # Run pipeline with real-time event emission
+            runner = PipelineRunner(executor, json_logger, cfg)
+
+            # Emit step events during execution
+            results = []
+            for i, step in enumerate(steps):
+                step_name = step.get("name", f"Step {i+1}")
+                validator_type = step.get("validator", step.get("name"))
+
+                # Update progress in pipeline_runs
+                pipeline_runs[run_id]["current_step"] = i + 1
+                pipeline_runs[run_id]["current_step_name"] = step_name
+
+                # Emit step started
+                await emitter.step_started(
                     step_name=step_name,
                     step_order=i,
-                    status=result_dict.get("status", "passed"),
-                    result=result_dict
+                    validator_type=validator_type,
+                    config=step.get("config")
                 )
 
-            except Exception as step_error:
-                # Emit step failed
-                await emitter.step_failed(
-                    step_name=step_name,
-                    step_order=i,
-                    error_message=str(step_error)
-                )
-                raise
+                # Execute step
+                try:
+                    result = executor.run_step(step)
+                    results.append(result)
+
+                    # Emit step completed
+                    result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+                    await emitter.step_completed(
+                        step_name=step_name,
+                        step_order=i,
+                        status=result_dict.get("status", "passed"),
+                        result=result_dict
+                    )
+
+                except Exception as step_error:
+                    # Emit step failed
+                    await emitter.step_failed(
+                        step_name=step_name,
+                        step_order=i,
+                        error_message=str(step_error)
+                    )
+                    raise
 
         # Convert results to dict
         results_dict = [r.to_dict() if hasattr(r, 'to_dict') else r for r in results]
@@ -517,73 +692,90 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
         # Emit pipeline completed event
         await emitter.pipeline_completed(
-            pipeline_name=pipeline_name,
-            duration_seconds=duration_seconds,
-            total_steps=len(results_dict),
-            successful_steps=successful_steps,
-            failed_steps=failed_steps,
-            warnings_count=warnings_count
+                pipeline_name=pipeline_name,
+                duration_seconds=duration_seconds,
+                total_steps=len(results_dict),
+                successful_steps=successful_steps,
+                failed_steps=failed_steps,
+                warnings_count=warnings_count
         )
 
         # Save to database
         if repo:
-            try:
-                # Update pipeline run
-                repo.update_pipeline_run(run_id, PipelineRunUpdate(
-                    status=DBPipelineStatus.COMPLETED,
-                    completed_at=end_time,
-                    duration_seconds=duration_seconds,
-                    total_steps=len(results_dict),
-                    successful_steps=successful_steps,
-                    failed_steps=failed_steps,
-                    warnings_count=warnings_count,
-                    errors_count=failed_steps
-                ))
-
-                # Save validation steps
-                for i, result in enumerate(results_dict):
-                    step_status = StepStatus.PASSED
-                    if result.get('status') == 'failed':
-                        step_status = StepStatus.FAILED
-                    elif result.get('status') == 'warning':
-                        step_status = StepStatus.WARNING
-
-                    # Create step
-                    step = repo.create_validation_step(ValidationStepCreate(
-                        run_id=run_id,
-                        step_name=result.get('name', f'Step {i+1}'),
-                        step_order=i,
-                        validator_type=result.get('validator_type'),
-                        step_config=result.get('config')
-                    ))
-
-                    # Update with results
-                    repo.update_validation_step(step.step_id, ValidationStepUpdate(
-                        status=step_status,
+                try:
+                    # Update pipeline run
+                    repo.update_pipeline_run(run_id, PipelineRunUpdate(
+                        status=DBPipelineStatus.COMPLETED,
                         completed_at=end_time,
-                        duration_milliseconds=result.get('duration_ms'),
-                        result_message=result.get('message'),
-                        difference_type=result.get('difference_type'),
-                        total_rows=result.get('total_rows'),
-                        differing_rows_count=result.get('differing_rows'),
-                        affected_columns=result.get('affected_columns'),
-                        comparison_details=result.get('comparison_details'),
-                        sql_row_count=result.get('sql_row_count'),
-                        snowflake_row_count=result.get('snowflake_row_count'),
-                        match_percentage=result.get('match_percentage'),
-                        error_message=result.get('error')
+                        duration_seconds=duration_seconds,
+                        total_steps=len(results_dict),
+                        successful_steps=successful_steps,
+                        failed_steps=failed_steps,
+                        warnings_count=warnings_count,
+                        errors_count=failed_steps
                     ))
 
-                logger.info(f"Pipeline run {run_id} saved to database successfully")
-            except Exception as e:
-                logger.error(f"Failed to save pipeline results to database: {e}")
+                    # Save validation steps
+                    for i, result in enumerate(results_dict):
+                        step_status = StepStatus.PASSED
+                        if result.get('status') == 'failed':
+                            step_status = StepStatus.FAILED
+                        elif result.get('status') == 'warning':
+                            step_status = StepStatus.WARNING
+
+                        # Create step
+                        step = repo.create_validation_step(ValidationStepCreate(
+                            run_id=run_id,
+                            step_name=result.get('name', f'Step {i+1}'),
+                            step_order=i,
+                            validator_type=result.get('validator_type'),
+                            step_config=result.get('config')
+                        ))
+
+                        # Update with results
+                        repo.update_validation_step(step.step_id, ValidationStepUpdate(
+                            status=step_status,
+                            completed_at=end_time,
+                            duration_milliseconds=result.get('duration_ms'),
+                            result_message=result.get('message'),
+                            difference_type=result.get('difference_type'),
+                            total_rows=result.get('total_rows'),
+                            differing_rows_count=result.get('differing_rows'),
+                            affected_columns=result.get('affected_columns'),
+                            comparison_details=result.get('comparison_details'),
+                            sql_row_count=result.get('sql_row_count'),
+                            snowflake_row_count=result.get('snowflake_row_count'),
+                            match_percentage=result.get('match_percentage'),
+                            error_message=result.get('error')
+                        ))
+
+                    logger.info(f"Pipeline run {run_id} saved to database successfully")
+                except Exception as e:
+                    logger.error(f"Failed to save pipeline results to database: {e}")
 
         # Save results to file
         os.makedirs(RESULTS_DIR, exist_ok=True)
-        with open(f"{RESULTS_DIR}/{run_id}.json", "w") as f:
-            json.dump(pipeline_runs[run_id], f, indent=2)
+        try:
+            with open(f"{RESULTS_DIR}/{run_id}.json", "w") as f:
+                json.dump(pipeline_runs[run_id], f, indent=2, cls=CustomJSONEncoder)
+            logger.info(f"Pipeline results saved to {RESULTS_DIR}/{run_id}.json")
+        except TypeError as e:
+            logger.error(f"Failed to serialize pipeline results for {run_id}: {e}")
+            # Try saving with a safer fallback (convert to string representation)
+            with open(f"{RESULTS_DIR}/{run_id}.json", "w") as f:
+                json.dump({
+                    "run_id": run_id,
+                    "error": f"Failed to serialize results: {str(e)}",
+                    "raw_data": str(pipeline_runs[run_id])
+                }, f, indent=2)
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"[ASYNC] Pipeline execution failed for {run_id}: {e}")
+        logger.error(f"[ASYNC] Traceback:\n{error_details}")
+        print(f"[ASYNC ERROR] Pipeline {run_id} failed: {e}\n{error_details}", flush=True)
+
         pipeline_runs[run_id]["status"] = "failed"
         pipeline_runs[run_id]["completed_at"] = datetime.now().isoformat()
         pipeline_runs[run_id]["error"] = str(e)
@@ -621,8 +813,15 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
 
 @router.get("/status/{run_id}")
-async def get_pipeline_status(run_id: str):
-    """Get status of a pipeline execution"""
+async def get_pipeline_status(
+    run_id: str,
+    current_user: Optional[UserInDB] = Depends(optional_authentication)
+):
+    """
+    Get status of a pipeline execution.
+
+    Authentication: Optional (public endpoint)
+    """
     if run_id not in pipeline_runs:
         raise PipelineNotFoundError(pipeline_id=run_id)
 
@@ -630,8 +829,14 @@ async def get_pipeline_status(run_id: str):
 
 
 @router.get("/list")
-async def list_pipelines():
-    """List all pipeline executions"""
+async def list_pipelines(
+    current_user: Optional[UserInDB] = Depends(optional_authentication)
+):
+    """
+    List all pipeline executions.
+
+    Authentication: Optional (public endpoint)
+    """
     return {
         "pipelines": [
             {
@@ -725,8 +930,15 @@ async def get_default_pipeline(pipeline_id: str):
 
 
 @router.delete("/{run_id}")
-async def delete_pipeline_run(run_id: str):
-    """Delete a pipeline run"""
+async def delete_pipeline_run(
+    run_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Delete a pipeline run.
+
+    Requires: User or Admin role
+    """
     if run_id in pipeline_runs:
         del pipeline_runs[run_id]
 
@@ -755,8 +967,15 @@ class SavePipelineRequest(BaseModel):
 
 
 @router.post("/custom/save")
-async def save_custom_pipeline(request: SavePipelineRequest):
-    """Save a custom pipeline to a project"""
+async def save_custom_pipeline(
+    request: SavePipelineRequest,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Save a custom pipeline to a project.
+
+    Requires: User or Admin role
+    """
     try:
         # Validate project exists
         project_dir = f"{PROJECTS_DIR}/{request.project_id}"
@@ -867,9 +1086,16 @@ async def get_custom_pipeline(project_id: str, pipeline_name: str):
             raise PipelineNotFoundError(pipeline_id=f"{project_id}/{pipeline_name}")
 
         # Load pipeline YAML
+        print(f"[DEBUG LOAD] Loading pipeline from file: {pipeline_file}")
         with open(pipeline_file) as f:
             content = f.read()
             pipeline_def = yaml.safe_load(content)
+
+        # Debug: Check what we loaded
+        pipeline = pipeline_def.get("pipeline", pipeline_def)
+        num_steps = len(pipeline.get("steps", []))
+        num_custom_queries = len(pipeline.get("custom_queries", []))
+        print(f"[DEBUG LOAD] Loaded pipeline has {num_steps} steps and {num_custom_queries} custom_queries")
 
         # Load metadata
         meta_file = f"{pipelines_dir}/{pipeline_name}.meta.json"
@@ -895,8 +1121,16 @@ async def get_custom_pipeline(project_id: str, pipeline_name: str):
 
 
 @router.delete("/custom/project/{project_id}/{pipeline_name}")
-async def delete_custom_pipeline(project_id: str, pipeline_name: str):
-    """Delete a custom pipeline"""
+async def delete_custom_pipeline(
+    project_id: str,
+    pipeline_name: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Delete a custom pipeline.
+
+    Requires: User or Admin role
+    """
     try:
         pipelines_dir = f"{PROJECTS_DIR}/{project_id}/pipelines"
         pipeline_file = f"{pipelines_dir}/{pipeline_name}.yaml"

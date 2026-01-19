@@ -146,7 +146,7 @@ def _analyze_differences(sql_df: pd.DataFrame, snow_df: pd.DataFrame, ignore_row
             snow_sorted = snow_df.sort_values(by=list(snow_df.columns)).reset_index(drop=True)
             if sql_sorted.equals(snow_sorted):
                 is_row_order_only = True
-        except:
+        except Exception:
             pass
 
     if is_row_order_only:
@@ -227,8 +227,8 @@ def _analyze_differences(sql_df: pd.DataFrame, snow_df: pd.DataFrame, ignore_row
 def validate_custom_sql(
     sql_conn,
     snow_conn,
-    sql_server_query: str = None,
-    snowflake_query: str = None,
+    sql_query: str = None,
+    snow_query: str = None,
     compare_mode: str = 'result_set',
     tolerance: float = 0.0,
     ignore_column_order: bool = True,
@@ -241,8 +241,8 @@ def validate_custom_sql(
     Parameters:
         sql_conn: SQL Server connection
         snow_conn: Snowflake connection
-        sql_server_query (str): Query to execute on SQL Server
-        snowflake_query (str): Query to execute on Snowflake
+        sql_query (str): Query to execute on SQL Server
+        snow_query (str): Query to execute on Snowflake
         compare_mode (str): 'result_set', 'count', or 'value'
         tolerance (float): Acceptable difference threshold (default: 0.0)
         ignore_column_order (bool): Whether to ignore column order
@@ -251,10 +251,8 @@ def validate_custom_sql(
     Returns:
         Dict with keys: status, severity, message, and comparison details
     """
-    sql_query = sql_server_query
-    snow_query = snowflake_query
+    # Keep local variables for clarity
     ignore_col_order = ignore_column_order
-    ignore_row_order = ignore_row_order
 
     # Initialize diff_details for use in return statement
     diff_details = {}
@@ -444,7 +442,7 @@ def validate_custom_sql(
                             try:
                                 diff_details = _analyze_differences(sql_df, snow_df, ignore_row_order)
                                 message = diff_details['message']
-                            except:
+                            except Exception:
                                 message = f"Result sets differ ✗ ({len(sql_df)} rows, {len(sql_df.columns)} columns)"
 
         else:  # compare_mode == 'value'
