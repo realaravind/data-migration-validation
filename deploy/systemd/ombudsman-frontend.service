@@ -1,0 +1,31 @@
+[Unit]
+Description=Ombudsman Validation Studio Frontend (React)
+After=network.target ombudsman-backend.service
+Wants=ombudsman-backend.service
+
+[Service]
+Type=simple
+User=ombudsman
+Group=ombudsman
+WorkingDirectory=/opt/ombudsman/frontend
+
+# Start command - serve the built static files
+ExecStart=/usr/bin/serve -s dist -l 3000 --no-clipboard -c /opt/ombudsman/frontend/serve.json
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=append:/var/log/ombudsman/frontend.log
+StandardError=append:/var/log/ombudsman/frontend-error.log
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/ombudsman/frontend
+
+[Install]
+WantedBy=multi-user.target
