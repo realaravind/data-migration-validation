@@ -12,8 +12,11 @@ Supports:
 
 from datetime import datetime, date
 import random
+import os
+import yaml
+from ..sql_utils import substitute_schema_names
 
-def validate_custom_queries(sql_conn, snow_conn, query_definitions, mapping):
+def validate_custom_queries(sql_conn, snow_conn, query_definitions, mapping, metadata=None):
     """
     Execute and validate custom business queries.
 
@@ -22,6 +25,7 @@ def validate_custom_queries(sql_conn, snow_conn, query_definitions, mapping):
         snow_conn: Snowflake connection
         query_definitions: List of query definitions with sql_query and snow_query
         mapping: Table mapping dictionary
+        metadata: Optional metadata object with project information
 
     Query definition format:
     {
@@ -38,6 +42,38 @@ def validate_custom_queries(sql_conn, snow_conn, query_definitions, mapping):
     details = []
     explain_data = {}  # ALWAYS generate explain data
 
+    # Load schema mappings from project configuration
+    schema_mappings = {}
+    try:
+        # Try to get active project ID from environment or metadata
+        project_id = None
+        if metadata and hasattr(metadata, 'get_active_project'):
+            project_id = metadata.get_active_project()
+        if not project_id:
+            # Try to read from active_project.txt
+            active_project_file = os.path.join(
+                os.path.dirname(__file__),
+                '../../../../backend/data/active_project.txt'
+            )
+            if os.path.exists(active_project_file):
+                with open(active_project_file, 'r') as f:
+                    project_id = f.read().strip()
+
+        if project_id:
+            # Load schema mappings for this project
+            schema_mappings_file = os.path.join(
+                os.path.dirname(__file__),
+                f'../../../../backend/data/projects/{project_id}/config/schema_mappings.yaml'
+            )
+            if os.path.exists(schema_mappings_file):
+                with open(schema_mappings_file, 'r') as f:
+                    schema_mappings = yaml.safe_load(f) or {}
+                print(f"[SCHEMA_SUBSTITUTION] Loaded schema mappings for project '{project_id}': {schema_mappings}")
+            else:
+                print(f"[SCHEMA_SUBSTITUTION] No schema mappings found for project '{project_id}'")
+    except Exception as e:
+        print(f"[SCHEMA_SUBSTITUTION] Warning: Could not load schema mappings: {str(e)}")
+
     for query_def in query_definitions:
         name = query_def.get("name", "Unnamed Query")
         sql_query = query_def.get("sql_query")
@@ -47,8 +83,27 @@ def validate_custom_queries(sql_conn, snow_conn, query_definitions, mapping):
         order_by = query_def.get("order_by", [])
         limit = query_def.get("limit", 100)
 
-        if not sql_query or not snow_query:
+        # Handle case where both queries might be the same (from Query Store)
+        # In this case, we use the same query but transform it for each environment
+        if not sql_query and not snow_query:
             continue
+
+        # If only one query provided, use it as base for both environments
+        if not sql_query:
+            sql_query = snow_query
+        if not snow_query:
+            snow_query = sql_query
+
+        # Apply schema substitution ONLY to Snowflake query
+        # SQL Server query keeps original schema names from Query Store
+        original_snow_query = snow_query
+        if schema_mappings:
+            snow_query = substitute_schema_names(snow_query, schema_mappings)
+            if snow_query != original_snow_query:
+                print(f"[SCHEMA_SUBSTITUTION] Transformed Snowflake query for '{name}':")
+                print(f"[SCHEMA_SUBSTITUTION] SQL Server will use: {sql_query[:100]}...")
+                print(f"[SCHEMA_SUBSTITUTION] Snowflake BEFORE: {original_snow_query[:100]}...")
+                print(f"[SCHEMA_SUBSTITUTION] Snowflake AFTER:  {snow_query[:100]}...")
 
         try:
             # Execute queries
@@ -214,14 +269,19 @@ def validate_custom_queries(sql_conn, snow_conn, query_definitions, mapping):
             }
 
         except Exception as e:
-            # Add error to issues and explain
+            # Add error to BOTH issues and details (so total count is accurate)
             error_entry = {
                 "query_name": name,
+                "comparison_type": comparison_type,
+                "match": False,
                 "error": str(e),
                 "sql_query": sql_query,
-                "snow_query": snow_query
+                "snow_query": snow_query,
+                "sql_execution_time": 0,
+                "snow_execution_time": 0
             }
             issues.append(error_entry)
+            details.append(error_entry)  # CRITICAL: Add to details so it's counted in total validations
 
             explain_data[name] = {
                 "query_name": name,

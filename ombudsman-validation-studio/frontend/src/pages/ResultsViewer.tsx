@@ -35,6 +35,8 @@ import WarningIcon from '@mui/icons-material/Warning';
 import InfoIcon from '@mui/icons-material/Info';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import TableChartIcon from '@mui/icons-material/TableChart';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SchemaIcon from '@mui/icons-material/AccountTree';
 import DataQualityIcon from '@mui/icons-material/VerifiedUser';
@@ -52,12 +54,21 @@ const CATEGORY_MAP: Record<string, { label: string; icon: any; color: string }> 
 };
 
 export default function ResultsViewer() {
+  console.log('[ResultsViewer] Component loaded - VERSION 2024-12-17-v3');
+
+  // Temporary alert to verify new code is loading
+  if (typeof window !== 'undefined' && !window.sessionStorage.getItem('version_check_done')) {
+    window.sessionStorage.setItem('version_check_done', 'true');
+    console.warn('NEW CODE LOADED - VERSION 2024-12-17-v3 - Check passed!');
+  }
+
   const { runId } = useParams();
   const navigate = useNavigate();
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [exportingFormat, setExportingFormat] = useState<string | null>(null);
 
   useEffect(() => {
     if (runId) {
@@ -154,14 +165,42 @@ export default function ResultsViewer() {
     setSelectedCategories(newCategories);
   };
 
-  const downloadResults = () => {
-    const dataStr = JSON.stringify(results, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `pipeline-results-${runId}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+  const handleExport = async (format: 'pdf' | 'excel' | 'json') => {
+    if (!runId) return;
+
+    try {
+      setExportingFormat(format);
+
+      const response = await fetch(`http://localhost:8000/results/export/${format}/${runId}`);
+
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.statusText}`);
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Set the filename based on format
+      const extensions = { pdf: 'pdf', excel: 'xlsx', json: 'json' };
+      link.download = `validation_results_${runId}.${extensions[format]}`;
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(`Export failed: ${err.message}`);
+    } finally {
+      setExportingFormat(null);
+    }
   };
 
   const getSummaryMessage = (validatorName: string, details: any): string | null => {
@@ -257,8 +296,13 @@ export default function ResultsViewer() {
   };
 
   const formatDetailValue = (_validatorName: string, key: string, value: any): React.ReactNode => {
-    // Show special formatting for arrays of objects (mismatches, issues, etc.)
-    if ((key === 'mismatches' || key === 'issues' || key === 'duplicates' || key === 'results' || key === 'details' || key === 'outliers' || key === 'reason') && Array.isArray(value) && value.length > 0) {
+    // Define table-renderable keys as a constant to prevent tree-shaking
+    const TABLE_KEYS = ['mismatches', 'issues', 'duplicates', 'results', 'details', 'outliers', 'reason', 'comparison'];
+
+    console.log('[formatDetailValue] key:', key, 'isInTableKeys:', TABLE_KEYS.includes(key), 'isArray:', Array.isArray(value), 'length:', value?.length);
+
+    // Show special formatting for arrays of objects (mismatches, issues, duplicates, etc.)
+    if (TABLE_KEYS.includes(key) && Array.isArray(value) && value.length > 0) {
       if (typeof value[0] === 'object' && value[0] !== null && !Array.isArray(value[0])) {
         const headers = Object.keys(value[0]);
         const showCount = 20;
@@ -438,13 +482,13 @@ export default function ResultsViewer() {
       return <Chip label={`${entries.length} properties`} size="small" sx={{ height: 18, fontSize: '0.65rem' }} />;
     }
 
-    // Skip showing raw data for large arrays
+    // Skip showing raw data for large arrays (but not for TABLE_KEYS which are handled above)
     if (Array.isArray(value) && value.length > 10) {
       return (
         <Chip
-          label={`${value.length} items`}
+          label={`${value.length} items [OLD CODE BUG]`}
           size="small"
-          color="info"
+          color="error"
           sx={{ height: 18, fontSize: '0.65rem' }}
         />
       );
@@ -585,7 +629,7 @@ export default function ResultsViewer() {
             {stepResults.details && (
               <Box sx={{ mb: 2 }}>
                 {Object.entries(stepResults.details)
-                  .filter(([key]) => !['mismatches', 'issues', 'duplicates', 'missing_in_sql', 'missing_in_snow', 'exception', 'error', 'outliers', 'results', 'details', 'explain', 'reason'].includes(key))
+                  .filter(([key]) => !['mismatches', 'issues', 'duplicates', 'missing_in_sql', 'missing_in_snow', 'exception', 'error', 'outliers', 'results', 'details', 'explain', 'reason', 'comparison'].includes(key))
                   .map(([key, value]: any) => (
                     <Box key={key} sx={{ mb: 0.5 }}>
                       <Typography variant="caption" component="span" sx={{ fontSize: '0.65rem', fontWeight: 'bold', mr: 0.5 }}>
@@ -610,6 +654,7 @@ export default function ResultsViewer() {
                 (stepResults.details.duplicates?.length > 0) ||
                 (stepResults.details.missing_in_sql?.length > 0) ||
                 (stepResults.details.missing_in_snow?.length > 0) ||
+                (stepResults.details.comparison?.length > 0) ||
                 stepResults.details.reason ||
                 stepResults.details.explain ||
                 stepResults.details.exception
@@ -657,6 +702,24 @@ export default function ResultsViewer() {
                     </Box>
                   </Box>
                 )}
+                {(() => {
+                  console.log('Checking comparison:', {
+                    hasComparison: stepResults.details.comparison?.length > 0,
+                    comparisonLength: stepResults.details.comparison?.length,
+                    stepName: stepName,
+                    firstItem: stepResults.details.comparison?.[0]
+                  });
+                  return stepResults.details.comparison?.length > 0 && (
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '0.65rem', display: 'block', mb: 0.5 }}>
+                        Detailed Comparison ({stepResults.details.comparison.length}):
+                      </Typography>
+                      <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+                        {formatDetailValue(stepName, 'comparison', stepResults.details.comparison)}
+                      </Box>
+                    </Box>
+                  );
+                })()}
                 {stepResults.details.missing_in_sql?.length > 0 && (
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '0.65rem', display: 'block', mb: 0.5 }}>
@@ -997,9 +1060,31 @@ export default function ResultsViewer() {
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Download Results">
-              <IconButton onClick={downloadResults} color="primary">
-                <DownloadIcon />
+            <Tooltip title="Export as PDF">
+              <IconButton
+                onClick={() => handleExport('pdf')}
+                color="error"
+                disabled={exportingFormat === 'pdf'}
+              >
+                {exportingFormat === 'pdf' ? <CircularProgress size={20} /> : <PictureAsPdfIcon />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Export as Excel">
+              <IconButton
+                onClick={() => handleExport('excel')}
+                color="success"
+                disabled={exportingFormat === 'excel'}
+              >
+                {exportingFormat === 'excel' ? <CircularProgress size={20} /> : <TableChartIcon />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Export as JSON">
+              <IconButton
+                onClick={() => handleExport('json')}
+                color="primary"
+                disabled={exportingFormat === 'json'}
+              >
+                {exportingFormat === 'json' ? <CircularProgress size={20} /> : <DownloadIcon />}
               </IconButton>
             </Tooltip>
             <Tooltip title="Close">

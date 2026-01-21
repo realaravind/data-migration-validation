@@ -15,6 +15,7 @@ class PipelineGenerator:
         self.pipelines_dir = Path(pipelines_dir)
         self.pipelines_dir.mkdir(parents=True, exist_ok=True)
         self.column_mappings = {}  # Will be loaded per project
+        self.schema_mappings = {}  # Will be loaded per project
 
     def _load_column_mappings(self, project_id: str) -> Dict[str, Dict[str, str]]:
         """
@@ -53,6 +54,32 @@ class PipelineGenerator:
         except Exception as e:
             print(f"[ERROR] Failed to load column mappings: {e}")
             return {}
+
+    def _load_schema_mappings(self, project_id: str) -> Dict[str, str]:
+        """
+        Load schema mappings from project config.
+
+        Returns:
+            Dict mapping source schema names to target schema names (e.g., {"SAMPLE_DIM": "DIM", "SAMPLE_FACT": "FACT"})
+        """
+        print(f"[SCHEMA_MAPPING] Loading schema mappings for project_id: '{project_id}'")
+        mappings_path = Path(f"data/projects/{project_id}/config/schema_mappings.yaml")
+        print(f"[SCHEMA_MAPPING] Looking for mappings at: {mappings_path}")
+
+        if not mappings_path.exists():
+            print(f"[SCHEMA_MAPPING] Schema mappings not found, using defaults")
+            # Return default mappings for common patterns
+            return {"DIM": "DIM", "FACT": "FACT", "SAMPLE_DIM": "DIM", "SAMPLE_FACT": "FACT"}
+
+        try:
+            with open(mappings_path, 'r') as f:
+                mappings = yaml.safe_load(f) or {}
+
+            print(f"[SCHEMA_MAPPING] Loaded {len(mappings)} schema mappings: {mappings}")
+            return mappings
+        except Exception as e:
+            print(f"[SCHEMA_MAPPING] Failed to load schema mappings: {e}")
+            return {"DIM": "DIM", "FACT": "FACT", "SAMPLE_DIM": "DIM", "SAMPLE_FACT": "FACT"}
 
     def _normalize_column_name(self, col_name: str) -> str:
         """
@@ -201,12 +228,15 @@ class PipelineGenerator:
         if schema_mapping is None:
             schema_mapping = {"dim": "DIM", "fact": "FACT", "dbo": "PUBLIC"}
 
-        # Load column mappings for this project
+        # Load column mappings and schema mappings for this project
         print(f"[DEBUG generate_comparative_pipelines] Loading column mappings for project_id: '{project_id}'")
         self.column_mappings = self._load_column_mappings(project_id)
         print(f"[DEBUG generate_comparative_pipelines] Loaded column mappings: {len(self.column_mappings)} tables")
         if self.column_mappings:
             print(f"[DEBUG generate_comparative_pipelines] Tables with mappings: {list(self.column_mappings.keys())}")
+
+        self.schema_mappings = self._load_schema_mappings(project_id)
+        print(f"[DEBUG generate_comparative_pipelines] Loaded schema mappings: {self.schema_mappings}")
 
         # Group queries by table (extract from SQL)
         table_queries = {}
@@ -286,7 +316,8 @@ class PipelineGenerator:
                 'generated_from': f'workload_{workload_id}',
                 'project_id': project_id,
                 'created_at': datetime.now().isoformat(),
-                'validation_count': len(validations)
+                'validation_count': len(validations),
+                'active': True  # New pipelines are active by default
             },
             'source': {
                 'type': 'sqlserver',
@@ -300,7 +331,7 @@ class PipelineGenerator:
                 'schema': schema_name.upper() if schema_name else '${SNOWFLAKE_SCHEMA}',
                 'table': table_name.upper()
             },
-            'validations': validation_rules
+            'steps': validation_rules  # Changed from 'validations' to 'steps' for executor compatibility
         }
 
         return pipeline
@@ -321,6 +352,7 @@ class PipelineGenerator:
         reason = validation.get('reason', '')
         metadata = validation.get('metadata', {})
         table_name = validation.get('table_name', '')
+        schema_name = validation.get('schema_name', '')
 
         # Base rule structure
         rule = {
@@ -331,11 +363,88 @@ class PipelineGenerator:
             'enabled': True
         }
 
-        # Add validator-specific configuration
-        if 'row count' in validator_name.lower():
-            rule['validator'] = 'row_count_check'
+        # PROPER IMPLEMENTATION: Handle workload_query validator type
+        # This uses the EXACT original SQL from Query Store
+        if validator_name == 'workload_query':
+            raw_sql = metadata.get('raw_sql', '')
+            query_id = metadata.get('query_id', '')
+
+            if raw_sql:
+                # Apply column mappings to the query
+                table_key = f"{schema_name}.{table_name}" if schema_name else table_name
+
+                # Map columns for SQL Server query (ensure correct casing)
+                sql_server_query = self._apply_column_mappings(raw_sql, table_key, 'source') if self.column_mappings else raw_sql
+
+                # Translate to Snowflake syntax using loaded schema mappings
+                # Use loaded schema mappings if available, otherwise fall back to hardcoded defaults
+                schema_mapping_to_use = self.schema_mappings if self.schema_mappings else {"dim": "DIM", "fact": "FACT", "dbo": "PUBLIC"}
+                print(f"[SCHEMA_MAPPING] Using schema mappings for translation: {schema_mapping_to_use}")
+                snowflake_query = self._translate_query_to_snowflake(sql_server_query, schema_mapping_to_use)
+
+                # Map columns for Snowflake query (map to target columns)
+                snowflake_query = self._apply_column_mappings(snowflake_query, table_key, 'target') if self.column_mappings else snowflake_query
+
+                rule['validator'] = 'custom_sql'
+                rule['type'] = 'comparative'
+                rule['config'] = {
+                    'sql_query': sql_server_query,
+                    'snow_query': snowflake_query,
+                    'compare_mode': 'result_set',
+                    'tolerance': 0.01,  # 1% tolerance for numeric comparisons
+                    'ignore_column_order': True,
+                    'ignore_row_order': False
+                }
+                rule['metadata'] = {
+                    'query_id': query_id,
+                    'validation_type': 'workload_query',
+                    'total_executions': metadata.get('total_executions', 0),
+                    'avg_duration_ms': metadata.get('avg_duration_ms', 0)
+                }
+                return rule
+            else:
+                # Fallback if raw_sql is missing
+                print(f"[WARN] workload_query validator missing raw_sql in metadata")
+                rule['validator'] = 'custom_sql'
+                rule['config'] = {
+                    'sql_query': 'SELECT COUNT(*) as count FROM {table}',
+                    'snow_query': 'SELECT COUNT(*) as count FROM {table}',
+                    'compare_mode': 'result_set',
+                    'tolerance': 0.01
+                }
+                return rule
+
+        # Check if this is a workload-based validation (legacy pattern-based approach)
+        is_workload_validation = validation.get('source') == 'workload'
+
+        if is_workload_validation:
+            # Use custom_sql for all workload validations
+            # This allows us to run flexible queries on both source and target
+            rule['validator'] = 'custom_sql'
+
+            # Build a simple comparison query based on the columns involved
+            if columns:
+                col_list = ', '.join(columns)
+                rule['config'] = {
+                    'sql_query': f'SELECT {col_list}, COUNT(*) as row_count FROM {{table}} GROUP BY {col_list} ORDER BY {col_list}',
+                    'snow_query': f'SELECT {col_list}, COUNT(*) as row_count FROM {{table}} GROUP BY {col_list} ORDER BY {col_list}',
+                    'compare_mode': 'result_set',
+                    'tolerance': 0.02  # 2% tolerance
+                }
+            else:
+                # Fallback to simple row count
+                rule['config'] = {
+                    'sql_query': 'SELECT COUNT(*) as count FROM {table}',
+                    'snow_query': 'SELECT COUNT(*) as count FROM {table}',
+                    'compare_mode': 'result_set',
+                    'tolerance': 0.01  # 1% tolerance
+                }
+
+        # Add validator-specific configuration for non-workload validations
+        elif 'row count' in validator_name.lower():
+            rule['validator'] = 'validate_record_counts'
             rule['config'] = {
-                'tolerance': 0.01  # 1% tolerance
+                'tolerance_percentage': 1.0  # 1% tolerance
             }
 
         elif validator_name == 'comparative' and metadata.get('validation_type') in ['fact_dimension_conformance', 'referential_integrity']:
@@ -372,8 +481,8 @@ class PipelineGenerator:
 
                 rule['validator'] = 'custom_sql'
                 rule['config'] = {
-                    'sql_server_query': sql_server_query.strip(),
-                    'snowflake_query': snowflake_query.strip(),
+                    'sql_query': sql_server_query.strip(),
+                    'snow_query': snowflake_query.strip(),
                     'compare_mode': 'result_set',
                     'tolerance': 0.0,  # Exact match expected (both should have 0 orphans ideally)
                     'ignore_column_order': True,
@@ -415,8 +524,8 @@ class PipelineGenerator:
 
                 rule['validator'] = 'custom_sql'
                 rule['config'] = {
-                    'sql_server_query': sql_server_query.strip(),
-                    'snowflake_query': snowflake_query.strip(),
+                    'sql_query': sql_server_query.strip(),
+                    'snow_query': snowflake_query.strip(),
                     'compare_mode': 'result_set',
                     'tolerance': 0.0,
                     'ignore_column_order': True,
@@ -430,66 +539,21 @@ class PipelineGenerator:
                 }
 
         elif 'referential' in validator_name.lower():
-            rule['validator'] = 'referential_integrity'
+            rule['validator'] = 'validate_foreign_keys'
             rule['config'] = {
-                'columns': columns,
+                'foreign_keys': [{'column': col} for col in columns],
                 'reference_table': metadata.get('reference_table', ''),
                 'reference_columns': metadata.get('reference_columns', columns)
             }
 
-        elif 'distribution' in validator_name.lower():
-            rule['validator'] = 'distribution_check'
-            rule['config'] = {
-                'columns': columns,
-                'aggregations': metadata.get('aggregations', ['SUM', 'AVG', 'COUNT']),
-                'tolerance': 0.05  # 5% tolerance
-            }
-
-        elif 'data quality' in validator_name.lower() or 'null check' in validator_name.lower():
-            rule['validator'] = 'data_quality'
-            rule['config'] = {
-                'columns': columns,
-                'checks': ['not_null', 'data_type', 'range']
-            }
-
-        elif 'cardinality' in validator_name.lower() or 'uniqueness' in validator_name.lower():
-            rule['validator'] = 'cardinality_check'
-            rule['config'] = {
-                'columns': columns,
-                'check_type': 'unique_count',
-                'tolerance': 0.02  # 2% tolerance
-            }
-
-        elif 'time series' in validator_name.lower() or 'date' in validator_name.lower():
-            rule['validator'] = 'time_series_check'
-            rule['config'] = {
-                'columns': columns,
-                'checks': ['continuity', 'range', 'distribution']
-            }
-
-        elif 'statistics' in validator_name.lower():
-            rule['validator'] = 'statistical_check'
-            rule['config'] = {
-                'columns': columns,
-                'metrics': metadata.get('metrics', ['AVG', 'STDEV', 'MIN', 'MAX']),
-                'tolerance': 0.05  # 5% tolerance
-            }
-
-        elif 'value range' in validator_name.lower() or 'range' in validator_name.lower():
-            rule['validator'] = 'value_range_check'
-            rule['config'] = {
-                'columns': columns,
-                'min_value': metadata.get('min_value'),
-                'max_value': metadata.get('max_value'),
-                'tolerance': 0.05
-            }
-
         else:
-            # Default/generic validator
-            rule['validator'] = 'generic_comparison'
+            # Fallback for any other validator types - use custom_sql
+            rule['validator'] = 'custom_sql'
             rule['config'] = {
-                'columns': columns,
-                'comparison_type': 'exact_match'
+                'sql_query': 'SELECT COUNT(*) as count FROM {table}',
+                'snow_query': 'SELECT COUNT(*) as count FROM {table}',
+                'compare_mode': 'result_set',
+                'tolerance': 0.01
             }
 
         return rule
@@ -577,7 +641,8 @@ class PipelineGenerator:
                 'project_id': project_id,
                 'created_at': datetime.now().isoformat(),
                 'validation_count': len(queries),
-                'validation_type': 'comparative'
+                'validation_type': 'comparative',
+                'active': True  # New pipelines are active by default
             },
             'source': {
                 'type': 'sqlserver',
@@ -633,8 +698,8 @@ class PipelineGenerator:
             'description': f'Compare query results between SQL Server and Snowflake (Query ID: {query_id})',
             'enabled': True,
             'config': {
-                'sql_server_query': sql_server_query,
-                'snowflake_query': snowflake_query,
+                'sql_query': sql_server_query,
+                'snow_query': snowflake_query,
                 'compare_mode': 'result_set',
                 'tolerance': 0.0,
                 'ignore_column_order': True,
@@ -733,35 +798,192 @@ class PipelineGenerator:
         with open(filepath, 'r') as f:
             return f.read()
 
-    def list_generated_pipelines(self, project_id: str = None) -> List[Dict[str, Any]]:
-        """List all generated pipelines"""
+    def list_generated_pipelines(self, project_id: str = None, active_only: bool = False) -> List[Dict[str, Any]]:
+        """
+        List all generated pipelines
+
+        Args:
+            project_id: Optional filter by project
+            active_only: If True, return only active pipelines
+        """
         pipelines = []
 
-        for yaml_file in self.pipelines_dir.glob('*.yaml'):
-            try:
-                with open(yaml_file, 'r') as f:
-                    data = yaml.safe_load(f)
+        # Scan both the flat pipelines_dir and project-specific directories
+        projects_base = Path("/data/projects")
 
-                metadata = data.get('metadata', {})
+        search_paths = []
 
-                # Filter by project if specified
-                if project_id and metadata.get('project_id') != project_id:
+        # If project_id specified, only search that project
+        if project_id:
+            project_pipeline_dir = projects_base / project_id / "pipelines"
+            if project_pipeline_dir.exists():
+                search_paths.append(project_pipeline_dir)
+        else:
+            # Search all project directories
+            if projects_base.exists():
+                for project_dir in projects_base.iterdir():
+                    if project_dir.is_dir():
+                        pipeline_dir = project_dir / "pipelines"
+                        if pipeline_dir.exists():
+                            search_paths.append(pipeline_dir)
+
+            # Also check the flat pipelines directory
+            if self.pipelines_dir.exists():
+                search_paths.append(self.pipelines_dir)
+
+        # Scan all search paths for YAML files
+        for search_path in search_paths:
+            for yaml_file in search_path.glob('*.yaml'):
+                try:
+                    with open(yaml_file, 'r') as f:
+                        data = yaml.safe_load(f)
+
+                    metadata = data.get('metadata', {})
+
+                    # Extract project_id from path if not in metadata
+                    file_project_id = metadata.get('project_id')
+                    if not file_project_id and 'projects' in str(yaml_file):
+                        # Extract from path: /data/projects/{project_id}/pipelines/...
+                        parts = yaml_file.parts
+                        if 'projects' in parts:
+                            proj_idx = parts.index('projects')
+                            if len(parts) > proj_idx + 1:
+                                file_project_id = parts[proj_idx + 1]
+
+                    # Filter by project if specified
+                    if project_id and file_project_id != project_id:
+                        continue
+
+                    # Filter by active status if requested
+                    is_active = metadata.get('active', True)  # Default to True for backward compatibility
+                    if active_only and not is_active:
+                        continue
+
+                    # Extract table name from correct location
+                    # First try pipeline.source.table, then fall back to source.table
+                    pipeline_section = data.get('pipeline', {})
+                    source_section = pipeline_section.get('source', {}) if pipeline_section else data.get('source', {})
+                    table_name = source_section.get('table', 'unknown')
+
+                    # Handle custom queries pipelines (extract table from queries)
+                    custom_queries = data.get('custom_queries', [])
+                    if custom_queries and table_name == 'unknown':
+                        # Try to extract table from first query
+                        first_query = custom_queries[0]
+                        sql_query = first_query.get('sql_query', '')
+                        # Look for "FROM schema.table" pattern
+                        import re
+                        match = re.search(r'FROM\s+(\w+\.\w+)', sql_query, re.IGNORECASE)
+                        if match:
+                            table_name = match.group(1)
+
+                    # Count validations from execution.validations or pipeline.steps or root-level steps/validations or custom_queries
+                    execution_section = pipeline_section.get('execution', {}) if pipeline_section else data.get('execution', {})
+                    validation_list = (
+                        execution_section.get('validations', []) if execution_section
+                        else pipeline_section.get('steps', []) if pipeline_section
+                        else data.get('validations', data.get('steps', custom_queries))
+                    )
+                    validation_count = metadata.get('validation_count', len(validation_list))
+
+                    # Determine type: batch or pipeline
+                    # Batch files have a "batch" top-level key with "pipelines" list
+                    file_type = "batch" if "batch" in data and "pipelines" in data.get("batch", {}) else "pipeline"
+
+                    # For batch files, get the list of pipelines and description
+                    batch_info = {}
+                    if file_type == "batch":
+                        batch_data = data.get("batch", {})
+                        batch_info = {
+                            "pipeline_count": len(batch_data.get("pipelines", [])),
+                            "batch_type": batch_data.get("type", "sequential"),
+                            "description": batch_data.get("description", ""),
+                            "pipelines": [p.get("file") for p in batch_data.get("pipelines", [])]
+                        }
+
+                    pipelines.append({
+                        'filename': yaml_file.name,
+                        'path': str(yaml_file),
+                        'name': metadata.get('name', yaml_file.stem),
+                        'table': table_name,
+                        'validation_count': validation_count,
+                        'created_at': metadata.get('created_at'),
+                        'project_id': file_project_id,
+                        'active': is_active,
+                        'type': file_type,
+                        **batch_info  # Add batch-specific fields if it's a batch file
+                    })
+                except Exception as e:
+                    print(f"Error reading {yaml_file}: {e}")
                     continue
 
-                pipelines.append({
-                    'filename': yaml_file.name,
-                    'path': str(yaml_file),
-                    'name': metadata.get('name', yaml_file.stem),
-                    'table': data.get('source', {}).get('table', 'unknown'),
-                    'validation_count': metadata.get('validation_count', 0),
-                    'created_at': metadata.get('created_at'),
-                    'project_id': metadata.get('project_id')
-                })
-            except Exception as e:
-                print(f"Error reading {yaml_file}: {e}")
-                continue
+        # Remove duplicates based on filename (keep first occurrence)
+        seen_filenames = set()
+        unique_pipelines = []
+        for pipeline in pipelines:
+            filename = pipeline.get('filename')
+            if filename not in seen_filenames:
+                seen_filenames.add(filename)
+                unique_pipelines.append(pipeline)
 
-        # Sort by creation date (newest first)
-        pipelines.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        # Sort by creation date (newest first), handling None values
+        unique_pipelines.sort(key=lambda x: x.get('created_at') or '', reverse=True)
 
-        return pipelines
+        return unique_pipelines
+
+    def update_pipeline_active_status(self, filename: str, active: bool) -> bool:
+        """
+        Update the active status of a pipeline
+
+        Args:
+            filename: Pipeline filename
+            active: New active status
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Search for the file in multiple locations
+        projects_base = Path("/data/projects")
+        search_paths = [self.pipelines_dir]
+
+        # Add all project pipeline directories
+        if projects_base.exists():
+            for project_dir in projects_base.iterdir():
+                if project_dir.is_dir():
+                    pipeline_dir = project_dir / "pipelines"
+                    if pipeline_dir.exists():
+                        search_paths.append(pipeline_dir)
+
+        # Find the file
+        filepath = None
+        for search_path in search_paths:
+            candidate = search_path / filename
+            if candidate.exists():
+                filepath = candidate
+                break
+
+        if not filepath:
+            print(f"Pipeline file not found: {filename}")
+            return False
+
+        try:
+            # Read the pipeline
+            with open(filepath, 'r') as f:
+                data = yaml.safe_load(f)
+
+            # Update the active flag
+            if 'metadata' not in data:
+                data['metadata'] = {}
+            data['metadata']['active'] = active
+            data['metadata']['updated_at'] = datetime.now().isoformat()
+
+            # Write back to file
+            with open(filepath, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+            print(f"Updated pipeline {filename} active status to {active}")
+            return True
+
+        except Exception as e:
+            print(f"Error updating pipeline active status: {e}")
+            return False

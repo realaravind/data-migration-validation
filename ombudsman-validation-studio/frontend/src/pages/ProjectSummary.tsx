@@ -6,9 +6,16 @@ import {
 } from '@mui/material';
 import {
     TrendingUp, TrendingDown, TrendingFlat,
-    CheckCircle, Warning, Error as ErrorIcon
+    Warning, Error as ErrorIcon
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+interface Recommendation {
+    priority: string;
+    title: string;
+    description: string;
+    action?: string;
+}
 
 interface ProjectSummaryData {
     summary: {
@@ -20,9 +27,30 @@ interface ProjectSummaryData {
         recent_avg_errors: number;
         older_avg_errors: number;
     };
+    pipeline_breakdown?: {
+        standard: {
+            total_runs: number;
+            total_steps: number;
+            failed_steps: number;
+            total_errors: number;
+            pass_rate: number;
+            avg_errors_per_run: number;
+        };
+        workload: {
+            total_runs: number;
+            total_steps: number;
+            failed_steps: number;
+            total_errors: number;
+            pass_rate: number;
+            avg_errors_per_run: number;
+        };
+    };
     error_trend: Array<{
         run_id: string;
+        run_number: number;
         timestamp: string;
+        started_at?: string;
+        execution_time?: string;
         total_errors: number;
         total_steps: number;
         failed_steps: number;
@@ -34,7 +62,7 @@ interface ProjectSummaryData {
         total_runs: number;
         failure_rate: number;
     }>;
-    recommendations: string[];
+    recommendations: Array<string | Recommendation>;
     latest_run: any;
     oldest_run: any;
 }
@@ -96,10 +124,13 @@ export default function ProjectSummary() {
         return 'error';
     };
 
-    const getRecommendationSeverity = (rec: string): 'error' | 'warning' | 'info' | 'success' => {
-        if (rec.startsWith('CRITICAL')) return 'error';
-        if (rec.startsWith('ALERT') || rec.startsWith('WARNING') || rec.startsWith('PRIORITY')) return 'warning';
-        if (rec.startsWith('POSITIVE') || rec.startsWith('GOOD')) return 'success';
+    const getRecommendationSeverity = (rec: any): 'error' | 'warning' | 'info' | 'success' => {
+        // Handle both string and object formats
+        const priority = typeof rec === 'string' ? rec : rec?.priority || '';
+        if (priority.toUpperCase().includes('CRITICAL')) return 'error';
+        if (priority.toUpperCase().includes('HIGH')) return 'warning';
+        if (priority.toUpperCase().includes('MEDIUM')) return 'warning';
+        if (priority.toUpperCase().includes('LOW')) return 'info';
         return 'info';
     };
 
@@ -126,12 +157,18 @@ export default function ProjectSummary() {
 
     const { summary, error_trend, problematic_steps, recommendations } = data;
 
-    // Prepare chart data
-    const chartData = error_trend.map(run => ({
-        timestamp: new Date(run.timestamp).toLocaleDateString(),
-        errors: run.total_errors,
-        failed_steps: run.failed_steps
-    }));
+    // Prepare chart data with run numbers for better x-axis labeling
+    const chartData = error_trend.map(run => {
+        const dateValue = run.started_at || run.timestamp || run.execution_time || new Date().toISOString();
+        const date = new Date(dateValue);
+        const dateStr = date.toLocaleDateString();
+        return {
+            label: `Run #${run.run_number}`,
+            tooltip_date: dateStr,
+            errors: run.total_errors,
+            failed_steps: run.failed_steps
+        };
+    });
 
     return (
         <Box>
@@ -145,28 +182,29 @@ export default function ProjectSummary() {
             {/* Key Metrics Cards */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} md={3}>
-                    <Card>
-                        <CardContent>
+                    <Card sx={{ height: '100%' }}>
+                        <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Typography color="text.secondary" gutterBottom>
                                 Total Pipeline Runs
                             </Typography>
-                            <Typography variant="h3">
+                            <Typography variant="h3" sx={{ mb: 1 }}>
                                 {summary.total_runs}
                             </Typography>
+                            <Box sx={{ height: 32 }} />
                         </CardContent>
                     </Card>
                 </Grid>
 
                 <Grid item xs={12} md={3}>
-                    <Card>
-                        <CardContent>
+                    <Card sx={{ height: '100%' }}>
+                        <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Typography color="text.secondary" gutterBottom>
                                 Avg Errors Per Run
                             </Typography>
-                            <Typography variant="h3">
+                            <Typography variant="h3" sx={{ mb: 1 }}>
                                 {summary.average_errors_per_run}
                             </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', height: 32 }}>
                                 {getTrendIcon(summary.trend_direction)}
                                 <Chip
                                     label={summary.trend_direction}
@@ -180,33 +218,36 @@ export default function ProjectSummary() {
                 </Grid>
 
                 <Grid item xs={12} md={3}>
-                    <Card>
-                        <CardContent>
+                    <Card sx={{ height: '100%' }}>
+                        <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Typography color="text.secondary" gutterBottom>
                                 Project Health Score
                             </Typography>
-                            <Typography variant="h3" color={`${getHealthColor(summary.health_score)}.main`}>
+                            <Typography variant="h3" color={`${getHealthColor(summary.health_score)}.main`} sx={{ mb: 1 }}>
                                 {summary.health_score}
                             </Typography>
-                            <LinearProgress
-                                variant="determinate"
-                                value={summary.health_score}
-                                color={getHealthColor(summary.health_score) as any}
-                                sx={{ mt: 1, height: 8, borderRadius: 4 }}
-                            />
+                            <Box sx={{ height: 32, display: 'flex', alignItems: 'center' }}>
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={summary.health_score}
+                                    color={getHealthColor(summary.health_score) as any}
+                                    sx={{ width: '100%', height: 8, borderRadius: 4 }}
+                                />
+                            </Box>
                         </CardContent>
                     </Card>
                 </Grid>
 
                 <Grid item xs={12} md={3}>
-                    <Card>
-                        <CardContent>
+                    <Card sx={{ height: '100%' }}>
+                        <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Typography color="text.secondary" gutterBottom>
                                 Total Errors (All Time)
                             </Typography>
-                            <Typography variant="h3">
+                            <Typography variant="h3" sx={{ mb: 1 }}>
                                 {summary.total_errors_all_time}
                             </Typography>
+                            <Box sx={{ height: 32 }} />
                         </CardContent>
                     </Card>
                 </Grid>
@@ -221,9 +262,17 @@ export default function ProjectSummary() {
                     <ResponsiveContainer width="100%" height={300}>
                         <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="timestamp" />
+                            <XAxis dataKey="label" />
                             <YAxis />
-                            <Tooltip />
+                            <Tooltip
+                                labelFormatter={(label, payload) => {
+                                    if (payload && payload[0]) {
+                                        const date = payload[0].payload.tooltip_date;
+                                        return `${label} (${date})`;
+                                    }
+                                    return label;
+                                }}
+                            />
                             <Legend />
                             <Line
                                 type="monotone"
@@ -252,6 +301,77 @@ export default function ProjectSummary() {
                 </CardContent>
             </Card>
 
+            {/* Pipeline Breakdown by Type */}
+            {data.pipeline_breakdown && (
+                <Card sx={{ mb: 4 }}>
+                    <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                            Pipeline Breakdown by Type
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                            Separate metrics for Standard Validations vs Workload-Based Validations
+                        </Typography>
+                        <TableContainer component={Paper} variant="outlined">
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell><strong>Pipeline Type</strong></TableCell>
+                                        <TableCell align="right"><strong>Total Runs</strong></TableCell>
+                                        <TableCell align="right"><strong>Total Steps</strong></TableCell>
+                                        <TableCell align="right"><strong>Failed Steps</strong></TableCell>
+                                        <TableCell align="right"><strong>Pass Rate</strong></TableCell>
+                                        <TableCell align="right"><strong>Total Errors</strong></TableCell>
+                                        <TableCell align="right"><strong>Avg Errors/Run</strong></TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    <TableRow>
+                                        <TableCell>
+                                            <Chip label="Standard Validations" color="primary" size="small" />
+                                        </TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.standard.total_runs}</TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.standard.total_steps}</TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.standard.failed_steps}</TableCell>
+                                        <TableCell align="right">
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                                <Typography
+                                                    color={data.pipeline_breakdown.standard.pass_rate >= 80 ? 'success.main' :
+                                                           data.pipeline_breakdown.standard.pass_rate >= 60 ? 'warning.main' : 'error.main'}
+                                                >
+                                                    {data.pipeline_breakdown.standard.pass_rate}%
+                                                </Typography>
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.standard.total_errors}</TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.standard.avg_errors_per_run}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell>
+                                            <Chip label="Workload Validations" color="secondary" size="small" />
+                                        </TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.workload.total_runs}</TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.workload.total_steps}</TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.workload.failed_steps}</TableCell>
+                                        <TableCell align="right">
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                                <Typography
+                                                    color={data.pipeline_breakdown.workload.pass_rate >= 80 ? 'success.main' :
+                                                           data.pipeline_breakdown.workload.pass_rate >= 60 ? 'warning.main' : 'error.main'}
+                                                >
+                                                    {data.pipeline_breakdown.workload.pass_rate}%
+                                                </Typography>
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.workload.total_errors}</TableCell>
+                                        <TableCell align="right">{data.pipeline_breakdown.workload.avg_errors_per_run}</TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Recommendations */}
             <Card sx={{ mb: 4 }}>
                 <CardContent>
@@ -259,15 +379,33 @@ export default function ProjectSummary() {
                         <Warning sx={{ mr: 1 }} />
                         Recommendations & Action Items
                     </Typography>
-                    {recommendations.map((rec, index) => (
-                        <Alert
-                            key={index}
-                            severity={getRecommendationSeverity(rec)}
-                            sx={{ mb: 1 }}
-                        >
-                            {rec}
-                        </Alert>
-                    ))}
+                    {recommendations.map((rec, index) => {
+                        // Handle both string and object formats
+                        const isObject = typeof rec === 'object' && rec !== null;
+                        return (
+                            <Alert
+                                key={index}
+                                severity={getRecommendationSeverity(rec)}
+                                sx={{ mb: 1 }}
+                            >
+                                {(isObject ? (
+                                    <Box>
+                                        <Typography variant="subtitle2" fontWeight="bold">
+                                            {rec.title}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                            {rec.description}
+                                        </Typography>
+                                        {rec.action && (
+                                            <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                                                Action: {rec.action}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                ) : rec) as any}
+                            </Alert>
+                        );
+                    })}
                 </CardContent>
             </Card>
 

@@ -1,0 +1,57 @@
+# Environment and secrets
+.env
+.env.*
+!.env.template
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data directories (may contain credentials/secrets)
+ombudsman-validation-studio/backend/data/projects/*/
+ombudsman-validation-studio/backend/data/.active_project
+ombudsman-validation-studio/backend/data/active_project.txt
+ombudsman-validation-studio/backend/data/auth/
+ombudsman-validation-studio/backend/data/audit_logs/
+ombudsman-validation-studio/backend/data/batch_jobs/
+ombudsman-validation-studio/backend/data/workloads/
+ombudsman-validation-studio/backend/results/
+
+# Keep default project template
+!ombudsman-validation-studio/backend/data/projects/default_project/
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp

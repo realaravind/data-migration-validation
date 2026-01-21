@@ -1,0 +1,49 @@
+{
+  "job_id": "51475121-05c0-4b10-a999-a10fd300f8e7",
+  "job_type": "bulk_pipeline_execution",
+  "status": "failed",
+  "name": "Test Batch",
+  "description": null,
+  "operations": [
+    {
+      "operation_id": "pipeline_0_test-1",
+      "operation_type": "pipeline_execution",
+      "status": "failed",
+      "started_at": "2025-12-05 03:33:16.425463",
+      "completed_at": "2025-12-05 03:33:16.432121",
+      "duration_ms": 6,
+      "result": null,
+      "error": "Pipeline execution failed: {\"error\":{\"code\":\"HTTP_403\",\"message\":\"Not authenticated\",\"details\":{}}}",
+      "metadata": {
+        "pipeline_id": "test-1",
+        "pipeline_name": "test-1",
+        "config_override": {}
+      }
+    }
+  ],
+  "progress": {
+    "total_operations": 1,
+    "completed_operations": 0,
+    "failed_operations": 1,
+    "skipped_operations": 0,
+    "current_operation": null,
+    "percent_complete": 100.0,
+    "estimated_time_remaining_ms": null
+  },
+  "parallel_execution": false,
+  "max_parallel": 5,
+  "stop_on_error": false,
+  "retry_failed": false,
+  "max_retries": 3,
+  "created_at": "2025-12-05 03:33:16.422087",
+  "started_at": "2025-12-05 03:33:16.424283",
+  "completed_at": "2025-12-05 03:33:16.432756",
+  "total_duration_ms": 8,
+  "success_count": 0,
+  "failure_count": 1,
+  "result_summary": null,
+  "created_by": null,
+  "project_id": null,
+  "tags": [],
+  "metadata": null
+}

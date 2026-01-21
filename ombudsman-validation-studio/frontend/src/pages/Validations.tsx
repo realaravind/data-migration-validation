@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { Box, Card, CardContent, Typography, Button, List, ListItem, ListItemText } from '@mui/material';
 
-export default function Validations() {
+interface ValidationsProps {
+    currentProject?: any;
+}
+
+export default function Validations(_props: ValidationsProps) {
     const [validations, setValidations] = useState<any[]>([]);
 
     const runValidations = async () => {

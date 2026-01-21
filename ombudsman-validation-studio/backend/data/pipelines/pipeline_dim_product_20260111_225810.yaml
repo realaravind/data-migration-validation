@@ -1,0 +1,210 @@
+metadata:
+  name: dim_product_workload_validation
+  description: Workload-based validations for dim_product
+  generated_from: workload_wl_20260111_225702_f10a2b86
+  project_id: default_project
+  created_at: '2026-01-11T22:58:10.582982'
+  validation_count: 10
+  active: true
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: DIM
+  table: dim_product
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: DIM
+  table: DIM_PRODUCT
+steps:
+- name: validation_1_workload_query
+  type: comparative
+  description: Actual workload query (executed 980 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT COUNT(*) FROM DIM.dim_product
+    snowflake_query: SELECT COUNT(*) FROM DIM.DIM_PRODUCT
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 2
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 38.7
+- name: validation_2_workload_query
+  type: comparative
+  description: Actual workload query (executed 680 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT * FROM DIM.dim_product WHERE category = 'Electronics'
+    snowflake_query: SELECT * FROM DIM.DIM_PRODUCT WHERE category = 'Electronics'
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 5
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 28.3
+- name: validation_3_workload_query
+  type: comparative
+  description: Actual workload query (executed 890 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT AVG(unit_price) FROM DIM.dim_product
+    snowflake_query: SELECT AVG(unit_price) FROM DIM.DIM_PRODUCT
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 6
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 42.3
+- name: validation_4_workload_query
+  type: comparative
+  description: Actual workload query (executed 1350 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT p.product_name, s.quantity FROM DIM.dim_product p INNER
+      JOIN FACT.fact_sales s ON p.product_key = s.dim_product_key
+    snowflake_query: SELECT p.product_name, s.quantity FROM DIM.DIM_PRODUCT p INNER
+      JOIN FACT.FACT_SALES s ON p.product_key = s.dim_product_key
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 7
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 223.4
+- name: validation_5_workload_query
+  type: comparative
+  description: Actual workload query (executed 650 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT category, COUNT(*) FROM DIM.dim_product GROUP BY category
+    snowflake_query: SELECT category, COUNT(*) FROM DIM.DIM_PRODUCT GROUP BY category
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 8
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 56.8
+- name: validation_6_workload_query
+  type: comparative
+  description: Actual workload query (executed 490 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT * FROM DIM.dim_product ORDER BY unit_price DESC
+    snowflake_query: SELECT * FROM DIM.DIM_PRODUCT ORDER BY unit_price DESC
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 9
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 67.4
+- name: validation_7_workload_query
+  type: comparative
+  description: Actual workload query (executed 420 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT DISTINCT category FROM DIM.dim_product
+    snowflake_query: SELECT DISTINCT category FROM DIM.DIM_PRODUCT
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 11
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 48.2
+- name: validation_8_workload_query
+  type: comparative
+  description: Actual workload query (executed 580 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT * FROM DIM.dim_product WHERE unit_price > 100 AND unit_price
+      < 500
+    snowflake_query: SELECT * FROM DIM.DIM_PRODUCT WHERE unit_price > 100 AND unit_price
+      < 500
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 12
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 52.1
+- name: validation_9_workload_query
+  type: comparative
+  description: Actual workload query (executed 460 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT * FROM DIM.dim_product WHERE category IN ('Electronics',
+      'Clothing', 'Food')
+    snowflake_query: SELECT * FROM DIM.DIM_PRODUCT WHERE category IN ('Electronics',
+      'Clothing', 'Food')
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 13
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 43.5
+- name: validation_10_workload_query
+  type: comparative
+  description: Actual workload query (executed 670 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_server_query: SELECT p.category, COUNT(*) AS ProductCount, AVG(p.unit_price)
+      AS AvgPrice, SUM(ISNULL(s.quantity, 0)) AS TotalSold FROM DIM.dim_product p
+      LEFT JOIN FACT.fact_sales s ON p.product_key = s.dim_product_key GROUP BY p.category
+    snowflake_query: SELECT p.category, COUNT(*) AS ProductCount, AVG(p.unit_price)
+      AS AvgPrice, SUM(COALESCE(s.quantity, 0)) AS TotalSold FROM DIM.DIM_PRODUCT
+      p LEFT JOIN FACT.FACT_SALES s ON p.product_key = s.dim_product_key GROUP BY
+      p.category
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 14
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 289.4

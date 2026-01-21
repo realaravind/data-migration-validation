@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { Box, Button, TextareaAutosize } from '@mui/material';
 
-export default function PipelineYamlEditor() {
+interface PipelineYamlEditorProps {
+    currentProject?: any;
+}
+
+export default function PipelineYamlEditor(_props: PipelineYamlEditorProps) {
     const [yaml, setYaml] = useState("");
 
     const runPipeline = async () => {

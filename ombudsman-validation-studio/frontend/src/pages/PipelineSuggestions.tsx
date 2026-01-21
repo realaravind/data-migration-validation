@@ -10,7 +10,11 @@ import {
   TextField
 } from "@mui/material";
 
-export default function PipelineSuggestions() {
+interface PipelineSuggestionsProps {
+    currentProject?: any;
+}
+
+export default function PipelineSuggestions(_props: PipelineSuggestionsProps) {
   const [steps, setSteps] = useState<string[]>([]);
   const [metadata, setMetadata] = useState<any>({});
 

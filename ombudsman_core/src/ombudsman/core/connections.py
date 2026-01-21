@@ -18,6 +18,10 @@ import time
 import logging
 from decimal import Decimal
 from typing import Optional, Dict, Any
+from contextlib import contextmanager
+
+# Import connection pool manager
+from .connection_pool import pool_manager
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +91,16 @@ class ConnectionWrapper:
         return getattr(self._conn, 'schema', None)
 
 
-def get_sql_conn(cfg):
+def _create_sql_connection(cfg):
+    """
+    Create a raw SQL Server connection (used by connection pool).
+
+    Args:
+        cfg: Configuration dictionary
+
+    Returns:
+        pyodbc.Connection: Raw SQL Server connection
+    """
     sql_cfg = cfg["connections"]["sql"]
 
     # New structured config
@@ -99,21 +112,60 @@ def get_sql_conn(cfg):
             f"UID={sql_cfg['user']};"
             f"PWD={sql_cfg['password']};"
             f"TrustServerCertificate=yes;"
+            f"Connection Timeout=60;"
         )
-        raw_conn = pyodbc.connect(conn_str)
-        return ConnectionWrapper(raw_conn)
+        return pyodbc.connect(conn_str)
 
     # Fallback: older env var
     env_conn_str = os.getenv("SQLSERVER_CONN_STR")
     if env_conn_str:
-        raw_conn = pyodbc.connect(env_conn_str)
-        return ConnectionWrapper(raw_conn)
+        return pyodbc.connect(env_conn_str)
 
     raise ValueError("No SQL connection config found")
 
-def get_snow_conn(cfg=None, retries=3, retry_delay=2):
+
+@contextmanager
+def get_sql_conn(cfg, use_pool=True):
     """
-    Get Snowflake connection with retry logic.
+    Get SQL Server connection (optionally from pool).
+
+    Args:
+        cfg: Configuration dictionary
+        use_pool: Whether to use connection pooling (default: True)
+
+    Yields:
+        ConnectionWrapper: Wrapped SQL Server connection
+
+    Example:
+        with get_sql_conn(cfg) as conn:
+            result = conn.fetch_one("SELECT COUNT(*) FROM table")
+    """
+    if use_pool:
+        # Get or create pool for SQL Server
+        pool = pool_manager.get_or_create_pool(
+            name="sqlserver",
+            connection_factory=lambda: _create_sql_connection(cfg),
+            min_size=2,
+            max_size=10,
+            max_age_seconds=3600,
+            health_check_interval=300,
+            connection_timeout=30
+        )
+
+        # Get connection from pool
+        with pool.get_connection() as raw_conn:
+            yield ConnectionWrapper(raw_conn)
+    else:
+        # Direct connection (no pooling)
+        raw_conn = _create_sql_connection(cfg)
+        try:
+            yield ConnectionWrapper(raw_conn)
+        finally:
+            raw_conn.close()
+
+def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
+    """
+    Create a raw Snowflake connection with retry logic (used by connection pool).
 
     Args:
         cfg: Configuration dictionary with snowflake credentials
@@ -121,7 +173,7 @@ def get_snow_conn(cfg=None, retries=3, retry_delay=2):
         retry_delay: Seconds to wait between retries (default: 2)
 
     Returns:
-        ConnectionWrapper: Wrapped Snowflake connection
+        snowflake.connector.Connection: Raw Snowflake connection
 
     Raises:
         ValueError: If configuration is missing
@@ -171,7 +223,7 @@ def get_snow_conn(cfg=None, retries=3, retry_delay=2):
             cursor.close()
 
             logger.info(f"Successfully connected to Snowflake (version: {version})")
-            return ConnectionWrapper(raw_conn)
+            return raw_conn
 
         except snowflake.connector.Error as e:
             last_error = e
@@ -193,6 +245,52 @@ def get_snow_conn(cfg=None, retries=3, retry_delay=2):
     raise last_error if last_error else Exception("Unknown error during Snowflake connection")
 
 
+@contextmanager
+def get_snow_conn(cfg=None, use_pool=True, retries=3, retry_delay=2):
+    """
+    Get Snowflake connection (optionally from pool) with retry logic.
+
+    Args:
+        cfg: Configuration dictionary with snowflake credentials
+        use_pool: Whether to use connection pooling (default: True)
+        retries: Number of connection attempts (default: 3)
+        retry_delay: Seconds to wait between retries (default: 2)
+
+    Yields:
+        ConnectionWrapper: Wrapped Snowflake connection
+
+    Raises:
+        ValueError: If configuration is missing
+        snowflake.connector.Error: If connection fails after retries
+
+    Example:
+        with get_snow_conn(cfg) as conn:
+            result = conn.fetch_one("SELECT CURRENT_VERSION()")
+    """
+    if use_pool:
+        # Get or create pool for Snowflake
+        pool = pool_manager.get_or_create_pool(
+            name="snowflake",
+            connection_factory=lambda: _create_snowflake_connection(cfg, retries, retry_delay),
+            min_size=2,
+            max_size=10,
+            max_age_seconds=3600,
+            health_check_interval=300,
+            connection_timeout=30
+        )
+
+        # Get connection from pool
+        with pool.get_connection() as raw_conn:
+            yield ConnectionWrapper(raw_conn)
+    else:
+        # Direct connection (no pooling)
+        raw_conn = _create_snowflake_connection(cfg, retries, retry_delay)
+        try:
+            yield ConnectionWrapper(raw_conn)
+        finally:
+            raw_conn.close()
+
+
 def test_snowflake_connection(cfg=None):
     """
     Test Snowflake connection and return status information.
@@ -204,30 +302,29 @@ def test_snowflake_connection(cfg=None):
         dict: Connection status with details
     """
     try:
-        conn = get_snow_conn(cfg, retries=1)
-        cursor = conn.cursor()
+        with get_snow_conn(cfg, retries=1) as conn:
+            cursor = conn.cursor()
 
-        # Get connection info
-        cursor.execute("SELECT CURRENT_VERSION()")
-        version = cursor.fetchone()[0]
+            # Get connection info
+            cursor.execute("SELECT CURRENT_VERSION()")
+            version = cursor.fetchone()[0]
 
-        cursor.execute("SELECT CURRENT_WAREHOUSE()")
-        warehouse = cursor.fetchone()[0]
+            cursor.execute("SELECT CURRENT_WAREHOUSE()")
+            warehouse = cursor.fetchone()[0]
 
-        cursor.execute("SELECT CURRENT_DATABASE()")
-        database = cursor.fetchone()[0]
+            cursor.execute("SELECT CURRENT_DATABASE()")
+            database = cursor.fetchone()[0]
 
-        cursor.execute("SELECT CURRENT_SCHEMA()")
-        schema = cursor.fetchone()[0]
+            cursor.execute("SELECT CURRENT_SCHEMA()")
+            schema = cursor.fetchone()[0]
 
-        cursor.execute("SELECT CURRENT_USER()")
-        user = cursor.fetchone()[0]
+            cursor.execute("SELECT CURRENT_USER()")
+            user = cursor.fetchone()[0]
 
-        cursor.execute("SELECT CURRENT_ROLE()")
-        role = cursor.fetchone()[0]
+            cursor.execute("SELECT CURRENT_ROLE()")
+            role = cursor.fetchone()[0]
 
-        cursor.close()
-        conn.close()
+            cursor.close()
 
         return {
             "status": "success",

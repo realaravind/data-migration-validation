@@ -1,0 +1,28 @@
+pipeline:
+  name: Test Pipeline
+  description: Test pipeline to verify dynamic loading
+  type: test
+  category: testing
+
+  source:
+    connection: "${SQLSERVER_CONNECTION}"
+    database: "${SQL_DATABASE}"
+    schema: "${SQL_SCHEMA}"
+    table: "${SOURCE_TABLE}"
+
+  target:
+    connection: "${SNOWFLAKE_CONNECTION}"
+    database: "${SNOWFLAKE_DATABASE}"
+    schema: "${SNOWFLAKE_SCHEMA}"
+    table: "${TARGET_TABLE}"
+
+  steps:
+    - name: test_step
+      config: {}
+
+execution:
+  write_results_to: "results/test/"
+  fail_on_error: false
+  notify:
+    email: []
+    slack: []

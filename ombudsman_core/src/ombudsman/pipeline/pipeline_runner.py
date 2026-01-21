@@ -21,9 +21,9 @@ class PipelineRunner:
         self.logger = logger
         self.tables_initialized = False
 
-        # create a single Snowflake connection for the run
-        if cfg:
-            self.snow_conn = get_snow_conn(cfg)
+        # Use the Snowflake connection from the executor (already initialized)
+        if hasattr(executor, 'snow_conn') and executor.snow_conn:
+            self.snow_conn = executor.snow_conn
             self.cursor = self.snow_conn.cursor()
         else:
             self.snow_conn = None

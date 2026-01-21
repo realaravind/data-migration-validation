@@ -1,0 +1,457 @@
+{
+  "DIM.dim_customer": {
+    "columns": [
+      {
+        "name": "customer_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": false,
+        "default": null,
+        "primary_key": true
+      },
+      {
+        "name": "customer_id",
+        "data_type": "nvarchar",
+        "max_length": 50,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "customer_name",
+        "data_type": "nvarchar",
+        "max_length": 100,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "email",
+        "data_type": "nvarchar",
+        "max_length": 100,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "segment",
+        "data_type": "nvarchar",
+        "max_length": 20,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "region",
+        "data_type": "nvarchar",
+        "max_length": 50,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      }
+    ],
+    "schema": "DIM",
+    "table": "dim_customer",
+    "object_type": "TABLE"
+  },
+  "DIM.dim_date": {
+    "columns": [
+      {
+        "name": "date_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": false,
+        "default": null,
+        "primary_key": true
+      },
+      {
+        "name": "date",
+        "data_type": "date",
+        "max_length": null,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "year",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "quarter",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "month",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "month_name",
+        "data_type": "varchar",
+        "max_length": 20,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "week",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "day_of_month",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "day_of_week",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "day_name",
+        "data_type": "varchar",
+        "max_length": 20,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "is_weekend",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "is_holiday",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "fiscal_year",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "fiscal_quarter",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      }
+    ],
+    "schema": "DIM",
+    "table": "dim_date",
+    "object_type": "TABLE"
+  },
+  "DIM.dim_product": {
+    "columns": [
+      {
+        "name": "product_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": false,
+        "default": null,
+        "primary_key": true
+      },
+      {
+        "name": "product_id",
+        "data_type": "nvarchar",
+        "max_length": 50,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "product_name",
+        "data_type": "nvarchar",
+        "max_length": 200,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "category",
+        "data_type": "nvarchar",
+        "max_length": 50,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "subcategory",
+        "data_type": "nvarchar",
+        "max_length": 50,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "unit_price",
+        "data_type": "decimal",
+        "max_length": null,
+        "precision": 10,
+        "scale": 2,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      }
+    ],
+    "schema": "DIM",
+    "table": "dim_product",
+    "object_type": "TABLE"
+  },
+  "DIM.dim_store": {
+    "columns": [
+      {
+        "name": "store_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": false,
+        "default": null,
+        "primary_key": true
+      },
+      {
+        "name": "store_id",
+        "data_type": "nvarchar",
+        "max_length": 20,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "store_name",
+        "data_type": "nvarchar",
+        "max_length": 100,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "city",
+        "data_type": "nvarchar",
+        "max_length": 50,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "state",
+        "data_type": "nvarchar",
+        "max_length": 2,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "store_type",
+        "data_type": "nvarchar",
+        "max_length": 20,
+        "precision": null,
+        "scale": null,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      }
+    ],
+    "schema": "DIM",
+    "table": "dim_store",
+    "object_type": "TABLE"
+  },
+  "FACT.fact_sales": {
+    "columns": [
+      {
+        "name": "sales_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": false,
+        "default": null,
+        "primary_key": true
+      },
+      {
+        "name": "dim_customer_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "dim_product_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "dim_store_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "dim_date_key",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "quantity",
+        "data_type": "int",
+        "max_length": null,
+        "precision": 10,
+        "scale": 0,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "unit_price",
+        "data_type": "decimal",
+        "max_length": null,
+        "precision": 10,
+        "scale": 2,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "discount_amount",
+        "data_type": "decimal",
+        "max_length": null,
+        "precision": 10,
+        "scale": 2,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "sales_amount",
+        "data_type": "decimal",
+        "max_length": null,
+        "precision": 12,
+        "scale": 2,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      },
+      {
+        "name": "cost_amount",
+        "data_type": "decimal",
+        "max_length": null,
+        "precision": 12,
+        "scale": 2,
+        "nullable": true,
+        "default": null,
+        "primary_key": false
+      }
+    ],
+    "schema": "FACT",
+    "table": "fact_sales",
+    "object_type": "TABLE"
+  }
+}

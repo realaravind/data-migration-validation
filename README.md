@@ -1,243 +1,316 @@
-# Ombudsman Data Migration Validator
+# Ombudsman Validation Studio
 
-Complete data migration validation platform with core library and validation studio.
+**Intelligent Data Migration Validation Platform**
+
+Ombudsman Validation Studio is a comprehensive platform for validating data migrations between databases, with specialized support for SQL Server to Snowflake migrations.
+
+---
 
 ## 🚀 Quick Start
 
-```bash
-# Navigate to project root
-cd /Users/aravind/sourcecode/projects/data-migration-validator
-
-# Start in development mode (recommended)
-make unified
-
-# Access the application
-# Frontend: http://localhost:3000
-# Backend:  http://localhost:8000
-# API Docs: http://localhost:8000/docs
-```
-
-## 📁 Project Structure
-
-```
-data-migration-validator/
-├── ombudsman_core/                    # Core validation library
-│   ├── src/ombudsman/                # Core Python package
-│   └── Dockerfile                    # Core-only Docker build
-│
-├── ombudsman-validation-studio/      # Validation Studio application
-│   ├── backend/                      # FastAPI backend
-│   │   ├── main.py
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── frontend/                     # React + Vite frontend
-│   │   ├── src/
-│   │   ├── Dockerfile
-│   │   └── package.json
-│   ├── docker-compose.yml            # Production config
-│   └── docker-compose.dev.yml        # Development config
-│
-├── Dockerfile.unified                # ⭐ Core + Backend together
-├── Dockerfile.all-in-one            # ⭐ Everything in one
-├── docker-compose.unified.yml        # ⭐ Unified deployment
-├── docker-compose.all-in-one.yml    # ⭐ All-in-one deployment
-├── Makefile                          # ⭐ Easy commands
-└── Documentation/
-    ├── QUICKSTART.md                 # Quick start guide
-    ├── DOCKER_UNIFIED_GUIDE.md       # Complete Docker guide
-    └── UNIFIED_DOCKER_SUMMARY.md     # Setup summary
-```
-
-## 🐳 Docker Deployment Options
-
-### 1. Unified Backend (Development) ⭐ Recommended
-Core and backend in one container, frontend separate. Best for active development.
+### Using Makefile (Recommended)
 
 ```bash
-make unified
-# or
-docker-compose -f docker-compose.unified.yml up --build
+# Start all services
+make up
+
+# View logs
+make logs
+
+# Stop all services
+make down
 ```
 
-### 2. All-in-One (Production) ⭐ Recommended
-Everything in a single container. Best for simple deployment.
-
-```bash
-make all-in-one
-# or
-docker-compose -f docker-compose.all-in-one.yml up --build
-```
-
-### 3. Separate Services (Microservices)
-Core, backend, and frontend as independent services.
+### Using Docker Compose
 
 ```bash
 cd ombudsman-validation-studio
-docker-compose -f docker-compose.dev.yml up --build
+docker-compose up -d
 ```
 
-## 📚 Documentation
-
-- **[QUICKSTART.md](./QUICKSTART.md)** - Get started in 2 minutes
-- **[DOCKER_UNIFIED_GUIDE.md](./DOCKER_UNIFIED_GUIDE.md)** - Complete Docker guide
-- **[UNIFIED_DOCKER_SUMMARY.md](./UNIFIED_DOCKER_SUMMARY.md)** - Architecture overview
-- **[ombudsman-validation-studio/DOCKER.md](./ombudsman-validation-studio/DOCKER.md)** - Studio-specific docs
-
-## 🛠️ Common Commands
-
-```bash
-# Development
-make unified        # Start unified backend mode
-make dev           # Start separate services mode
-
-# Production
-make all-in-one    # Start all-in-one container
-make prod          # Start production mode
-
-# Management
-make stop          # Stop all services
-make clean         # Remove all containers/volumes
-make logs          # View logs
-make rebuild       # Rebuild without cache
-
-# Utilities
-make shell-backend # Open backend shell
-make validate      # Validate all configs
-make help          # Show all commands
-```
-
-## 🌐 Service URLs
+### Access the Application
 
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
 
-## 🏗️ Architecture
+---
 
-### Unified Backend (Development)
+## 📚 Documentation
+
+### Essential Guides
+- **[User Manual](USER_MANUAL.md)** - Complete end-user guide (32,000+ words)
+- **[Technical Manual](TECHNICAL_MANUAL.md)** - Developer and architecture documentation
+- **[Architecture Guide](ARCHITECTURE.md)** - System architecture and design details
+- **[Architecture Diagrams](ARCHITECTURE_DIAGRAM.md)** - Visual system diagrams (Mermaid)
+
+### Deployment Guides
+- **[Ubuntu Deployment](deployment/ubuntu/README.md)** - Deploy on Ubuntu VM
+- **[Windows Deployment](deployment/windows/README.md)** - Deploy on Windows Server
+
+---
+
+## 📁 Project Structure
+
 ```
-┌─────────────────────┐     ┌─────────────────┐
-│  Backend Container  │     │ Frontend        │
-│  ┌───────────────┐  │     │ Container       │
-│  │ Core Library  │  │     │ ┌─────────────┐ │
-│  └───────────────┘  │     │ │ React+Vite  │ │
-│  ┌───────────────┐  │     │ └─────────────┘ │
-│  │ Studio API    │  │     └─────────────────┘
-│  │ (FastAPI)     │  │            ↓
-│  └───────────────┘  │     http://localhost:3000
-│         ↓           │
-│  http://localhost:8000
-└─────────────────────┘
+.
+├── ombudsman-validation-studio/    # Main application
+│   ├── backend/                    # FastAPI backend (Python 3.11)
+│   ├── frontend/                   # React frontend (TypeScript)
+│   └── docker-compose.yml          # Service orchestration
+│
+├── ombudsman_core/                 # Core validation library
+│   └── src/ombudsman/
+│       ├── core/                   # Core services
+│       ├── pipeline/               # Pipeline engine
+│       └── validation/             # 30+ validation modules
+│
+├── deployment/                     # VM deployment scripts
+│   ├── ubuntu/                     # Ubuntu automated installer
+│   └── windows/                    # Windows automated installer
+│
+├── obsolete/                       # Archived files
+│
+├── Makefile                        # Docker shortcuts
+├── README.md                       # This file
+├── USER_MANUAL.md                  # End-user guide
+├── TECHNICAL_MANUAL.md             # Developer guide
+├── ARCHITECTURE.md                 # Architecture documentation
+└── ARCHITECTURE_DIAGRAM.md         # Visual diagrams
 ```
 
-### All-in-One (Production)
+---
+
+## ✨ Key Features
+
+### 30+ Built-in Validators
+- **Schema**: Column existence, data types, nullability
+- **Data Quality**: Counts, nulls, uniqueness, statistics, distributions
+- **Referential Integrity**: Foreign key validation
+- **Dimensions**: SCD Type 1/2, business keys, surrogate keys
+- **Facts**: Fact-dimension conformance, late arriving facts
+- **Metrics**: Sums, averages, ratios
+- **Time Series**: Continuity, duplicates, drift
+
+### Intelligent Features
+- **Workload Analysis**: Analyzes SQL Server Query Store
+- **Smart Suggestions**: Auto-generates validation pipelines
+- **Fuzzy Mapping**: Automatic table/column mapping
+- **Comparison Viewer**: Row-by-row difference analysis
+- **Visual Pipeline Builder**: Drag-and-drop workflows
+
+### User Features
+- **Project Management**: Organize by project
+- **JWT Authentication**: Secure user management
+- **Results Viewer**: Detailed drill-down
+- **Metadata Extraction**: Auto-discover schemas
+
+---
+
+## 🛠️ Makefile Commands
+
+```bash
+# Quick Start
+make up              # Start all services
+make down            # Stop all services
+make restart         # Restart all services
+make status          # Show container status
+
+# Development
+make logs            # View all logs
+make logs-backend    # View backend logs only
+make logs-frontend   # View frontend logs only
+make shell-backend   # Open backend shell
+make shell-frontend  # Open frontend shell
+
+# Maintenance
+make rebuild         # Rebuild without cache
+make clean           # Remove containers/volumes
+make prune           # Clean up Docker system
+
+# Testing
+make test            # Run backend tests
+
+# Help
+make help            # Show all commands
 ```
-┌─────────────────────────────┐
-│   Single Container          │
-│  ┌───────────────────────┐  │
-│  │   Core Library        │  │
-│  └───────────────────────┘  │
-│  ┌───────────────────────┐  │
-│  │   Backend API :8000   │  │
-│  └───────────────────────┘  │
-│  ┌───────────────────────┐  │
-│  │   Frontend :3000      │  │
-│  └───────────────────────┘  │
-└─────────────────────────────┘
+
+---
+
+## 🏗️ System Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│              Ombudsman.AI Platform                  │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  React Frontend  ←→  FastAPI Backend               │
+│    (Port 3000)        (Port 8000)                  │
+│                            ↓                        │
+│                    Core Library                     │
+│                   (30+ Validators)                  │
+│                            ↓                        │
+│        ┌───────────────────┼──────────────┐         │
+│        ↓                   ↓              ↓         │
+│   SQL Server          Snowflake       OVS DB       │
+│   (Source)            (Target)      (App Data)     │
+└─────────────────────────────────────────────────────┘
 ```
 
-## 🔧 Development Workflow
+---
 
-1. **Make changes** to core or studio code
-2. **Auto-reload** picks up changes (in unified mode)
-3. **Test** at http://localhost:3000
-4. **Commit** when ready
+## 🔧 Development
 
-## 📦 Components
+### Prerequisites
+- Docker Engine 24.0+
+- Docker Compose 2.20+
+- 4GB RAM (8GB+ recommended)
+- SQL Server access
+- Snowflake account
 
-### Ombudsman Core
-- Database connectors (MySQL, PostgreSQL, SQL Server)
-- Validation engine
-- Rule builder
-- Metadata extraction
+### Environment Setup
 
-### Validation Studio
-- **Backend**: FastAPI REST API
-- **Frontend**: React + TypeScript + Material-UI
-- **Features**:
-  - Pipeline YAML editor
-  - Validation dashboard
-  - Metadata extraction
-  - Rule builder
-  - Mermaid diagram editor
+**IMPORTANT**: The system uses a single unified configuration file to eliminate ambiguity.
+
+Copy the example environment file:
+```bash
+cp ombudsman-validation-studio/.env.example ombudsman-validation-studio/.env
+```
+
+Edit `.env` with your database credentials:
+```bash
+# SQL Server Configuration
+MSSQL_HOST=your-server
+MSSQL_PORT=1433
+MSSQL_DATABASE=your-database
+MSSQL_USER=your-user
+MSSQL_PASSWORD=your-password
+
+# Snowflake Configuration
+SNOWFLAKE_ACCOUNT=xyz.region.cloud
+SNOWFLAKE_USER=your-user
+SNOWFLAKE_PASSWORD=your-password
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+SNOWFLAKE_DATABASE=your-database
+SNOWFLAKE_SCHEMA=your-schema
+
+# JWT Secret
+JWT_SECRET_KEY=change-this-to-random-32-chars
+```
+
+**Configuration Architecture**:
+- **Single Source of Truth**: `ombudsman-validation-studio/.env`
+- **Symlinked**: `ombudsman_core/.env` → `ombudsman-validation-studio/.env`
+- **Project Overrides**: Managed via UI in each project's configuration
+- **No Duplication**: You only need to configure database credentials once
+
+### Run Tests
+
+```bash
+make test
+```
+
+---
+
+## 🚀 Deployment
+
+### Single VM Deployment
+
+**Ubuntu 22.04:**
+```bash
+cd deployment/ubuntu
+sudo ./pre-check.sh    # Verify system
+sudo ./install.sh      # Install
+./verify.sh            # Verify
+```
+
+**Windows Server 2022:**
+```powershell
+cd deployment\windows
+.\install.ps1
+```
+
+See detailed guides:
+- [Ubuntu Deployment Guide](deployment/ubuntu/README.md)
+- [Windows Deployment Guide](deployment/windows/README.md)
+
+---
+
+## 📖 Usage Overview
+
+1. **Create Project** - Configure source/target databases
+2. **Map Databases** - Map schemas, tables, columns
+3. **Extract Metadata** - Auto-discover database structure
+4. **Build Pipeline** - Add validation steps
+5. **Execute Pipeline** - Run validations
+6. **View Results** - Analyze pass/fail results
+
+For detailed usage, see [User Manual](USER_MANUAL.md).
+
+---
 
 ## 🧪 Testing
 
 ```bash
-# Run tests in backend container
+# Run all tests
 make test
 
-# Or manually
-docker-compose -f docker-compose.unified.yml exec studio-backend pytest
+# Run specific test
+cd ombudsman-validation-studio
+docker-compose exec studio-backend pytest tests/test_auth.py
+
+# Run with coverage
+docker-compose exec studio-backend pytest --cov
 ```
 
-## 🐛 Troubleshooting
+---
 
-### Port Conflicts
-```bash
-lsof -ti:3000 | xargs kill -9
-lsof -ti:8000 | xargs kill -9
-```
+## 🛠️ Technology Stack
 
-### Services Won't Start
-```bash
-make clean
-make unified
-```
+**Frontend:**
+- React 18 + TypeScript
+- Material-UI 6
+- Vite build tool
+- React Router 7
 
-### Core Changes Not Reflected
-```bash
-make rebuild
-```
+**Backend:**
+- FastAPI 0.115
+- Python 3.11
+- JWT Authentication
+- Uvicorn ASGI
 
-### View Logs
-```bash
-make logs
-```
+**Database Drivers:**
+- pyodbc 5.2 (SQL Server)
+- snowflake-connector-python
 
-## 📝 Environment Variables
+**Infrastructure:**
+- Docker & Docker Compose
+- Systemd (auto-start)
 
-Create `.env` file in project root:
-
-```env
-# Backend
-PYTHONPATH=/app:/core/src
-DATABASE_URL=postgresql://user:pass@localhost/dbname
-
-# Frontend
-VITE_API_URL=http://localhost:8000
-NODE_ENV=development
-```
+---
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test with `make unified`
-5. Submit a pull request
-
-## 📄 License
-
-[Your License Here]
-
-## 🆘 Support
-
-- **Documentation**: See `/docs` directory
-- **Issues**: [GitHub Issues](your-repo-url)
-- **Quick Help**: Run `make help`
+2. Create feature branch
+3. Make changes
+4. Run tests: `make test`
+5. Submit pull request
 
 ---
 
-**Ready to start?** Run `make unified` and you're good to go! 🚀
+## 📄 License
+
+Copyright © 2025 Ombudsman.AI. All rights reserved.
+
+---
+
+## 📞 Support
+
+- **User Guide**: [USER_MANUAL.md](USER_MANUAL.md)
+- **Tech Guide**: [TECHNICAL_MANUAL.md](TECHNICAL_MANUAL.md)
+- **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
+**Made with ❤️ by the Ombudsman.AI Team**

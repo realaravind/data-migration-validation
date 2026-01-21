@@ -10,10 +10,10 @@ import re
 
 def sanitize(text: str) -> str:
     """Sanitize text for Mermaid syntax (remove special characters)."""
-    # Remove parentheses, commas, and other special chars
-    text = re.sub(r'[(),]', '', text)
-    # Replace spaces with underscores
-    text = text.replace(' ', '_')
+    # Remove parentheses, commas, dots, and other special chars
+    text = re.sub(r'[(),.]', '', text)
+    # Replace spaces and hyphens with underscores
+    text = text.replace(' ', '_').replace('-', '_')
     return text
 
 
@@ -69,6 +69,9 @@ def generate_mermaid(payload: dict) -> str:
     for table_key, table_meta in tables.items():
         table_name = table_meta.get("table", table_key)
         columns = table_meta.get("columns", {})
+
+        # Extract just the table name (strip schema prefix)
+        table_name = _extract_table_name(table_name)
 
         # Add table with columns
         lines.append(f"    {sanitize(table_name)} {{")
@@ -151,7 +154,14 @@ def generate_mermaid_from_yaml(tables_yaml: Dict, relationships_yaml: List[Dict]
     # Convert to standard format
     tables = {}
     sql_tables = tables_yaml.get("sql", {})
-    for table_name, columns in sql_tables.items():
+    for table_name, table_data in sql_tables.items():
+        # Handle wrapped format {columns: {...}, object_type: TABLE}
+        if isinstance(table_data, dict) and "columns" in table_data:
+            columns = table_data["columns"]
+        else:
+            # Old format: table_data is the columns dict directly
+            columns = table_data
+
         tables[table_name] = {
             "table": table_name,
             "columns": columns
@@ -162,21 +172,28 @@ def generate_mermaid_from_yaml(tables_yaml: Dict, relationships_yaml: List[Dict]
     for rel in relationships_yaml:
         fact_table = rel.get("fact_table", "")
         fk_column = rel.get("fk_column", "")
-        dim_reference = rel.get("dim_reference", "")
 
-        # Parse dim_reference: "dim_table.dim_column"
-        if "." in dim_reference:
-            dim_table, dim_column = dim_reference.split(".", 1)
+        # Check if relationship has dim_table/dim_column fields (new format)
+        # or dim_reference field (old format)
+        if "dim_table" in rel:
+            dim_table = rel.get("dim_table", "")
+            dim_column = rel.get("dim_column", "id")
         else:
-            dim_table = dim_reference
-            dim_column = "id"
+            # Old format with dim_reference
+            dim_reference = rel.get("dim_reference", "")
+            # Parse dim_reference: "dim_table.dim_column"
+            if "." in dim_reference:
+                dim_table, dim_column = dim_reference.split(".", 1)
+            else:
+                dim_table = dim_reference
+                dim_column = "id"
 
         relationships.append({
             "fact_table": fact_table,
             "fk_column": fk_column,
             "dim_table": dim_table,
             "dim_column": dim_column,
-            "confidence": "high",
+            "confidence": rel.get("confidence", "high"),
             "is_broken": False
         })
 

@@ -3,6 +3,76 @@
 SQL utility functions for escaping identifiers and handling reserved keywords.
 """
 import os
+import re
+
+def substitute_schema_names(sql_text, schema_mappings, target_database=None):
+    """
+    Substitute schema names in SQL text based on provided mappings.
+
+    Handles all common SQL identifier formats:
+    - database.schema.table
+    - schema.table
+    - table (when preceded by FROM, JOIN, UPDATE, INTO, etc.)
+
+    Args:
+        sql_text: The SQL query text to transform
+        schema_mappings: Dict mapping source schemas to target schemas
+                        e.g., {'SAMPLE_DIM': 'DIM', 'SAMPLE_FACT': 'FACT'}
+        target_database: Optional target database name to prepend
+
+    Returns:
+        Transformed SQL text with substituted schema names
+
+    Examples:
+        Input:  "SELECT * FROM SAMPLE_DIM.DIM_CUSTOMER"
+        Output: "SELECT * FROM DIM.DIM_CUSTOMER"
+
+        Input:  "SELECT * FROM SAMPLEDW.SAMPLE_FACT.FACT_SALES"
+        Output: "SELECT * FROM SAMPLEDW.FACT.FACT_SALES"
+    """
+    if not sql_text or not schema_mappings:
+        return sql_text
+
+    transformed_sql = sql_text
+
+    # Sort mappings by length (longest first) to avoid partial replacements
+    sorted_mappings = sorted(schema_mappings.items(), key=lambda x: len(x[0]), reverse=True)
+
+    for source_schema, target_schema in sorted_mappings:
+        # Pattern 1: database.schema.table (3-part identifier)
+        # Matches: SAMPLEDW.SAMPLE_DIM.table_name
+        # Replaces schema part while keeping database and table
+        pattern1 = r'\b(\w+)\.' + re.escape(source_schema) + r'\.(\w+)\b'
+        transformed_sql = re.sub(
+            pattern1,
+            lambda m: f"{m.group(1)}.{target_schema}.{m.group(2)}",
+            transformed_sql,
+            flags=re.IGNORECASE
+        )
+
+        # Pattern 2: schema.table (2-part identifier)
+        # Matches: SAMPLE_DIM.table_name
+        # Replaces with: target_schema.table_name
+        pattern2 = r'\b' + re.escape(source_schema) + r'\.(\w+)\b'
+        transformed_sql = re.sub(
+            pattern2,
+            f"{target_schema}.\\1",
+            transformed_sql,
+            flags=re.IGNORECASE
+        )
+
+        # Pattern 3: Standalone schema references (e.g., in WITH clauses)
+        # Only replace if followed by specific SQL keywords or context
+        # This is more conservative to avoid false positives
+        pattern3 = r'\bFROM\s+' + re.escape(source_schema) + r'\b(?!\.)'
+        transformed_sql = re.sub(
+            pattern3,
+            f"FROM {target_schema}",
+            transformed_sql,
+            flags=re.IGNORECASE
+        )
+
+    return transformed_sql
 
 def escape_sql_server_identifier(identifier):
     """

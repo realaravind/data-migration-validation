@@ -10,7 +10,11 @@ import {
   MenuItem
 } from "@mui/material";
 
-export default function ValidationRules() {
+interface ValidationRulesProps {
+    currentProject?: any;
+}
+
+export default function ValidationRules(_props: ValidationRulesProps) {
   const [rules, setRules] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
 

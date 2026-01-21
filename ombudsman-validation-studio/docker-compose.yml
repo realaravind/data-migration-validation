@@ -7,14 +7,41 @@ services:
       - ../ombudsman_core:/core
       - ./backend:/app
       - ./backend/data:/data  # Persistent data storage (projects, workloads, pipelines)
+      - ..:/docs  # Documentation files from project root
     environment:
       PYTHONPATH: "/app:/core/src"
+      # Data Storage Paths (inside container)
+      MAPPING_INTELLIGENCE_DIR: "/data/mapping_intelligence"
+      QUERY_HISTORY_DIR: "/data/query_history"
+      PIPELINE_RUNS_DIR: "/data/pipeline_runs"
+      CONFIG_BACKUPS_DIR: "/data/config_backups"
+      AUTH_DATA_DIR: "/data/auth"
+      AUDIT_LOG_DIR: "/data/audit_logs"
+      # Notification settings
+      NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-true}"
+      NOTIFICATION_RULES_FILE: "/data/notification_rules.json"
+      # Batch operations settings
+      BATCH_JOBS_DIR: "/data/batch_jobs"
+      # Email/SMTP settings
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM_EMAIL: "${SMTP_FROM_EMAIL:-}"
+      SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Ombudsman Validation Studio}"
+      SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
+      # Slack settings
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      SLACK_CHANNEL: "${SLACK_CHANNEL:-}"
+      # Webhook settings
+      WEBHOOK_URL: "${WEBHOOK_URL:-}"
+      WEBHOOK_TIMEOUT: "${WEBHOOK_TIMEOUT:-30}"
       # SQL Server connection (update these with your SQL Server details)
       MSSQL_HOST: "${MSSQL_HOST:-host.docker.internal}"
       MSSQL_PORT: "${MSSQL_PORT:-1433}"
       MSSQL_USER: "${MSSQL_USER:-sa}"
       MSSQL_PASSWORD: "${MSSQL_PASSWORD:-YourPassword123!}"
-      MSSQL_DATABASE: "${MSSQL_DATABASE:-SampleDW}"
+      MSSQL_DATABASE: "${MSSQL_DATABASE:-snowmigratedev01}"
       SQLSERVER_CONN_STR: "${SQLSERVER_CONN_STR:-}"
       # Snowflake connection (update these with your Snowflake details)
       SNOWFLAKE_USER: "${SNOWFLAKE_USER:-your_user}"
@@ -23,7 +50,7 @@ services:
       SNOWFLAKE_WAREHOUSE: "${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
       SNOWFLAKE_ROLE: "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}"
       SNOWFLAKE_DATABASE: "${SNOWFLAKE_DATABASE:-SAMPLEDW}"
-      SNOWFLAKE_SCHEMA: "${SNOWFLAKE_SCHEMA:-PUBLIC}"
+      SNOWFLAKE_SCHEMA: "${SNOWFLAKE_SCHEMA:-FACT}"
     networks:
       - ovs-net
     # Add reload for development
@@ -34,15 +61,9 @@ services:
   studio-frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
-    volumes:
-      # Mount source for hot reload in development
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
+      - "3002:3000"
     networks:
       - ovs-net
-    environment:
-      - NODE_ENV=development
 
 networks:
   ovs-net:

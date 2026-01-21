@@ -31,6 +31,45 @@ def str_representer(dumper, data):
 CustomYAMLDumper.add_representer(str, str_representer)
 
 
+def _extract_metadata_structure(columns: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Extract proper metadata structure from columns list.
+
+    The frontend sends columns as:
+    [
+        {'name': 'columns', 'type': {<dict of actual columns>}},
+        {'name': 'object_type', 'type': 'TABLE'}
+    ]
+
+    We need to extract the actual columns dict and structure it properly.
+    """
+    result = {}
+
+    for col in columns:
+        col_name = col.get('name')
+        col_type = col.get('type') or col.get('data_type', 'VARCHAR')
+
+        if col_name == 'columns' and isinstance(col_type, dict):
+            # This is the actual columns dict
+            result['columns'] = col_type
+        elif col_name == 'object_type':
+            # This is the object type
+            result['object_type'] = col_type
+        else:
+            # Regular column - shouldn't happen with the new structure, but handle it
+            if 'columns' not in result:
+                result['columns'] = {}
+            result['columns'][col_name] = col_type
+
+    # Ensure columns and object_type exist
+    if 'columns' not in result:
+        result['columns'] = {}
+    if 'object_type' not in result:
+        result['object_type'] = 'TABLE'
+
+    return result
+
+
 def format_yaml(data: dict) -> str:
     """Format YAML with consistent indentation and style"""
     return yaml.dump(
@@ -83,15 +122,41 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
 
         for col in request.columns:
             col_name = col.get('name', '')
-            # Support both 'type' and 'data_type' field names
             col_type = col.get('data_type') or col.get('type') or ''
-            # Ensure col_type is a string, handle if it's not
+
+            # SPECIAL CASE: Frontend sends metadata as [{'name': 'columns', 'type': {COL1: TYPE1, ...}}, {'name': 'object_type', 'type': 'TABLE'}]
+            # If col_name is 'columns' and col_type is a dict, expand it into actual columns
+            if col_name == 'columns' and isinstance(col_type, dict):
+                print(f"[DEBUG] Detected wrapped columns structure, expanding {len(col_type)} columns")
+                for actual_col_name, actual_col_type in col_type.items():
+                    if not isinstance(actual_col_type, str):
+                        continue
+                    actual_col_type_lower = actual_col_type.lower()
+
+                    # Identify numeric columns
+                    if any(t in actual_col_type_lower for t in ['int', 'decimal', 'numeric', 'number', 'float', 'money']):
+                        numeric_columns.append(actual_col_name)
+
+                    # Identify date columns
+                    if any(t in actual_col_type_lower for t in ['date', 'datetime', 'timestamp']):
+                        date_columns.append(actual_col_name)
+
+                    # Identify FK columns
+                    if any(suffix in actual_col_name.lower() for suffix in ['id', 'key', '_fk']):
+                        if actual_col_name.lower() not in ['id', 'factid', 'rowid']:
+                            fk_columns.append(actual_col_name)
+                continue  # Skip to next col, don't process 'columns' as a column name
+
+            # Skip object_type metadata
+            if col_name == 'object_type':
+                continue
+
+            # Normal case: col_type is a string
             if not isinstance(col_type, str):
                 col_type = str(col_type) if col_type else ''
             col_type = col_type.lower()
 
             # Identify numeric columns (metrics)
-            # Support both SQL Server types (int, decimal, numeric, float, money) and Snowflake types (NUMBER)
             if any(t in col_type for t in ['int', 'decimal', 'numeric', 'number', 'float', 'money']):
                 numeric_columns.append(col_name)
 
@@ -237,6 +302,8 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
         # 4. Referential Integrity (if FK columns exist)
         if fk_columns or request.relationships:
             dimension_tables = [rel.get('dim_table') for rel in request.relationships if rel.get('dim_table')]
+            print(f"[DEBUG] Found {len(request.relationships)} relationships")
+            print(f"[DEBUG] Dimension tables: {dimension_tables}")
 
             suggested_checks.append({
                 "category": "Referential Integrity",
@@ -790,9 +857,27 @@ def generate_fact_pipeline_yaml(fact_table: str, schema: str, suggested_checks: 
     default_email = os.getenv("ALERT_EMAIL", "")
     email_list = [default_email] if default_email else []
 
-    # Determine schemas - both SQL Server and Snowflake use the provided schema
-    sql_schema = schema  # Use provided schema for SQL Server (e.g., FACT)
-    snow_schema = schema  # Use provided schema for Snowflake (e.g., FACT)
+    # Parse the fact_table parameter - it may contain schema.table format
+    # e.g., "FACT.FACT_SALES" should be split into schema="FACT", table="FACT_SALES"
+    if '.' in fact_table:
+        parts = fact_table.split('.', 1)  # Split only on first dot
+        parsed_schema = parts[0]
+        parsed_table = parts[1]
+        print(f"[PIPELINE_GEN] Parsed table name '{fact_table}' -> schema='{parsed_schema}', table='{parsed_table}'")
+
+        # Use parsed schema if provided schema is generic/default
+        if schema in ['PUBLIC', 'public', 'dbo']:
+            sql_schema = parsed_schema
+            snow_schema = parsed_schema
+            fact_table = parsed_table  # Update fact_table to just the table name
+            print(f"[PIPELINE_GEN] Using parsed schema '{parsed_schema}' instead of default '{schema}'")
+        else:
+            sql_schema = schema
+            snow_schema = schema
+    else:
+        # No dot in table name - use provided schema as-is
+        sql_schema = schema  # Use provided schema for SQL Server (e.g., FACT)
+        snow_schema = schema  # Use provided schema for Snowflake (e.g., FACT)
 
     pipeline = {
         "pipeline": {
@@ -816,13 +901,34 @@ def generate_fact_pipeline_yaml(fact_table: str, schema: str, suggested_checks: 
                 fact_table: {
                     "sql": f"{sql_schema}.{fact_table}",
                     "snow": f"{snow_schema}.{fact_table}"
-                }
+                },
+                # Add dimension table mappings for fact-dimension validators
+                **({
+                    rel["dim_table"]: {
+                        "sql": rel["dim_table"],  # Already in schema.table format from relationships
+                        "snow": rel["dim_table"]  # Already in schema.table format
+                    }
+                    for rel in relationships
+                } if relationships else {})
             },
             "metadata": {
                 fact_table: {
-                    col.get('name'): (col.get('data_type') or col.get('type', 'VARCHAR'))
-                    for col in columns
-                }
+                    **_extract_metadata_structure(columns),
+                    "foreign_keys": {
+                        rel["dim_table"]: {
+                            "column": rel["fk_column"],
+                            "references": f"{rel['dim_table']}.{rel['dim_column']}"
+                        }
+                        for rel in relationships
+                    } if relationships else {}
+                },
+                # Add dimension table metadata with business keys
+                **({
+                    rel["dim_table"]: {
+                        "business_key": rel["dim_column"]
+                    }
+                    for rel in relationships
+                } if relationships else {})
             },
             "steps": []
         },
@@ -871,16 +977,26 @@ def generate_fact_pipeline_yaml(fact_table: str, schema: str, suggested_checks: 
                 # Skip - requires SQL and Snowflake result sets
                 continue
             elif check_name in ["validate_fact_dim_conformance", "validate_late_arriving_facts"]:
-                # These require fact and dim parameters - skip for now or add if relationship info available
+                # These require fact and dim parameters - add all relationships
+                print(f"[PIPELINE_GEN] Processing {check_name}, relationships count: {len(relationships)}")
                 if relationships:
-                    # Try to find first relationship
-                    first_rel = relationships[0] if relationships else None
-                    if first_rel:
-                        config["fact"] = fact_table
-                        config["dim"] = first_rel.get("target_table", "unknown_dim")
-                    else:
-                        continue  # Skip if no relationships
+                    # Add one step per relationship
+                    for rel in relationships:
+                        dim_table = rel.get("dim_table") or rel.get("target_table", "unknown_dim")
+                        print(f"[PIPELINE_GEN] Adding {check_name} step for {fact_table} -> {dim_table}")
+                        rel_config = {
+                            "table": fact_table,
+                            "fact": fact_table,
+                            "dim": dim_table
+                        }
+                        pipeline["pipeline"]["steps"].append({
+                            "name": check_name,
+                            "config": rel_config
+                        })
+                    # Continue to skip the default step addition below
+                    continue
                 else:
+                    print(f"[PIPELINE_GEN] Skipping {check_name} - no relationships provided")
                     continue  # Skip if no relationships
 
             pipeline["pipeline"]["steps"].append({

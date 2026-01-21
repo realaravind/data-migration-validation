@@ -53,7 +53,11 @@ interface DatabaseTables {
   };
 }
 
-export default function MetadataExtraction() {
+interface MetadataExtractionProps {
+    currentProject?: any;
+}
+
+export default function MetadataExtraction(_props: MetadataExtractionProps) {
   const [connection, setConnection] = useState("sqlserver");
   const [database, setDatabase] = useState<string>("");
   const [allTables, setAllTables] = useState<DatabaseTables | null>(null);

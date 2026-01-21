@@ -90,6 +90,119 @@ class WorkloadEngine:
 
         return workload_data
 
+    def generate_query_based_validations(self, project_id: str, workload_id: str) -> Dict:
+        """
+        Generate validations directly from workload queries (proper implementation).
+
+        This creates one validation per unique query, using the original SQL.
+
+        Args:
+            project_id: Project identifier
+            workload_id: Workload identifier
+
+        Returns:
+            Dictionary with validations grouped by table
+        """
+        # Load workload
+        workload = self.storage.get_workload(project_id, workload_id)
+        if not workload:
+            raise ValueError(f"Workload {workload_id} not found")
+
+        queries = workload.get('queries', [])
+        if not queries:
+            raise ValueError("No queries found in workload")
+
+        # Group queries by table and deduplicate
+        table_queries = {}
+        seen_queries = {}  # Track unique queries by normalized SQL
+
+        for query_data in queries:
+            raw_sql = query_data.get('raw_text', '').strip()
+            if not raw_sql:
+                continue
+
+            # Normalize query for deduplication (lowercase, remove extra spaces)
+            normalized = ' '.join(raw_sql.lower().split())
+
+            # Skip if we've seen this exact query before
+            if normalized in seen_queries:
+                # Update execution count
+                seen_queries[normalized]['total_executions'] += query_data.get('stats', {}).get('total_executions', 0)
+                continue
+
+            # Extract table name from query
+            # Try to find FROM clause
+            import re
+            from_match = re.search(r'FROM\s+(?:(\w+)\.)?(\w+)', raw_sql, re.IGNORECASE)
+            if from_match:
+                schema = from_match.group(1) or ''
+                table = from_match.group(2)
+                table_key = f"{schema}.{table}" if schema else table
+
+                # Store unique query
+                query_info = {
+                    'query_id': query_data.get('query_id'),
+                    'raw_text': raw_sql,
+                    'normalized': normalized,
+                    'total_executions': query_data.get('stats', {}).get('total_executions', 0),
+                    'avg_duration': query_data.get('stats', {}).get('avg_duration', 0),
+                    'table': table,
+                    'schema': schema
+                }
+
+                seen_queries[normalized] = query_info
+
+                if table_key not in table_queries:
+                    table_queries[table_key] = []
+                table_queries[table_key].append(query_info)
+
+        # Create validation suggestions from unique queries
+        validation_results = {}
+        all_validations = []
+
+        for table_key, queries_list in table_queries.items():
+            validations = []
+
+            for idx, query_info in enumerate(queries_list, 1):
+                # Create a validation suggestion with the original SQL
+                from .analyzer import ValidationSuggestion
+
+                validation = ValidationSuggestion(
+                    validator_name='workload_query',  # Special type for workload queries
+                    table_name=query_info['table'],
+                    schema_name=query_info['schema'],
+                    columns=[],  # Not needed for custom SQL
+                    confidence=0.95,  # High confidence since these are actual queries
+                    reason=f"Actual workload query (executed {query_info['total_executions']} times)",
+                    query_count=1,
+                    total_executions=query_info['total_executions'],
+                    source='workload',
+                    metadata={
+                        'query_id': query_info['query_id'],
+                        'raw_sql': query_info['raw_text'],
+                        'avg_duration_ms': query_info['avg_duration'],
+                        'validation_type': 'workload_query'
+                    }
+                )
+
+                validations.append(validation)
+                all_validations.append(validation)
+
+            validation_results[table_key] = {
+                'table': table_key,
+                'query_count': len(queries_list),
+                'total_executions': sum(q['total_executions'] for q in queries_list),
+                'suggestions': [self._serialize_suggestion(v) for v in validations]
+            }
+
+        return {
+            'tables': validation_results,
+            'total_unique_queries': len(seen_queries),
+            'total_queries': len(queries),
+            'deduplication_ratio': len(seen_queries) / len(queries) if queries else 0,
+            'validations': [self._serialize_suggestion(v) for v in all_validations]
+        }
+
     def analyze_workload(self, project_id: str, workload_id: str, metadata: Dict = None) -> Dict:
         """
         Analyze a stored workload and generate validation suggestions

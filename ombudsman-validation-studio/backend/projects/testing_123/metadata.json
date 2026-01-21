@@ -1,0 +1,79 @@
+{
+  "DIM.dim_customer": {
+    "columns": {
+      "customer_key": "int",
+      "customer_id": "nvarchar",
+      "customer_name": "nvarchar",
+      "email": "nvarchar",
+      "segment": "nvarchar",
+      "region": "nvarchar"
+    },
+    "schema": "DIM",
+    "table": "dim_customer",
+    "object_type": "TABLE"
+  },
+  "DIM.dim_date": {
+    "columns": {
+      "date_key": "int",
+      "date": "date",
+      "year": "int",
+      "quarter": "int",
+      "month": "int",
+      "month_name": "varchar",
+      "week": "int",
+      "day_of_month": "int",
+      "day_of_week": "int",
+      "day_name": "varchar",
+      "is_weekend": "int",
+      "is_holiday": "int",
+      "fiscal_year": "int",
+      "fiscal_quarter": "int"
+    },
+    "schema": "DIM",
+    "table": "dim_date",
+    "object_type": "TABLE"
+  },
+  "DIM.dim_product": {
+    "columns": {
+      "product_key": "int",
+      "product_id": "nvarchar",
+      "product_name": "nvarchar",
+      "category": "nvarchar",
+      "subcategory": "nvarchar",
+      "unit_price": "decimal"
+    },
+    "schema": "DIM",
+    "table": "dim_product",
+    "object_type": "TABLE"
+  },
+  "DIM.dim_store": {
+    "columns": {
+      "store_key": "int",
+      "store_id": "nvarchar",
+      "store_name": "nvarchar",
+      "city": "nvarchar",
+      "state": "nvarchar",
+      "store_type": "nvarchar"
+    },
+    "schema": "DIM",
+    "table": "dim_store",
+    "object_type": "TABLE"
+  },
+  "FACT.fact_sales": {
+    "columns": {
+      "sales_key": "int",
+      "dim_customer_key": "int",
+      "dim_product_key": "int",
+      "dim_store_key": "int",
+      "dim_date_key": "int",
+      "quantity": "int",
+      "unit_price": "decimal",
+      "discount_amount": "decimal",
+      "sales_amount": "decimal",
+      "cost_amount": "decimal"
+    },
+    "schema": "FACT",
+    "table": "fact_sales",
+    "object_type": "TABLE"
+  }
+}

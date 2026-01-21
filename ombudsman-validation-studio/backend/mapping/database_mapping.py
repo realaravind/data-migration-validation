@@ -5,6 +5,7 @@ import pyodbc
 import snowflake.connector
 import os
 import yaml
+import json
 
 router = APIRouter()
 
@@ -46,20 +47,108 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
     Extract metadata from both SQL Server and Snowflake databases,
     then create mappings and generate YAML files for the core engine.
     Supports schema mappings for multi-schema extraction.
+    Uses intelligent schema mapping if no mappings are provided.
     """
     try:
+        # Get project-specific config directory
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir, get_active_project
+        config_dir = get_project_config_dir()
+        active_project = get_active_project()
+
         # Load or use provided schema mappings
         schema_mappings = request.schema_mappings
         if not schema_mappings:
-            # Try to load from file
-            config_dir = "/core/src/ombudsman/config"
+            # Try to load from file first
             schema_mappings_file = f"{config_dir}/schema_mappings.yaml"
             if os.path.exists(schema_mappings_file):
                 with open(schema_mappings_file, "r") as f:
                     schema_mappings = yaml.safe_load(f) or {}
+                print(f"[EXTRACT] Loaded existing schema mappings from file: {schema_mappings}")
             else:
-                # Default: single schema mapping
-                schema_mappings = {request.sql_server_schema: request.snowflake_schema}
+                # Use intelligent schema mapping
+                print(f"[EXTRACT] No schema mappings found. Using intelligent schema mapper...")
+
+                # Get schemas from project or fetch from databases
+                sql_schemas = None
+                snowflake_schemas = None
+
+                if active_project:
+                    sql_schemas = active_project.get('sql_schemas', [])
+                    snowflake_schemas = active_project.get('snowflake_schemas', [])
+                    print(f"[EXTRACT] Project schemas - SQL: {sql_schemas}, Snowflake: {snowflake_schemas}")
+
+                # Import schema mapper
+                sys.path.insert(0, "/app/mapping")
+                from schema_mapper import auto_map_schemas
+
+                # Get available schemas from databases if not in project
+                if not sql_schemas:
+                    conn_str = os.getenv("SQLSERVER_CONN_STR", "")
+                    if "DATABASE=" in conn_str:
+                        parts = conn_str.split(";")
+                        for i, part in enumerate(parts):
+                            if part.startswith("DATABASE="):
+                                parts[i] = f"DATABASE={request.sql_server_database}"
+                        conn_str = ";".join(parts)
+
+                    conn = pyodbc.connect(conn_str)
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT SCHEMA_NAME
+                        FROM INFORMATION_SCHEMA.SCHEMATA
+                        WHERE SCHEMA_NAME NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'db_owner', 'db_accessadmin',
+                                                   'db_securityadmin', 'db_ddladmin', 'db_backupoperator', 'db_datareader',
+                                                   'db_datawriter', 'db_denydatareader', 'db_denydatawriter')
+                        ORDER BY SCHEMA_NAME
+                    """)
+                    sql_schemas = [row[0] for row in cursor.fetchall()]
+                    cursor.close()
+                    conn.close()
+                    print(f"[EXTRACT] Fetched SQL Server schemas: {sql_schemas}")
+
+                if not snowflake_schemas:
+                    conn = snowflake.connector.connect(
+                        user=os.getenv("SNOWFLAKE_USER"),
+                        password=os.getenv("SNOWFLAKE_PASSWORD"),
+                        account=os.getenv("SNOWFLAKE_ACCOUNT"),
+                        warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+                        role=os.getenv("SNOWFLAKE_ROLE"),
+                        database=request.snowflake_database
+                    )
+                    cursor = conn.cursor()
+                    cursor.execute("SHOW SCHEMAS")
+                    snowflake_schemas = [row[1] for row in cursor.fetchall() if row[1] not in ['INFORMATION_SCHEMA']]
+                    cursor.close()
+                    conn.close()
+                    print(f"[EXTRACT] Fetched Snowflake schemas: {snowflake_schemas}")
+
+                # Use intelligent schema mapper
+                mapping_suggestions = auto_map_schemas(
+                    sql_schemas=sql_schemas,
+                    snowflake_schemas=snowflake_schemas,
+                    confidence_threshold=0.7
+                )
+
+                # Build schema_mappings from auto-mapped suggestions
+                schema_mappings = {}
+                for sql_schema, suggestion in mapping_suggestions.items():
+                    if suggestion.get("auto_mapped") and suggestion.get("snowflake_schema"):
+                        schema_mappings[sql_schema] = suggestion["snowflake_schema"]
+                        print(f"[EXTRACT] Auto-mapped: {sql_schema} → {suggestion['snowflake_schema']} (confidence: {suggestion['confidence']})")
+                    else:
+                        print(f"[EXTRACT] Skipped low-confidence mapping for '{sql_schema}' (confidence: {suggestion.get('confidence', 0)})")
+
+                # Fallback to default if no auto-mappings
+                if not schema_mappings:
+                    schema_mappings = {request.sql_server_schema: request.snowflake_schema}
+                    print(f"[EXTRACT] Using default single schema mapping: {schema_mappings}")
+
+                # Save the intelligent mappings for future use
+                with open(schema_mappings_file, "w") as f:
+                    yaml.dump(schema_mappings, f, default_flow_style=False)
+                print(f"[EXTRACT] Saved intelligent schema mappings to {schema_mappings_file}")
 
         # Extract from all mapped schemas
         all_sql_metadata = {}
@@ -109,11 +198,56 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
                 "snowflake_tables_found": len(snow_metadata)
             })
 
-        # Create mappings
-        mappings = create_table_mappings(all_sql_metadata, all_snow_metadata)
+        # Create mappings using schema_mappings
+        mappings = create_table_mappings(all_sql_metadata, all_snow_metadata, schema_mappings)
+        print(f"[EXTRACT] Created {len(mappings)} table mappings")
 
         # Generate YAML files for core engine
         yaml_output = generate_yaml_files(mappings, request, schema_mappings)
+        print(f"[EXTRACT] Generated YAML files")
+
+        # Infer relationships from SQL Server metadata
+        print(f"[EXTRACT] Inferring relationships from {len(all_sql_metadata)} SQL Server tables...")
+        from context import get_active_project
+        active_project = get_active_project()
+        print(f"[EXTRACT] Active project: {active_project}")
+
+        relationships = []
+        if active_project:
+            # Import from projects/automation.py (not /app/automation/)
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("project_automation", "/app/projects/automation.py")
+            automation_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(automation_module)
+            ProjectAutomation = automation_module.ProjectAutomation
+
+            automation = ProjectAutomation(active_project["project_id"], active_project["name"])
+            relationships = automation.infer_relationships(all_sql_metadata)
+            print(f"[EXTRACT] Inferred {len(relationships)} relationships")
+
+            # Save relationships to config/relationships.yaml
+            config_dir = f"/data/projects/{active_project['project_id']}/config"
+            relationships_yaml_path = f"{config_dir}/relationships.yaml"
+            with open(relationships_yaml_path, "w") as f:
+                yaml.dump(relationships, f, default_flow_style=False, sort_keys=False)
+            print(f"[EXTRACT] Saved {len(relationships)} relationships to {relationships_yaml_path}")
+
+            # Update project metadata
+            project_dir = f"/data/projects/{active_project['project_id']}"
+            project_json_path = f"{project_dir}/project.json"
+            if os.path.exists(project_json_path):
+                with open(project_json_path, "r") as f:
+                    project_data = json.load(f)
+
+                from datetime import datetime
+                project_data["updated_at"] = datetime.now().isoformat()
+                project_data["has_metadata"] = True
+                project_data["has_relationships"] = len(relationships) > 0
+                project_data["table_mappings_count"] = len(mappings)
+
+                with open(project_json_path, "w") as f:
+                    json.dump(project_data, f, indent=2)
+                print(f"[EXTRACT] Updated project metadata: {len(mappings)} mappings, {len(relationships)} relationships")
 
         return {
             "status": "success",
@@ -128,6 +262,7 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
             "schema_mappings": schema_mappings,
             "schema_results": schema_extraction_results,
             "mappings": mappings,
+            "relationships": relationships,
             "yaml_generated": yaml_output
         }
 
@@ -309,8 +444,8 @@ def extract_snowflake_tables(database: str, schema: str, patterns: List[str], sp
         return {}
 
 
-def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict) -> List[TableMapping]:
-    """Create mappings between SQL Server and Snowflake tables with column-level mappings"""
+def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict, schema_mappings: Dict[str, str] = None) -> List[TableMapping]:
+    """Create mappings between SQL Server and Snowflake tables with column-level mappings using schema mappings"""
     mappings = []
 
     # Import MappingLoader for column suggestions
@@ -324,9 +459,25 @@ def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict) -> List[Table
     snow_lookup = {table.upper(): table for table in snow_metadata.keys()}
     matched_snow_tables = set()
 
-    # Find matching tables (case-insensitive)
+    # Find matching tables using schema mappings
     for sql_table in sql_metadata:
-        snow_table_upper = sql_table.upper()
+        # Parse schema.table from sql_table (e.g., "sample_dim.dim_customer")
+        if '.' in sql_table:
+            sql_schema, table_name = sql_table.split('.', 1)
+        else:
+            sql_schema, table_name = 'dbo', sql_table
+
+        # Map SQL schema to Snowflake schema using schema_mappings
+        if schema_mappings and sql_schema in schema_mappings:
+            mapped_snow_schema = schema_mappings[sql_schema]
+            # Build the expected snowflake table name: mapped_schema.table_name
+            expected_snow_table = f"{mapped_snow_schema}.{table_name}"
+            snow_table_upper = expected_snow_table.upper()
+            print(f"[MAPPING] SQL {sql_table} → Looking for Snowflake {expected_snow_table} (uppercase: {snow_table_upper})")
+        else:
+            # Fallback: just uppercase the whole thing
+            snow_table_upper = sql_table.upper()
+            print(f"[MAPPING] No schema mapping for '{sql_schema}', using direct match: {snow_table_upper}")
 
         if snow_table_upper in snow_lookup:
             snow_table_actual = snow_lookup[snow_table_upper]
@@ -434,27 +585,41 @@ def generate_yaml_files(mappings: List[Dict], request: DatabaseMappingRequest, s
                     "dim_reference": ref
                 })
 
-    # Save to core's config directory
+    # Save to project-specific config directory
     try:
         import sys
         sys.path.insert(0, "/core/src")
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir
 
-        config_dir = "/core/src/ombudsman/config"
+        config_dir = get_project_config_dir()
+        print(f"[YAML_GEN] Config directory from context: {config_dir}")
+
+        if not config_dir:
+            raise ValueError("get_project_config_dir() returned None - active project not set?")
+
         os.makedirs(config_dir, exist_ok=True)
+        print(f"[YAML_GEN] Created/verified config directory: {config_dir}")
 
+        print(f"[YAML_GEN] Writing tables.yaml ({len(tables_yaml['sql'])} SQL, {len(tables_yaml['snow'])} Snowflake)")
         with open(f"{config_dir}/tables.yaml", "w") as f:
             yaml.dump(tables_yaml, f, default_flow_style=False)
 
+        print(f"[YAML_GEN] Writing relationships.yaml ({len(relationships_yaml)} relationships)")
         with open(f"{config_dir}/relationships.yaml", "w") as f:
             yaml.dump(relationships_yaml, f, default_flow_style=False)
 
+        print(f"[YAML_GEN] Writing column_mappings.yaml ({len(column_mappings_yaml)} table mappings)")
         with open(f"{config_dir}/column_mappings.yaml", "w") as f:
             yaml.dump(column_mappings_yaml, f, default_flow_style=False)
 
         # Save schema mappings if provided
         if schema_mappings:
+            print(f"[YAML_GEN] Writing schema_mappings.yaml ({len(schema_mappings)} mappings)")
             with open(f"{config_dir}/schema_mappings.yaml", "w") as f:
                 yaml.dump(schema_mappings, f, default_flow_style=False)
+
+        print(f"[YAML_GEN] ✓ All YAML files written successfully to {config_dir}")
 
         # Calculate total column mappings
         total_column_mappings = sum(len(cm["mappings"]) for cm in column_mappings_yaml.values())
@@ -474,8 +639,13 @@ def generate_yaml_files(mappings: List[Dict], request: DatabaseMappingRequest, s
             "schema_mappings_count": len(schema_mappings) if schema_mappings else 0
         }
     except Exception as e:
+        import traceback
+        error_msg = f"Failed to save YAML files: {str(e)}"
+        print(f"[YAML_GEN] ERROR: {error_msg}")
+        traceback.print_exc()
         return {
-            "error": f"Failed to save YAML files: {str(e)}"
+            "error": error_msg,
+            "traceback": traceback.format_exc()
         }
 
 
@@ -574,42 +744,38 @@ async def get_existing_mappings():
                 table_relationships[fact_table] = {}
             table_relationships[fact_table][rel.get("fk_column")] = rel.get("dim_reference")
 
-        # Build mappings from SQL tables
+        # Build mappings from column_mappings.yaml (source of truth for pairings)
+        # This ensures we use the exact pairings created during extraction
         matched_snow_tables = set()
-        for sql_table, sql_columns in sql_tables.items():
-            # Check if there's a custom override
-            if sql_table in overrides:
-                snow_table = overrides[sql_table]
-            else:
-                # Default matching: schema.table -> schema.TABLE (only uppercase table name)
-                if '.' in sql_table:
-                    schema, table = sql_table.rsplit('.', 1)
-                    snow_table = f"{schema}.{table.upper()}"
-                else:
-                    snow_table = sql_table.upper()
+        matched_sql_tables = set()
 
-            if snow_table in snow_tables:
+        # First, add all matched tables from column_mappings.yaml
+        for sql_table, col_mapping_data in column_mappings_data.items():
+            snow_table = col_mapping_data.get("target_table")
+
+            if snow_table and sql_table in sql_tables and snow_table in snow_tables:
                 matched_snow_tables.add(snow_table)
-
-                # Get column mappings for this table
-                col_mapping_info = column_mappings_data.get(sql_table, {
-                    "mappings": [],
-                    "unmatched_source": [],
-                    "unmatched_target": [],
-                    "stats": {}
-                })
+                matched_sql_tables.add(sql_table)
 
                 mappings.append({
                     "sql_server_table": sql_table,
                     "snowflake_table": snow_table,
-                    "sql_columns": sql_columns,
+                    "sql_columns": sql_tables[sql_table],
                     "snowflake_columns": snow_tables[snow_table],
-                    "column_mappings": col_mapping_info,
+                    "column_mappings": {
+                        "mappings": col_mapping_data.get("mappings", []),
+                        "unmatched_source": col_mapping_data.get("unmatched_source", []),
+                        "unmatched_target": col_mapping_data.get("unmatched_target", []),
+                        "stats": col_mapping_data.get("stats", {})
+                    },
                     "relationships": table_relationships.get(sql_table, {}),
                     "match_status": "found_in_both",
                     "is_custom_mapping": sql_table in overrides
                 })
-            else:
+
+        # Add SQL-only tables (not in column_mappings.yaml)
+        for sql_table, sql_columns in sql_tables.items():
+            if sql_table not in matched_sql_tables:
                 mappings.append({
                     "sql_server_table": sql_table,
                     "snowflake_table": None,
@@ -686,7 +852,11 @@ async def update_mappings(update: MappingUpdate):
     Supports custom table name overrides (e.g., dim_1 -> customer).
     """
     try:
-        config_dir = "/core/src/ombudsman/config"
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir
+
+        config_dir = get_project_config_dir()
         os.makedirs(config_dir, exist_ok=True)
 
         # Backup existing files
@@ -821,6 +991,15 @@ async def get_available_schemas(sql_database: str = "SampleDW", snowflake_databa
                     if part.startswith("DATABASE="):
                         parts[i] = f"DATABASE={sql_database}"
                 conn_str = ";".join(parts)
+            else:
+                conn_str = (
+                    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+                    f"SERVER={os.getenv('MSSQL_HOST', 'localhost')},{os.getenv('MSSQL_PORT', '1433')};"
+                    f"DATABASE={sql_database};"
+                    f"UID={os.getenv('MSSQL_USER', 'sa')};"
+                    f"PWD={os.getenv('MSSQL_PASSWORD', '')};"
+                    f"TrustServerCertificate=yes;"
+                )
 
             conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
@@ -865,7 +1044,11 @@ async def get_available_schemas(sql_database: str = "SampleDW", snowflake_databa
 async def get_schema_mappings():
     """Get existing schema mappings"""
     try:
-        config_dir = "/core/src/ombudsman/config"
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir
+
+        config_dir = get_project_config_dir()
         schema_mappings_file = f"{config_dir}/schema_mappings.yaml"
 
         # Load schema mappings if they exist
@@ -889,7 +1072,11 @@ async def get_schema_mappings():
 async def update_schema_mappings(update: SchemaMappingUpdate):
     """Save schema mappings"""
     try:
-        config_dir = "/core/src/ombudsman/config"
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir
+
+        config_dir = get_project_config_dir()
         os.makedirs(config_dir, exist_ok=True)
         schema_mappings_file = f"{config_dir}/schema_mappings.yaml"
 
@@ -921,7 +1108,11 @@ async def update_schema_mappings(update: SchemaMappingUpdate):
 async def update_column_mappings(update: ColumnMappingUpdate):
     """Save column-level mappings for a specific table"""
     try:
-        config_dir = "/core/src/ombudsman/config"
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir
+
+        config_dir = get_project_config_dir()
         os.makedirs(config_dir, exist_ok=True)
         column_mappings_file = f"{config_dir}/column_mappings.yaml"
 
@@ -959,6 +1150,35 @@ async def update_column_mappings(update: ColumnMappingUpdate):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save column mappings: {str(e)}")
+
+
+@router.get("/relationships")
+async def get_relationships():
+    """Get existing relationships from YAML files"""
+    try:
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_project_config_dir
+
+        config_dir = get_project_config_dir()
+        relationships_file = f"{config_dir}/relationships.yaml"
+
+        # Load relationships if they exist
+        if os.path.exists(relationships_file):
+            with open(relationships_file, "r") as f:
+                relationships = yaml.safe_load(f) or []
+        else:
+            relationships = []
+
+        return {
+            "status": "success",
+            "relationships": relationships,
+            "count": len(relationships),
+            "file": relationships_file if os.path.exists(relationships_file) else None
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load relationships: {str(e)}")
 
 
 @router.get("/available-databases")
@@ -1007,3 +1227,141 @@ async def get_available_databases():
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SchemaMappingSuggestionRequest(BaseModel):
+    """Request to get intelligent schema mapping suggestions"""
+    sql_database: str
+    snowflake_database: str
+    sql_schemas: Optional[List[str]] = None
+    snowflake_schemas: Optional[List[str]] = None
+    use_ai: bool = False
+    confidence_threshold: float = 0.7
+
+
+@router.post("/suggest-schema-mappings")
+async def suggest_schema_mappings(request: SchemaMappingSuggestionRequest):
+    """
+    Intelligently suggest schema mappings between SQL Server and Snowflake.
+
+    Args:
+        request: SchemaMappingSuggestionRequest with:
+            - sql_database: SQL Server database name
+            - snowflake_database: Snowflake database name
+            - sql_schemas: List of SQL Server schemas to map (if None, fetches from database)
+            - snowflake_schemas: List of Snowflake schemas available (if None, fetches from database)
+            - use_ai: Whether to use Ollama AI for enhanced mapping
+            - confidence_threshold: Minimum confidence score (0.0-1.0) to auto-map
+
+    Returns:
+        Dict with suggested mappings, confidence scores, and alternatives
+    """
+    try:
+        sql_schemas = request.sql_schemas
+        snowflake_schemas = request.snowflake_schemas
+        # Import the schema mapper module
+        import sys
+        sys.path.insert(0, "/app/mapping")
+        from schema_mapper import auto_map_schemas, map_schemas_with_ollama
+
+        # If schemas not provided, fetch from databases
+        if not sql_schemas:
+            # Get SQL Server schemas
+            conn_str = os.getenv("SQLSERVER_CONN_STR", "")
+            if "DATABASE=" in conn_str:
+                parts = conn_str.split(";")
+                for i, part in enumerate(parts):
+                    if part.startswith("DATABASE="):
+                        parts[i] = f"DATABASE={request.sql_database}"
+                conn_str = ";".join(parts)
+
+            conn = pyodbc.connect(conn_str)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT SCHEMA_NAME
+                FROM INFORMATION_SCHEMA.SCHEMATA
+                WHERE SCHEMA_NAME NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'db_owner', 'db_accessadmin',
+                                           'db_securityadmin', 'db_ddladmin', 'db_backupoperator', 'db_datareader',
+                                           'db_datawriter', 'db_denydatareader', 'db_denydatawriter')
+                ORDER BY SCHEMA_NAME
+            """)
+            sql_schemas = [row[0] for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+
+        if not snowflake_schemas:
+            # Get Snowflake schemas
+            conn = snowflake.connector.connect(
+                user=os.getenv("SNOWFLAKE_USER"),
+                password=os.getenv("SNOWFLAKE_PASSWORD"),
+                account=os.getenv("SNOWFLAKE_ACCOUNT"),
+                warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+                role=os.getenv("SNOWFLAKE_ROLE"),
+                database=request.snowflake_database
+            )
+            cursor = conn.cursor()
+            cursor.execute("SHOW SCHEMAS")
+            snowflake_schemas = [row[1] for row in cursor.fetchall() if row[1] not in ['INFORMATION_SCHEMA']]
+            cursor.close()
+            conn.close()
+
+        # Try AI mapping first if requested
+        ai_mappings = None
+        if request.use_ai:
+            ai_mappings = await map_schemas_with_ollama(sql_schemas, snowflake_schemas)
+
+        # Get fuzzy matching suggestions
+        fuzzy_mappings = auto_map_schemas(
+            sql_schemas=sql_schemas,
+            snowflake_schemas=snowflake_schemas,
+            confidence_threshold=request.confidence_threshold
+        )
+
+        # Merge AI and fuzzy results (AI takes precedence if available)
+        final_mappings = {}
+        for sql_schema, fuzzy_result in fuzzy_mappings.items():
+            if ai_mappings and sql_schema in ai_mappings:
+                # Use AI mapping but keep fuzzy alternatives
+                final_mappings[sql_schema] = {
+                    **fuzzy_result,
+                    "snowflake_schema": ai_mappings[sql_schema],
+                    "confidence": 0.95,  # High confidence for AI
+                    "auto_mapped": True,
+                    "mapping_method": "ai_enhanced"
+                }
+            else:
+                # Use fuzzy mapping
+                final_mappings[sql_schema] = {
+                    **fuzzy_result,
+                    "mapping_method": "fuzzy_matching"
+                }
+
+        # Calculate summary statistics
+        total_schemas = len(sql_schemas)
+        auto_mapped_count = sum(1 for m in final_mappings.values() if m.get("auto_mapped", False))
+        high_confidence_count = sum(1 for m in final_mappings.values() if m.get("confidence", 0) >= 0.8)
+
+        return {
+            "status": "success",
+            "sql_database": request.sql_database,
+            "snowflake_database": request.snowflake_database,
+            "sql_schemas": sql_schemas,
+            "snowflake_schemas": snowflake_schemas,
+            "mappings": final_mappings,
+            "summary": {
+                "total_sql_schemas": total_schemas,
+                "total_snowflake_schemas": len(snowflake_schemas),
+                "auto_mapped": auto_mapped_count,
+                "high_confidence": high_confidence_count,
+                "needs_review": total_schemas - auto_mapped_count,
+                "confidence_threshold": request.confidence_threshold,
+                "ai_enabled": request.use_ai and ai_mappings is not None
+            }
+        }
+
+    except Exception as e:
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to suggest schema mappings: {str(e)}\n{traceback.format_exc()}"
+        )

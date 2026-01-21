@@ -15,6 +15,20 @@ router = APIRouter()
 
 PROJECTS_DIR = "/data/projects"  # Persistent storage for projects
 
+class AzureDevOpsConfig(BaseModel):
+    """Azure DevOps configuration for a project"""
+    enabled: bool = False
+    organization_url: Optional[str] = None  # e.g., https://dev.azure.com/myorg
+    project_name: Optional[str] = None
+    pat_token: Optional[str] = None  # Personal Access Token (will be encrypted)
+    work_item_type: str = "Bug"  # Bug, Task, User Story, Issue
+    area_path: Optional[str] = None
+    iteration_path: Optional[str] = None
+    assigned_to: Optional[str] = None  # Email of default assignee
+    auto_tags: List[str] = ["ombudsman", "data-validation"]
+    tag_prefix: Optional[str] = "OVS-"
+
+
 class ProjectMetadata(BaseModel):
     """Project metadata"""
     name: str
@@ -26,6 +40,7 @@ class ProjectMetadata(BaseModel):
     snowflake_database: str
     snowflake_schemas: List[str]
     schema_mappings: Dict[str, str] = {}
+    azure_devops: Optional[AzureDevOpsConfig] = None
 
 
 class ProjectCreate(BaseModel):
@@ -299,13 +314,70 @@ async def save_project(
         raise HTTPException(status_code=500, detail=f"Failed to save project: {str(e)}")
 
 
+class SchemaMappingsUpdate(BaseModel):
+    """Request to update schema mappings"""
+    schema_mappings: Dict[str, str]
+
+
+@router.put("/{project_id}/update-schema-mappings")
+async def update_schema_mappings(
+    project_id: str,
+    update: SchemaMappingsUpdate
+):
+    """
+    Update schema mappings in project metadata.
+
+    Args:
+        project_id: Project ID
+        update: Schema mappings to update
+
+    Returns:
+        Success message
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        metadata_file = f"{project_dir}/project.json"
+
+        if not os.path.exists(metadata_file):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load existing metadata
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+
+        # Update schema mappings
+        metadata["schema_mappings"] = update.schema_mappings
+        metadata["updated_at"] = datetime.now().isoformat()
+
+        # Save updated metadata
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": "Schema mappings updated successfully",
+            "schema_mappings": update.schema_mappings
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update schema mappings: {str(e)}")
+
+
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: str,
     current_user: UserInDB = Depends(require_user_or_admin)
 ):
     """
-    Delete a project.
+    Delete a project and all associated data.
+
+    Cascade deletes:
+    - Project directory (config, pipelines, results)
+    - Batch jobs that reference project pipelines
+    - Query store data for the project
+    - Results stored outside project directory
 
     Requires: User or Admin role
     """
@@ -319,15 +391,135 @@ async def delete_project(
         with open(f"{project_dir}/project.json", "r") as f:
             metadata = json.load(f)
 
-        # Delete project directory
+        project_name = metadata.get("name", project_id)
+
+        print(f"[PROJECT_DELETE] Starting cascade delete for project: {project_name} ({project_id})")
+
+        # Track deleted items
+        deleted_items = {
+            "project_dir": False,
+            "batch_jobs": [],
+            "results": [],
+            "queries": []
+        }
+
+        # 1. Collect pipeline names from project (to identify related batch jobs)
+        pipeline_names = set()
+        pipelines_dir = f"{project_dir}/pipelines"
+        if os.path.exists(pipelines_dir):
+            for filename in os.listdir(pipelines_dir):
+                if filename.endswith('.yaml') or filename.endswith('.yml'):
+                    pipeline_name = filename.replace('.yaml', '').replace('.yml', '')
+                    pipeline_names.add(pipeline_name)
+                    # Also match project prefix patterns
+                    if pipeline_name.startswith(f"{project_id}_"):
+                        pipeline_names.add(pipeline_name)
+
+        print(f"[PROJECT_DELETE] Found {len(pipeline_names)} pipelines to track")
+
+        # 2. Delete associated batch jobs
+        batch_jobs_dir = "/data/batch_jobs"
+        if os.path.exists(batch_jobs_dir):
+            for batch_file in os.listdir(batch_jobs_dir):
+                if not batch_file.endswith('.json'):
+                    continue
+
+                batch_path = f"{batch_jobs_dir}/{batch_file}"
+                try:
+                    with open(batch_path, 'r') as f:
+                        batch_data = json.load(f)
+
+                    # Check if batch belongs to this project
+                    batch_name = batch_data.get('batch_name', '')
+                    batch_pipelines = batch_data.get('pipelines', [])
+
+                    # Delete if batch name contains project_id OR any pipeline belongs to project
+                    should_delete = False
+                    if project_id in batch_name:
+                        should_delete = True
+                    else:
+                        # Check if any pipeline in batch belongs to this project
+                        for pipeline in batch_pipelines:
+                            if pipeline in pipeline_names:
+                                should_delete = True
+                                break
+
+                    if should_delete:
+                        os.remove(batch_path)
+                        deleted_items["batch_jobs"].append(batch_file)
+                        print(f"[PROJECT_DELETE] Deleted batch job: {batch_file}")
+
+                except Exception as e:
+                    print(f"[PROJECT_DELETE] Warning: Could not process batch file {batch_file}: {e}")
+
+        # 3. Delete associated results
+        results_dir = "/data/results"
+        if os.path.exists(results_dir):
+            for result_file in os.listdir(results_dir):
+                if not result_file.endswith('.json'):
+                    continue
+
+                result_path = f"{results_dir}/{result_file}"
+                try:
+                    with open(result_path, 'r') as f:
+                        result_data = json.load(f)
+
+                    # Check if result belongs to project pipelines
+                    pipeline_name = result_data.get('pipeline_name', '')
+
+                    if pipeline_name in pipeline_names or project_id in pipeline_name:
+                        os.remove(result_path)
+                        deleted_items["results"].append(result_file)
+                        print(f"[PROJECT_DELETE] Deleted result: {result_file}")
+
+                except Exception as e:
+                    print(f"[PROJECT_DELETE] Warning: Could not process result file {result_file}: {e}")
+
+        # 4. Delete project-specific query store data
+        queries_dir = "/data/queries"
+        if os.path.exists(queries_dir):
+            project_queries_dir = f"{queries_dir}/{project_id}"
+            if os.path.exists(project_queries_dir):
+                shutil.rmtree(project_queries_dir)
+                deleted_items["queries"].append(project_id)
+                print(f"[PROJECT_DELETE] Deleted query store: {project_queries_dir}")
+
+        # 5. Finally, delete the project directory itself
         shutil.rmtree(project_dir)
+        deleted_items["project_dir"] = True
+        print(f"[PROJECT_DELETE] Deleted project directory: {project_dir}")
+
+        # 6. Clear active project if this was the active one
+        try:
+            from .context import get_active_project, clear_active_project
+            active = get_active_project()
+            if active and active.get("project_id") == project_id:
+                clear_active_project()
+                print(f"[PROJECT_DELETE] Cleared active project context")
+        except Exception as e:
+            print(f"[PROJECT_DELETE] Warning: Could not clear active project: {e}")
+
+        print(f"[PROJECT_DELETE] Cascade delete completed successfully")
+        print(f"[PROJECT_DELETE]   - Batch jobs deleted: {len(deleted_items['batch_jobs'])}")
+        print(f"[PROJECT_DELETE]   - Results deleted: {len(deleted_items['results'])}")
+        print(f"[PROJECT_DELETE]   - Query stores deleted: {len(deleted_items['queries'])}")
 
         return {
             "status": "success",
-            "message": f"Project deleted: {metadata['name']}"
+            "message": f"Project '{project_name}' and all associated data deleted successfully",
+            "deleted": {
+                "project_directory": project_dir,
+                "batch_jobs_count": len(deleted_items["batch_jobs"]),
+                "batch_jobs": deleted_items["batch_jobs"],
+                "results_count": len(deleted_items["results"]),
+                "results": deleted_items["results"],
+                "query_stores_count": len(deleted_items["queries"])
+            }
         }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to delete project: {str(e)}")
 
 
@@ -427,19 +619,16 @@ class SetupRequest(BaseModel):
     schema: Optional[str] = None
 
 
-@router.post("/{project_id}/setup")
-async def setup_project(
+@router.post("/{project_id}/extract-metadata")
+async def extract_metadata(
     project_id: str,
     payload: SetupRequest,
     current_user: UserInDB = Depends(require_user_or_admin)
 ):
     """
-    Extract metadata and infer relationships for a project.
+    Extract metadata for all tables in a project.
 
-    This is the first step after project creation:
-    1. Extracts metadata for all tables
-    2. Infers relationships between tables
-    3. Saves both to project directory
+    Step 1: Extract table metadata only (no relationship inference)
 
     Requires: User or Admin role
     """
@@ -455,17 +644,65 @@ async def setup_project(
         # Create automation instance
         automation = ProjectAutomation(project_id, project_metadata["name"])
 
-        # Extract metadata
-        print(f"[PROJECT_SETUP] Extracting metadata for {project_id} from {payload.connection}")
+        # Extract metadata only
+        print(f"[METADATA_EXTRACT] Extracting metadata for {project_id} from {payload.connection}")
         metadata = automation.extract_all_metadata(payload.connection, payload.schema)
-
-        # Infer relationships
-        print(f"[PROJECT_SETUP] Inferring relationships for {project_id}")
-        relationships = automation.infer_relationships(metadata)
 
         # Update project metadata
         project_metadata["updated_at"] = datetime.now().isoformat()
         project_metadata["has_metadata"] = True
+
+        with open(f"{project_dir}/project.json", "w") as f:
+            json.dump(project_metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Metadata extracted for {project_metadata['name']}",
+            "table_count": len(metadata),
+            "metadata": metadata
+        }
+
+    except Exception as e:
+        print(f"[METADATA_EXTRACT] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{project_id}/infer-relationships")
+async def infer_relationships_endpoint(
+    project_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Infer relationships for a project.
+
+    Step 2: Infer FK relationships from extracted metadata
+    (requires metadata to be extracted first)
+
+    Requires: User or Admin role
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        # Create automation instance
+        automation = ProjectAutomation(project_id, project_metadata["name"])
+
+        # Get existing metadata
+        metadata = automation.get_metadata()
+        if not metadata:
+            raise HTTPException(status_code=400, detail="No metadata found. Please extract metadata first.")
+
+        # Infer relationships
+        print(f"[RELATIONSHIP_INFER] Inferring relationships for {project_id}")
+        relationships = automation.infer_relationships(metadata)
+
+        # Update project metadata
+        project_metadata["updated_at"] = datetime.now().isoformat()
         project_metadata["has_relationships"] = True
 
         with open(f"{project_dir}/project.json", "w") as f:
@@ -473,16 +710,358 @@ async def setup_project(
 
         return {
             "status": "success",
-            "message": f"Metadata extracted and relationships inferred for {project_metadata['name']}",
-            "table_count": len(metadata),
+            "message": f"Relationships inferred for {project_metadata['name']}",
             "relationship_count": len(relationships),
-            "metadata": metadata,
+            "relationships": relationships
+        }
+
+    except Exception as e:
+        print(f"[RELATIONSHIP_INFER] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{project_id}/setup")
+async def setup_project(
+    project_id: str,
+    payload: SetupRequest,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Complete auto-setup for a project:
+    1. Extracts metadata from both SQL Server and Snowflake (all schemas)
+    2. Creates table mappings between SQL and Snowflake
+    3. Infers relationships between tables
+    4. Generates YAML configuration files
+    5. Saves all data to project directory
+
+    Requires: User or Admin role
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        # Import database mapping functions
+        import sys
+        sys.path.insert(0, "/app/mapping")
+        sys.path.insert(0, "/app/projects")
+        from database_mapping import (
+            extract_sqlserver_tables,
+            extract_snowflake_tables,
+            create_table_mappings,
+            generate_yaml_files
+        )
+
+        # Set active project for config directory
+        from context import set_active_project
+        set_active_project(project_id, project_metadata)
+
+        # Get schema mappings from project
+        schema_mappings = project_metadata.get("schema_mappings", {})
+        if not schema_mappings:
+            raise HTTPException(status_code=400, detail="No schema mappings found in project. Please configure schema mappings first.")
+
+        print(f"[PROJECT_SETUP] Starting auto-setup for {project_id}")
+        print(f"[PROJECT_SETUP] Schema mappings: {schema_mappings}")
+
+        # Extract metadata from all mapped schemas
+        all_sql_metadata = {}
+        all_snow_metadata = {}
+        schema_results = []
+
+        for sql_schema, snow_schema in schema_mappings.items():
+            print(f"[PROJECT_SETUP] Extracting {sql_schema} (SQL) -> {snow_schema} (Snowflake)")
+
+            # Extract from SQL Server
+            sql_metadata = extract_sqlserver_tables(
+                database=project_metadata.get("sql_database"),
+                schema=sql_schema,
+                patterns=["%"],
+                specific_tables=None
+            )
+            print(f"[PROJECT_SETUP]   SQL Server: {len(sql_metadata)} tables in {sql_schema}")
+
+            # Extract from Snowflake
+            snow_metadata = extract_snowflake_tables(
+                database=project_metadata.get("snowflake_database"),
+                schema=snow_schema,
+                patterns=["%"],
+                specific_tables=None
+            )
+            print(f"[PROJECT_SETUP]   Snowflake: {len(snow_metadata)} tables in {snow_schema}")
+
+            # Add to combined metadata with schema prefix
+            for table_name, table_data in sql_metadata.items():
+                all_sql_metadata[f"{sql_schema}.{table_name}"] = {
+                    **table_data,
+                    "schema": sql_schema,
+                    "table": table_name
+                }
+
+            for table_name, table_data in snow_metadata.items():
+                all_snow_metadata[f"{snow_schema}.{table_name}"] = {
+                    **table_data,
+                    "schema": snow_schema,
+                    "table": table_name
+                }
+
+            schema_results.append({
+                "sql_schema": sql_schema,
+                "snowflake_schema": snow_schema,
+                "sql_tables": len(sql_metadata),
+                "snowflake_tables": len(snow_metadata)
+            })
+
+        # Create table mappings
+        print(f"[PROJECT_SETUP] Creating table mappings...")
+        mappings = create_table_mappings(all_sql_metadata, all_snow_metadata)
+        print(f"[PROJECT_SETUP] Created {len(mappings)} table mappings")
+
+        # Generate YAML files
+        print(f"[PROJECT_SETUP] Generating YAML configuration files...")
+        from pydantic import BaseModel
+        class DummyRequest(BaseModel):
+            sql_server_database: str
+            snowflake_database: str
+            sql_server_schema: str
+            snowflake_schema: str
+
+        dummy_request = DummyRequest(
+            sql_server_database=project_metadata.get("sql_database"),
+            snowflake_database=project_metadata.get("snowflake_database"),
+            sql_server_schema=list(schema_mappings.keys())[0] if schema_mappings else "dbo",
+            snowflake_schema=list(schema_mappings.values())[0] if schema_mappings else "PUBLIC"
+        )
+
+        yaml_output = generate_yaml_files(mappings, dummy_request, schema_mappings)
+        print(f"[PROJECT_SETUP] YAML generation result: {yaml_output}")
+
+        # Check if YAML generation failed
+        if "error" in yaml_output:
+            print(f"[PROJECT_SETUP] ERROR: YAML generation failed - {yaml_output['error']}")
+        else:
+            print(f"[PROJECT_SETUP] ✓ YAML files saved successfully:")
+            print(f"[PROJECT_SETUP]   - tables.yaml ({yaml_output.get('sql_tables_count', 0)} SQL, {yaml_output.get('snow_tables_count', 0)} Snowflake)")
+            print(f"[PROJECT_SETUP]   - column_mappings.yaml ({yaml_output.get('column_mappings_count', 0)} mappings)")
+            print(f"[PROJECT_SETUP]   - relationships.yaml ({yaml_output.get('relationships_count', 0)} relationships)")
+            print(f"[PROJECT_SETUP]   - schema_mappings.yaml ({yaml_output.get('schema_mappings_count', 0)} mappings)")
+
+        # Infer relationships
+        print(f"[PROJECT_SETUP] Inferring relationships...")
+        automation = ProjectAutomation(project_id, project_metadata["name"])
+        relationships = automation.infer_relationships(all_sql_metadata)
+        print(f"[PROJECT_SETUP] Inferred {len(relationships)} relationships")
+
+        # Update project metadata
+        project_metadata["updated_at"] = datetime.now().isoformat()
+        project_metadata["has_metadata"] = True
+        project_metadata["has_relationships"] = True
+        project_metadata["table_mappings_count"] = len(mappings)
+
+        with open(f"{project_dir}/project.json", "w") as f:
+            json.dump(project_metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Complete auto-setup finished for {project_metadata['name']}",
+            "table_count": len(all_sql_metadata),
+            "relationship_count": len(relationships),
+            "table_mappings_count": len(mappings),
+            "schema_results": schema_results,
+            "metadata": all_sql_metadata,
             "relationships": relationships
         }
 
     except Exception as e:
         print(f"[PROJECT_SETUP] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to setup project: {str(e)}")
+
+
+@router.post("/{project_id}/setup-from-existing")
+async def setup_project_from_existing(
+    project_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Setup project using existing YAML files instead of re-extracting metadata.
+    This loads tables, relationships, and mappings from YAML configuration files.
+
+    Requires: User or Admin role
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        config_dir = f"{project_dir}/config"
+
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+        if not os.path.exists(config_dir):
+            raise HTTPException(status_code=400, detail="No config directory found. Please run 'Extract Metadata' first.")
+
+        # Load project metadata
+        with open(f"{project_dir}/project.json", "r") as f:
+            project_metadata = json.load(f)
+
+        print(f"[SETUP_FROM_EXISTING] Loading existing YAML files for {project_id}")
+
+        # Set active project for config directory
+        from context import set_active_project
+        set_active_project(project_id, project_metadata)
+
+        # Load tables.yaml
+        tables_yaml_path = f"{config_dir}/tables.yaml"
+        if not os.path.exists(tables_yaml_path):
+            raise HTTPException(status_code=400, detail="No tables.yaml found. Please run 'Extract Metadata' first.")
+
+        with open(tables_yaml_path, "r") as f:
+            tables_data = yaml.safe_load(f) or {}
+
+        # Load relationships from multiple possible sources (same logic as diagram generation)
+        relationships = []
+
+        # Try sql_relationships.yaml first (new format)
+        sql_relationships_file = f"{config_dir}/sql_relationships.yaml"
+        if os.path.exists(sql_relationships_file):
+            with open(sql_relationships_file, "r") as f:
+                sql_rels = yaml.safe_load(f) or {}
+                # Handle wrapped format {relationships: [...]}
+                if isinstance(sql_rels, dict) and "relationships" in sql_rels:
+                    relationships.extend(sql_rels["relationships"])
+                elif isinstance(sql_rels, list):
+                    relationships.extend(sql_rels)
+
+        # Add snowflake relationships if they exist
+        snow_relationships_file = f"{config_dir}/snow_relationships.yaml"
+        if os.path.exists(snow_relationships_file):
+            with open(snow_relationships_file, "r") as f:
+                snow_rels = yaml.safe_load(f) or {}
+                # Handle wrapped format {relationships: [...]}
+                if isinstance(snow_rels, dict) and "relationships" in snow_rels:
+                    relationships.extend(snow_rels["relationships"])
+                elif isinstance(snow_rels, list):
+                    relationships.extend(snow_rels)
+
+        # Fallback to old relationships.yaml if no new files found
+        if not relationships:
+            relationships_yaml_path = f"{config_dir}/relationships.yaml"
+            if os.path.exists(relationships_yaml_path):
+                with open(relationships_yaml_path, "r") as f:
+                    rels = yaml.safe_load(f) or []
+                    if isinstance(rels, list):
+                        relationships = rels
+
+        # Load column_mappings.yaml
+        column_mappings_path = f"{config_dir}/column_mappings.yaml"
+        column_mappings = {}
+        if os.path.exists(column_mappings_path):
+            with open(column_mappings_path, "r") as f:
+                column_mappings = yaml.safe_load(f) or {}
+
+        # Load schema_mappings.yaml
+        schema_mappings_path = f"{config_dir}/schema_mappings.yaml"
+        schema_mappings = {}
+        if os.path.exists(schema_mappings_path):
+            with open(schema_mappings_path, "r") as f:
+                schema_mappings = yaml.safe_load(f) or {}
+
+        # Convert tables_data to metadata format
+        sql_metadata = tables_data.get("sql", {})
+        snow_metadata = tables_data.get("snow", {})
+
+        # Count tables
+        sql_table_count = len(sql_metadata)
+        snow_table_count = len(snow_metadata)
+
+        print(f"[SETUP_FROM_EXISTING] Loaded {sql_table_count} SQL tables, {snow_table_count} Snowflake tables")
+        print(f"[SETUP_FROM_EXISTING] Loaded {len(relationships)} relationships")
+        print(f"[SETUP_FROM_EXISTING] Loaded {len(column_mappings)} table mappings")
+        print(f"[SETUP_FROM_EXISTING] Loaded {len(schema_mappings)} schema mappings")
+
+        # Ensure pipelines directory exists (but don't copy old templates)
+        # Pipelines will be created by comprehensive automation endpoint
+        pipelines_dir = f"{project_dir}/pipelines"
+        os.makedirs(pipelines_dir, exist_ok=True)
+
+        print(f"[SETUP_FROM_EXISTING] Pipelines directory ready for comprehensive automation")
+        print(f"[SETUP_FROM_EXISTING] Use 'Setup Project Automation' to generate intelligent pipelines")
+
+        # Update project metadata
+        project_metadata["updated_at"] = datetime.now().isoformat()
+        project_metadata["has_metadata"] = True
+        project_metadata["has_relationships"] = len(relationships) > 0
+        project_metadata["table_mappings_count"] = len(column_mappings)
+
+        with open(f"{project_dir}/project.json", "w") as f:
+            json.dump(project_metadata, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Configuration loaded for {project_metadata['name']}. Use 'Setup Project Automation' to generate pipelines.",
+            "sql_table_count": sql_table_count,
+            "snowflake_table_count": snow_table_count,
+            "relationship_count": len(relationships),
+            "table_mappings_count": len(column_mappings),
+            "schema_mappings_count": len(schema_mappings),
+            "metadata": sql_metadata,
+            "relationships": relationships,
+            "loaded_from": "existing_yaml_files",
+            "next_step": "Click 'Setup Project Automation' to generate intelligent pipelines for all tables"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[SETUP_FROM_EXISTING] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to load existing configuration: {str(e)}")
+
+
+@router.post("/{project_id}/create-comprehensive-pipelines")
+async def create_comprehensive_pipelines(
+    project_id: str,
+    current_user: Optional[UserInDB] = Depends(optional_authentication)
+):
+    """
+    Create comprehensive pipelines for all tables in the project.
+
+    This endpoint:
+    1. Analyzes each table using intelligent suggest logic
+    2. Generates validation steps and custom queries with joins
+    3. Creates individual pipelines with project_ prefix
+    4. Creates a batch operation (projectname_batch) to run all pipelines
+
+    Authentication: Optional (allows internal calls and authenticated users)
+    """
+    try:
+        print(f"\n[COMPREHENSIVE_AUTOMATION] Starting for project: {project_id}")
+
+        # Import the comprehensive automation module
+        from pipelines.comprehensive_automation import create_comprehensive_automation
+
+        # Execute comprehensive automation (now async - uses Pipeline Builder logic)
+        result = await create_comprehensive_automation(project_id, PROJECTS_DIR)
+
+        print(f"[COMPREHENSIVE_AUTOMATION] Completed successfully")
+        print(f"[COMPREHENSIVE_AUTOMATION] Pipelines created: {len(result['pipelines_created'])}")
+        print(f"[COMPREHENSIVE_AUTOMATION] Batch pipeline: {result['batch_pipeline']}")
+
+        return result
+
+    except Exception as e:
+        print(f"[COMPREHENSIVE_AUTOMATION] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create comprehensive pipelines: {str(e)}"
+        )
 
 
 @router.get("/{project_id}/relationships")
@@ -770,3 +1349,215 @@ async def automate_project(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to automate project: {str(e)}")
+
+# Azure DevOps Configuration Endpoints
+
+@router.post("/{project_id}/azure-devops/configure")
+async def configure_azure_devops(
+    project_id: str,
+    config: AzureDevOpsConfig,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Configure Azure DevOps integration for a project.
+    
+    Args:
+        project_id: Project ID
+        config: Azure DevOps configuration
+        
+    Returns:
+        Success message with configuration status
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        metadata_file = f"{project_dir}/project.json"
+        
+        if not os.path.exists(metadata_file):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+        
+        # Load existing metadata
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        
+        # Update Azure DevOps configuration
+        metadata["azure_devops"] = config.dict()
+        metadata["updated_at"] = datetime.now().isoformat()
+        
+        # Save updated metadata
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+        
+        return {
+            "status": "success",
+            "message": "Azure DevOps configuration updated successfully",
+            "config": config.dict()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to configure Azure DevOps: {str(e)}")
+
+
+@router.get("/{project_id}/azure-devops/config")
+async def get_azure_devops_config(project_id: str):
+    """
+    Get Azure DevOps configuration for a project.
+    
+    Args:
+        project_id: Project ID
+        
+    Returns:
+        Azure DevOps configuration or None if not configured
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        metadata_file = f"{project_dir}/project.json"
+        
+        if not os.path.exists(metadata_file):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+        
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        
+        azure_config = metadata.get("azure_devops")
+        
+        if not azure_config:
+            return {
+                "status": "not_configured",
+                "message": "Azure DevOps is not configured for this project",
+                "config": None
+            }
+        
+        # Mask the PAT token in the response
+        if azure_config.get("pat_token"):
+            azure_config["pat_token"] = "***REDACTED***"
+        
+        return {
+            "status": "configured",
+            "message": "Azure DevOps configuration found",
+            "config": azure_config
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get Azure DevOps config: {str(e)}")
+
+
+@router.delete("/{project_id}/azure-devops/configure")
+async def delete_azure_devops_config(
+    project_id: str,
+    current_user: UserInDB = Depends(require_user_or_admin)
+):
+    """
+    Delete Azure DevOps configuration from a project.
+    
+    Args:
+        project_id: Project ID
+        
+    Returns:
+        Success message
+    """
+    try:
+        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        metadata_file = f"{project_dir}/project.json"
+        
+        if not os.path.exists(metadata_file):
+            raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+        
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        
+        # Remove Azure DevOps configuration
+        if "azure_devops" in metadata:
+            del metadata["azure_devops"]
+            metadata["updated_at"] = datetime.now().isoformat()
+            
+            with open(metadata_file, "w") as f:
+                json.dump(metadata, f, indent=2)
+            
+            return {
+                "status": "success",
+                "message": "Azure DevOps configuration removed successfully"
+            }
+        else:
+            return {
+                "status": "not_configured",
+                "message": "Azure DevOps was not configured for this project"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete Azure DevOps config: {str(e)}")
+
+
+class AzureDevOpsTestRequest(BaseModel):
+    organization_url: str
+    project_name: str
+    pat_token: str
+
+
+@router.post("/{project_id}/azure-devops/test")
+async def test_azure_devops_connection(
+    project_id: str,
+    test_request: AzureDevOpsTestRequest
+):
+    """
+    Test Azure DevOps connection without saving configuration.
+
+    Args:
+        project_id: Project ID
+        test_request: Connection parameters to test
+
+    Returns:
+        Connection test results
+    """
+    try:
+        from bugs.azure_devops_service import AzureDevOpsService
+
+        # Initialize Azure DevOps service with provided credentials
+        azure_service = AzureDevOpsService(
+            organization_url=test_request.organization_url,
+            project_name=test_request.project_name,
+            pat_token=test_request.pat_token
+        )
+
+        # Test the connection
+        result = azure_service.test_connection()
+
+        return result
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Connection test failed: {str(e)}",
+            "error_details": str(e)
+        }
+
+
+def auto_map_schemas(sql_schemas: List[str], snowflake_schemas: List[str]) -> Dict[str, str]:
+    """Auto-generate schema mappings between SQL Server and Snowflake using intelligent fuzzy matching"""
+    # Use the intelligent schema mapper from schema_mapper.py
+    import sys
+    sys.path.insert(0, "/app/mapping")
+    from schema_mapper import auto_map_schemas as intelligent_mapper
+
+    # Get intelligent mappings with confidence scores
+    intelligent_mappings = intelligent_mapper(sql_schemas, snowflake_schemas, confidence_threshold=0.7)
+
+    # Extract only the auto-mapped schemas
+    mappings = {}
+    for sql_schema, mapping_info in intelligent_mappings.items():
+        if mapping_info.get("auto_mapped") and mapping_info.get("snowflake_schema"):
+            mappings[sql_schema] = mapping_info["snowflake_schema"]
+            print(f"[AUTO_MAP] {sql_schema} → {mapping_info['snowflake_schema']} (confidence: {mapping_info['confidence']})")
+        else:
+            # Low confidence - log warning
+            print(f"[AUTO_MAP] WARNING: {sql_schema} has low confidence mapping (confidence: {mapping_info.get('confidence', 0)})")
+            # Still include the best match but log it
+            if mapping_info.get("snowflake_schema"):
+                mappings[sql_schema] = mapping_info["snowflake_schema"]
+
+    return mappings

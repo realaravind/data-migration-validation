@@ -3,11 +3,35 @@ import os
 import re
 
 
-def load_metadata():
-    """Legacy function for loading metadata from YAML files."""
+def load_metadata(database_type=None):
+    """
+    Load metadata from YAML files.
+
+    Args:
+        database_type: Optional database type ('sql' or 'snow').
+                      If provided, loads from sql_relationships.yaml or snow_relationships.yaml.
+                      If None, loads from relationships.yaml (legacy/merged format).
+    """
     tables = yaml.safe_load(open("ombudsman/config/tables.yaml"))
     columns = yaml.safe_load(open("ombudsman/config/columns.yaml"))
-    relationships = yaml.safe_load(open("ombudsman/config/relationships.yaml"))
+
+    # Load relationships based on database type
+    if database_type:
+        rel_file = f"ombudsman/config/{database_type}_relationships.yaml"
+        if os.path.exists(rel_file):
+            rel_data = yaml.safe_load(open(rel_file))
+            # Handle wrapped format {relationships: [...]}
+            if isinstance(rel_data, dict) and "relationships" in rel_data:
+                relationships = rel_data["relationships"]
+            else:
+                relationships = rel_data or []
+        else:
+            # Fallback to merged relationships.yaml
+            relationships = yaml.safe_load(open("ombudsman/config/relationships.yaml"))
+    else:
+        # Legacy: load from merged relationships.yaml
+        relationships = yaml.safe_load(open("ombudsman/config/relationships.yaml"))
+
     return tables, columns, relationships
 
 
@@ -193,33 +217,51 @@ class MetadataLoader:
         Get list of tables in the database.
 
         Args:
-            schema: Schema name (optional)
+            schema: Schema name (optional - if None, returns all tables from all schemas)
 
         Returns:
-            List of table names
+            List of table dictionaries with TABLE_SCHEMA and TABLE_NAME keys
         """
         if self.db_type == "sqlserver":
-            schema = schema or "dbo"
-            query = f"""
-            SELECT TABLE_NAME
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = '{schema}'
-            AND TABLE_TYPE = 'BASE TABLE'
-            ORDER BY TABLE_NAME
-            """
+            if schema:
+                # Filter by specific schema
+                query = f"""
+                SELECT TABLE_SCHEMA, TABLE_NAME
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = '{schema}'
+                AND TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_SCHEMA, TABLE_NAME
+                """
+            else:
+                # Get all tables from all schemas
+                query = """
+                SELECT TABLE_SCHEMA, TABLE_NAME
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_SCHEMA, TABLE_NAME
+                """
         elif self.db_type == "snowflake":
-            schema = schema or os.getenv("SNOW_SCHEMA", "PUBLIC")
             database = os.getenv("SNOW_DATABASE", "DEMO_DB")
-            query = f"""
-            SELECT TABLE_NAME
-            FROM {database}.INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = '{schema}'
-            AND TABLE_TYPE = 'BASE TABLE'
-            ORDER BY TABLE_NAME
-            """
+            if schema:
+                # Filter by specific schema
+                query = f"""
+                SELECT TABLE_SCHEMA, TABLE_NAME
+                FROM {database}.INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = '{schema}'
+                AND TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_SCHEMA, TABLE_NAME
+                """
+            else:
+                # Get all tables from all schemas
+                query = f"""
+                SELECT TABLE_SCHEMA, TABLE_NAME
+                FROM {database}.INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_TYPE = 'BASE TABLE'
+                ORDER BY TABLE_SCHEMA, TABLE_NAME
+                """
 
         try:
             results = self.conn.fetch_many(query)
-            return [row[0] for row in results]
+            return [{"TABLE_SCHEMA": row[0], "TABLE_NAME": row[1]} for row in results]
         except Exception as e:
             raise Exception(f"Failed to get tables: {str(e)}")

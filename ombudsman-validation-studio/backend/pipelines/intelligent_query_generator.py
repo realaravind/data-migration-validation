@@ -132,9 +132,22 @@ class IntelligentQueryGenerator:
                             # Match pattern: dim_product_key → dim_product
                             if dim_name in parts:
                                 # Find primary key in dimension table
-                                dim_cols = self.tables[db_key][table_name]
+                                dim_table_data = self.tables[db_key][table_name]
+                                # Extract columns from table data (handle both flat and nested structures)
+                                if isinstance(dim_table_data, dict) and 'columns' in dim_table_data:
+                                    dim_cols = dim_table_data['columns']
+                                else:
+                                    dim_cols = dim_table_data
+
+                                # Find the primary key in dimension table
+                                # Look for columns ending with _key or matching the FK name pattern
                                 for dim_col, dim_type in dim_cols.items():
-                                    if dim_col.lower() == col_lower or dim_col.lower().endswith('_key'):
+                                    dim_col_lower = dim_col.lower()
+                                    # Match: dim_product_key (FK) → product_key (PK) OR date_key (PK)
+                                    if (dim_col_lower == col_lower or
+                                        dim_col_lower == f"{dim_name}_key" or
+                                        (dim_col_lower.endswith('_key') and dim_name in dim_col_lower)):
+                                        # Use the ACTUAL column name from the fact table, not the dimension PK
                                         relationships.append((col_name, table_name, dim_col))
                                         break
 
@@ -191,9 +204,15 @@ class IntelligentQueryGenerator:
             return suggestions
 
         # Find all fact tables
-        for table_name, columns in self.tables[database].items():
+        for table_name, table_data in self.tables[database].items():
             if not self._is_fact_table(table_name):
                 continue
+
+            # Extract columns from table data (handle both flat and nested structures)
+            if isinstance(table_data, dict) and 'columns' in table_data:
+                columns = table_data['columns']
+            else:
+                columns = table_data
 
             # Classify columns
             classified = self._classify_fact_columns(table_name, columns)
@@ -275,9 +294,16 @@ class IntelligentQueryGenerator:
     def _get_dimension_columns(self, dim_table: str, database: str) -> List[Dict[str, str]]:
         """Get columns from a dimension table"""
         if database in self.tables and dim_table in self.tables[database]:
+            table_data = self.tables[database][dim_table]
+            # Extract columns from table data (handle both flat and nested structures)
+            if isinstance(table_data, dict) and 'columns' in table_data:
+                columns = table_data['columns']
+            else:
+                columns = table_data
+
             return [
                 {'name': name, 'type': dtype}
-                for name, dtype in self.tables[database][dim_table].items()
+                for name, dtype in columns.items()
             ]
         return []
 

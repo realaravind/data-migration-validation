@@ -70,9 +70,16 @@ export default function QuerySuggestions({ open, onClose, onSelectQueries, selec
                 }
             }
 
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch('http://localhost:8000/custom-queries/intelligent-suggest', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     fact_table: factTable
                 })
@@ -157,7 +164,7 @@ export default function QuerySuggestions({ open, onClose, onSelectQueries, selec
         }
     };
 
-    const getCategoryIcon = (category: string) => {
+    const getCategoryIcon = (_category: string) => {
         return '🧠';
     };
 

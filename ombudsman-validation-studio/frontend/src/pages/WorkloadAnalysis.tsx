@@ -28,7 +28,8 @@ import {
     Analytics,
     Description,
     ExpandMore,
-    Insights
+    Insights,
+    Download
 } from '@mui/icons-material';
 
 interface ValidationSuggestion {
@@ -117,10 +118,9 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
             const data = await response.json();
 
             // Fetch full workload details
-            const detailsResponse = await fetch(
+            await fetch(
                 `http://localhost:8000/workload/${projectId}/${data.workload_id}`
             );
-            const workloadDetails = await detailsResponse.json();
 
             // Analyze the workload
             await analyzeWorkload(data.workload_id);
@@ -150,7 +150,8 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                 throw new Error('Analysis failed');
             }
 
-            const analysis = await response.json();
+            const response_data = await response.json();
+            const analysis = response_data.data || response_data; // Handle both {data: ...} and direct response
 
             setCurrentWorkload({
                 workload_id: workloadId,
@@ -256,12 +257,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
     };
 
     const handleSaveToProject = async () => {
-        console.log('[WorkloadAnalysis] handleSaveToProject called');
-        console.log('[WorkloadAnalysis] generationResult:', generationResult);
-        console.log('[WorkloadAnalysis] pipeline_files:', generationResult?.pipeline_files);
-
         if (!generationResult || !generationResult.pipeline_files) {
-            console.error('[WorkloadAnalysis] No generation result or pipeline files');
             alert('No pipelines to save. Please generate pipelines first.');
             return;
         }
@@ -270,7 +266,6 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
         setError(null);
 
         try {
-            console.log('[WorkloadAnalysis] Saving to project:', projectId);
             const response = await fetch('http://localhost:8000/workload/save-pipelines-to-project', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -280,24 +275,22 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                 })
             });
 
-            console.log('[WorkloadAnalysis] Response status:', response.status);
-
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error('[WorkloadAnalysis] Error response:', errorData);
                 throw new Error('Failed to save pipelines to project');
             }
 
             const result = await response.json();
-            console.log('[WorkloadAnalysis] Success:', result);
             alert(`Successfully saved ${result.saved_count} pipeline(s) to project ${projectId}`);
         } catch (err) {
-            console.error('[WorkloadAnalysis] Error:', err);
             setError(err instanceof Error ? err.message : 'Save failed');
             alert('Failed to save pipelines to project');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleDownloadQueryGenerator = () => {
+        window.open('http://localhost:8000/workload/download-query-generator', '_blank');
     };
 
     const getConfidenceColor = (confidence: number) => {
@@ -322,21 +315,48 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                 Upload a JSON file exported from SQL Server Query Store containing your top queries
             </Typography>
 
-            <Button
-                variant="contained"
-                component="label"
-                startIcon={<CloudUpload />}
-                disabled={loading}
-                sx={{ mt: 2 }}
-            >
-                {loading ? 'Uploading...' : 'Choose File'}
-                <input
-                    type="file"
-                    hidden
-                    accept=".json"
-                    onChange={handleFileUpload}
-                />
-            </Button>
+            <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+                <Typography variant="subtitle2" gutterBottom>
+                    <strong>Need a Query Store JSON file?</strong>
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                    1. Download the SQL query generator script below
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                    2. Run it on your SQL Server database (requires Query Store enabled)
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                    3. Copy the JSON output and save it as a .json file
+                </Typography>
+                <Typography variant="body2">
+                    4. Upload the file using the button below
+                </Typography>
+            </Alert>
+
+            <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 2 }}>
+                <Button
+                    variant="outlined"
+                    startIcon={<Download />}
+                    onClick={handleDownloadQueryGenerator}
+                >
+                    Download SQL Query Generator
+                </Button>
+
+                <Button
+                    variant="contained"
+                    component="label"
+                    startIcon={<CloudUpload />}
+                    disabled={loading}
+                >
+                    {loading ? 'Uploading...' : 'Upload JSON File'}
+                    <input
+                        type="file"
+                        hidden
+                        accept=".json"
+                        onChange={handleFileUpload}
+                    />
+                </Button>
+            </Stack>
 
             {uploadedFile && (
                 <Alert severity="info" sx={{ mt: 2 }}>
@@ -398,7 +418,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                                     Executions Covered
                                 </Typography>
                                 <Typography variant="h4">
-                                    {coverage.total_executions_covered.toLocaleString()}
+                                    {coverage.total_executions_covered?.toLocaleString() || '0'}
                                 </Typography>
                             </Grid>
                         </Grid>
@@ -469,11 +489,13 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                                     color="primary"
                                     sx={{ mr: 2 }}
                                 />
-                                <Chip
-                                    label={`${tableData.access_count.toLocaleString()} accesses`}
-                                    size="small"
-                                    variant="outlined"
-                                />
+                                {tableData.access_count !== undefined && (
+                                    <Chip
+                                        label={`${tableData.access_count.toLocaleString()} accesses`}
+                                        size="small"
+                                        variant="outlined"
+                                    />
+                                )}
                             </Box>
                         </AccordionSummary>
                         <AccordionDetails>
@@ -496,9 +518,9 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                                         {suggestion.reason}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                                        Columns: {suggestion.columns.join(', ')} •
-                                        Queries: {suggestion.query_count} •
-                                        Executions: {suggestion.total_executions.toLocaleString()}
+                                        Columns: {suggestion.columns?.length > 0 ? suggestion.columns.join(', ') : 'N/A'} •
+                                        Queries: {suggestion.query_count || 0} •
+                                        Executions: {suggestion.total_executions?.toLocaleString() || '0'}
                                     </Typography>
                                 </Paper>
                             ))}

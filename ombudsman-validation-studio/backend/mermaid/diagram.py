@@ -51,6 +51,7 @@ def auto_generate(payload: dict):
 
 class GenerateFromYamlRequest(BaseModel):
     """Request to generate Mermaid diagram from YAML files"""
+    project_name: Optional[str] = None  # Project name - if not provided, uses active project
     show_columns: bool = True
     highlight_broken: bool = False
 
@@ -64,9 +65,25 @@ def generate_from_yaml(request: GenerateFromYamlRequest):
         raise HTTPException(status_code=500, detail=f"Core engine not available: {CORE_ERROR}")
 
     try:
-        config_dir = "/core/src/ombudsman/config"
+        # Get project name - use provided or fallback to active project
+        project_name = request.project_name
+        if not project_name:
+            # Try to get active project from session/state
+            import sys
+            sys.path.insert(0, "/app/projects")
+            from context import get_active_project
+
+            active_project = get_active_project()
+            if active_project:
+                project_name = active_project.get("project_id", "default_project")
+            else:
+                project_name = "default_project"
+
+        config_dir = f"/data/projects/{project_name}/config"
         tables_file = f"{config_dir}/tables.yaml"
         relationships_file = f"{config_dir}/relationships.yaml"
+        sql_relationships_file = f"{config_dir}/sql_relationships.yaml"
+        snow_relationships_file = f"{config_dir}/snow_relationships.yaml"
 
         if not os.path.exists(tables_file):
             raise HTTPException(
@@ -78,10 +95,35 @@ def generate_from_yaml(request: GenerateFromYamlRequest):
         with open(tables_file, "r") as f:
             tables_yaml = yaml.safe_load(f) or {}
 
+        # Load relationships from multiple possible sources
         relationships_yaml = []
-        if os.path.exists(relationships_file):
+
+        # Try sql_relationships.yaml first (new format)
+        if os.path.exists(sql_relationships_file):
+            with open(sql_relationships_file, "r") as f:
+                sql_rels = yaml.safe_load(f) or {}
+                # Handle wrapped format {relationships: [...]}
+                if isinstance(sql_rels, dict) and "relationships" in sql_rels:
+                    relationships_yaml.extend(sql_rels["relationships"])
+                elif isinstance(sql_rels, list):
+                    relationships_yaml.extend(sql_rels)
+
+        # Add snowflake relationships if they exist
+        if os.path.exists(snow_relationships_file):
+            with open(snow_relationships_file, "r") as f:
+                snow_rels = yaml.safe_load(f) or {}
+                # Handle wrapped format {relationships: [...]}
+                if isinstance(snow_rels, dict) and "relationships" in snow_rels:
+                    relationships_yaml.extend(snow_rels["relationships"])
+                elif isinstance(snow_rels, list):
+                    relationships_yaml.extend(snow_rels)
+
+        # Fallback to old relationships.yaml if no new files found
+        if not relationships_yaml and os.path.exists(relationships_file):
             with open(relationships_file, "r") as f:
-                relationships_yaml = yaml.safe_load(f) or []
+                rels = yaml.safe_load(f) or []
+                if isinstance(rels, list):
+                    relationships_yaml = rels
 
         # Generate Mermaid diagram
         diagram = generate_mermaid_from_yaml(
@@ -121,7 +163,18 @@ def generate_with_inference(request: GenerateWithInferenceRequest):
         raise HTTPException(status_code=500, detail=f"Core engine not available: {CORE_ERROR}")
 
     try:
-        config_dir = "/core/src/ombudsman/config"
+        # Get active project's config directory
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_active_project, get_project_config_dir
+
+        active_project = get_active_project()
+        if active_project:
+            project_name = active_project.get("project_id", "default_project")
+        else:
+            project_name = "default_project"
+
+        config_dir = get_project_config_dir()
         tables_file = f"{config_dir}/tables.yaml"
 
         if not os.path.exists(tables_file):
@@ -138,7 +191,14 @@ def generate_with_inference(request: GenerateWithInferenceRequest):
         # Use source_database to determine which tables to visualize
         tables = {}
         source_tables = tables_data.get(request.source_database, {})
-        for table_name, columns in source_tables.items():
+        for table_name, table_data in source_tables.items():
+            # Handle wrapped format {columns: {...}, object_type: TABLE}
+            if isinstance(table_data, dict) and "columns" in table_data:
+                columns = table_data["columns"]
+            else:
+                # Old format: table_data is the columns dict directly
+                columns = table_data
+
             if "." in table_name:
                 schema, tbl = table_name.rsplit(".", 1)
             else:

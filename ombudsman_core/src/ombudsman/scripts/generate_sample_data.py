@@ -241,44 +241,83 @@ def load_to_sqlserver(data, schema_def, progress_callback=None):
     if not conn_str:
         raise Exception("SQLSERVER_CONN_STR not set")
 
-    # Connect WITHOUT autocommit for transaction support
-    conn = pyodbc.connect(conn_str, autocommit=False)
-    cursor = conn.cursor()
-
     def report_progress(stage, progress, message):
         """Helper to report progress"""
         if progress_callback:
             progress_callback(stage, progress, message)
         print(f"[{stage}] {progress}% - {message}")
 
-    try:
-        report_progress("init", 0, "Initializing database")
-        cursor.execute("IF DB_ID('SampleDW') IS NULL CREATE DATABASE SampleDW;")
-        conn.commit()  # Commit database creation separately
+    # Step 1: Detect if we're using Azure SQL Database
+    # Azure SQL Database doesn't support CREATE DATABASE or USE statements
+    # The database is already specified in the connection string
+    is_azure_sql = "database.windows.net" in conn_str.lower()
 
-        cursor.execute("USE SampleDW;")
-        conn.commit()
+    if not is_azure_sql:
+        # For regular SQL Server, create database with autocommit=True
+        report_progress("init", 0, "Initializing database")
+        try:
+            conn_autocommit = pyodbc.connect(conn_str, autocommit=True)
+            cursor_autocommit = conn_autocommit.cursor()
+
+            # CREATE DATABASE must run with autocommit=True (not in a transaction)
+            cursor_autocommit.execute("IF DB_ID('SampleDW') IS NULL CREATE DATABASE SampleDW;")
+            cursor_autocommit.execute("USE SampleDW;")
+
+            cursor_autocommit.close()
+            conn_autocommit.close()
+        except Exception as e:
+            # If database creation fails, it might already exist - continue
+            print(f"[init] Database creation note: {e}")
+            pass
+    else:
+        # For Azure SQL, database is already specified in connection string
+        report_progress("init", 0, "Using Azure SQL Database from connection string")
+
+    # Step 2: Connect with autocommit=False for transactional data loading
+    conn = pyodbc.connect(conn_str, autocommit=False)
+    cursor = conn.cursor()
+
+    try:
+        # For regular SQL Server, use the database
+        # For Azure SQL, skip this step (database already in connection string)
+        if not is_azure_sql:
+            cursor.execute("USE SampleDW;")
+            conn.commit()
 
         # Create schemas
-        report_progress("schema", 5, "Creating schemas...")
-        cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'DIM') EXEC('CREATE SCHEMA DIM');")
-        cursor.execute("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'FACT') EXEC('CREATE SCHEMA FACT');")
+        # For Azure SQL, use SAMPLE_ prefix to avoid polluting production schemas
+        # For regular SQL Server, use regular DIM/FACT schemas in the SampleDW database
+        dim_schema = "SAMPLE_DIM" if is_azure_sql else "DIM"
+        fact_schema = "SAMPLE_FACT" if is_azure_sql else "FACT"
+
+        report_progress("schema", 5, f"Creating schemas ({dim_schema}, {fact_schema})...")
+        # Create schemas - split into separate statements for Azure SQL compatibility
+        try:
+            cursor.execute(f"IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '{dim_schema}') BEGIN EXEC('CREATE SCHEMA {dim_schema}') END")
+        except:
+            # Schema might already exist, continue
+            pass
+        try:
+            cursor.execute(f"IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '{fact_schema}') BEGIN EXEC('CREATE SCHEMA {fact_schema}') END")
+        except:
+            # Schema might already exist, continue
+            pass
         conn.commit()
 
         # Drop existing tables (facts first to avoid FK issues)
         report_progress("cleanup", 10, "Dropping existing tables...")
         for fact_name in data["facts"]:
-            cursor.execute(f"IF OBJECT_ID('FACT.{fact_name}') IS NOT NULL DROP TABLE FACT.{fact_name};")
+            cursor.execute(f"IF OBJECT_ID('{fact_schema}.{fact_name}') IS NOT NULL DROP TABLE {fact_schema}.{fact_name};")
 
         for dim_name in data["dimensions"]:
-            cursor.execute(f"IF OBJECT_ID('DIM.{dim_name}') IS NOT NULL DROP TABLE DIM.{dim_name};")
+            cursor.execute(f"IF OBJECT_ID('{dim_schema}.{dim_name}') IS NOT NULL DROP TABLE {dim_schema}.{dim_name};")
 
         conn.commit()  # Commit table drops
 
         # Create and populate date dimension
         report_progress("dimensions", 15, "Creating dim_date...")
-        cursor.execute("""
-            CREATE TABLE DIM.dim_date(
+        cursor.execute(f"""
+            CREATE TABLE {dim_schema}.dim_date(
                 date_key INT PRIMARY KEY,
                 date DATE,
                 year INT,
@@ -299,8 +338,8 @@ def load_to_sqlserver(data, schema_def, progress_callback=None):
         date_rows = data["dimensions"]["dim_date"]
         total_date_rows = len(date_rows)
         for idx, row in enumerate(date_rows):
-            cursor.execute("""
-                INSERT INTO DIM.dim_date VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            cursor.execute(f"""
+                INSERT INTO {dim_schema}.dim_date VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """, (
                 row["date_key"], row["date"], row["year"], row["quarter"], row["month"],
                 row["month_name"], row["week"], row["day_of_month"], row["day_of_week"],
@@ -334,14 +373,14 @@ def load_to_sqlserver(data, schema_def, progress_callback=None):
             columns_str = f"{pk_col} INT PRIMARY KEY, " + ", ".join(columns)
 
             report_progress("dimensions", dim_progress_base, f"Creating {dim_name}...")
-            cursor.execute(f"CREATE TABLE DIM.{dim_name}({columns_str});")
+            cursor.execute(f"CREATE TABLE {dim_schema}.{dim_name}({columns_str});")
 
             total_rows = len(dim_data)
             for row_idx, row in enumerate(dim_data):
                 cols = [pk_col] + list(dim_def["columns"].keys())
                 values = [row[c] for c in cols]
                 placeholders = ", ".join(["?"] * len(values))
-                cursor.execute(f"INSERT INTO DIM.{dim_name} VALUES ({placeholders});", values)
+                cursor.execute(f"INSERT INTO {dim_schema}.{dim_name} VALUES ({placeholders});", values)
 
                 # Report progress every 20 rows
                 if row_idx % 20 == 0:
@@ -373,14 +412,14 @@ def load_to_sqlserver(data, schema_def, progress_callback=None):
             columns_str = ", ".join(columns)
 
             report_progress("facts", fact_progress_base, f"Creating {fact_name}...")
-            cursor.execute(f"CREATE TABLE FACT.{fact_name}({columns_str});")
+            cursor.execute(f"CREATE TABLE {fact_schema}.{fact_name}({columns_str});")
 
             total_rows = len(fact_data)
             for row_idx, row in enumerate(fact_data):
                 cols = [pk_col] + [f"{d}_key" for d in fact_def["dimensions"]] + list(fact_def["metrics"].keys())
                 values = [row[c] for c in cols]
                 placeholders = ", ".join(["?"] * len(values))
-                cursor.execute(f"INSERT INTO FACT.{fact_name} VALUES ({placeholders});", values)
+                cursor.execute(f"INSERT INTO {fact_schema}.{fact_name} VALUES ({placeholders});", values)
 
                 # Report progress every 50 rows
                 if row_idx % 50 == 0:

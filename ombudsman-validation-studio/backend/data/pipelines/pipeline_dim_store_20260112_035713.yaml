@@ -1,0 +1,37 @@
+metadata:
+  name: dim_store_workload_validation
+  description: Workload-based validations for dim_store
+  generated_from: workload_wl_20260112_035211_811caf2b
+  project_id: default_project
+  created_at: '2026-01-12T03:57:13.371437'
+  validation_count: 1
+  active: true
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: sample_dim
+  table: dim_store
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: SAMPLE_DIM
+  table: DIM_STORE
+steps:
+- name: validation_1_workload_query
+  type: comparative
+  description: Actual workload query (executed 850 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_query: SELECT COUNT(*) FROM sample_dim.dim_store
+    snow_query: SELECT COUNT(*) FROM SAMPLE_DIM.DIM_STORE
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 3
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 32.1

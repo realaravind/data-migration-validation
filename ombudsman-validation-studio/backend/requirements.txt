@@ -5,6 +5,8 @@ python-multipart==0.0.6
 
 # Data Validation
 pydantic==2.5.3
+pydantic[email]==2.5.3
+email-validator==2.1.0
 numpy==1.26.3
 pandas==2.1.4
 scipy==1.11.4
@@ -17,6 +19,9 @@ snowflake-connector-python==3.6.0
 # YAML Processing
 pyyaml==6.0.1
 
+# Documentation
+markdown==3.5.1
+
 # SQL Parsing
 sqlparse==0.4.4
 
@@ -26,8 +31,19 @@ requests==2.31.0
 # CORS Support
 python-dotenv==1.0.0
 
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.6
+
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 httpx==0.25.2
+faker==22.6.0
+
+# Export Libraries
+reportlab==4.0.7
+openpyxl==3.1.2

@@ -177,12 +177,20 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         autoLoadExtraction();
     }, []);
 
+    // Reload schema mappings when project changes
+    useEffect(() => {
+        if (currentProject) {
+            loadSchemaMappings();
+        }
+    }, [currentProject]);
+
     // Auto-load relationships when a project is loaded
     useEffect(() => {
         if (currentProject && currentProject.config) {
             const loadProjectRelationships = async () => {
                 try {
                     const config = currentProject.config;
+                    let hasRelationships = false;
 
                     // Load SQL relationships if they exist
                     if (config.sql_relationships) {
@@ -195,6 +203,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                         // Set edited relationships to SQL if that's the selected database
                         if (selectedDatabase === 'sql') {
                             setEditedRelationships(sqlRels.relationships);
+                            hasRelationships = sqlRels.relationships.length > 0;
                         }
                         console.log('Loaded SQL relationships from project:', sqlRels.relationships.length, 'relationships');
                     }
@@ -210,8 +219,48 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                         // Set edited relationships to Snowflake if that's the selected database
                         if (selectedDatabase === 'snow') {
                             setEditedRelationships(snowRels.relationships);
+                            hasRelationships = snowRels.relationships.length > 0;
                         }
                         console.log('Loaded Snowflake relationships from project:', snowRels.relationships.length, 'relationships');
+                    }
+
+                    // Auto-generate diagram if relationships exist
+                    if (hasRelationships) {
+                        console.log('[AUTO-LOAD] Generating diagram from existing relationships...');
+                        const token = localStorage.getItem('auth_token');
+                        const headers: any = { 'Content-Type': 'application/json' };
+                        if (token) {
+                            headers['Authorization'] = `Bearer ${token}`;
+                        }
+
+                        const response = await fetch('http://localhost:8000/diagram/generate-from-yaml', {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify({
+                                project_name: currentProject.project_id,
+                                show_columns: false,
+                                highlight_broken: false
+                            })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.diagram) {
+                                // Update the appropriate relationship object with the diagram
+                                if (selectedDatabase === 'sql' && sqlRelationships) {
+                                    setSqlRelationships({
+                                        ...sqlRelationships,
+                                        diagram: data.diagram
+                                    });
+                                } else if (selectedDatabase === 'snow' && snowRelationships) {
+                                    setSnowRelationships({
+                                        ...snowRelationships,
+                                        diagram: data.diagram
+                                    });
+                                }
+                                console.log('[AUTO-LOAD] Diagram generated successfully');
+                            }
+                        }
                     }
                 } catch (err) {
                     console.error('Failed to load project relationships:', err);
@@ -305,6 +354,19 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
 
     const loadSchemaMappings = async () => {
         try {
+            // If we have a current project, load schema mappings from the project
+            if (currentProject && currentProject.project_id) {
+                const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}`);
+                const data = await response.json();
+
+                if (data.status === 'success' && data.metadata?.schema_mappings) {
+                    console.log('[DatabaseMapping] Loading schema mappings from project:', data.metadata.schema_mappings);
+                    setSchemaMappings(data.metadata.schema_mappings);
+                    return;
+                }
+            }
+
+            // Fallback to global schema mappings endpoint
             const response = await fetch('http://localhost:8000/database-mapping/schema-mappings');
             const data = await response.json();
 
@@ -344,8 +406,26 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
             const data = await response.json();
 
             if (response.ok) {
+                // Also update project metadata if we have a current project
+                if (currentProject && currentProject.project_id) {
+                    try {
+                        const updateResponse = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/update-schema-mappings`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                schema_mappings: schemaMappings
+                            })
+                        });
+
+                        if (!updateResponse.ok) {
+                            console.warn('Failed to update project schema mappings');
+                        }
+                    } catch (err) {
+                        console.warn('Failed to update project schema mappings:', err);
+                    }
+                }
+
                 setSchemaEditMode(false);
-                await loadSchemaMappings();
                 setError(null);
             } else {
                 setError(data.detail || 'Failed to save schema mappings');
@@ -635,7 +715,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        project_name: currentProject.name,
+                        project_name: currentProject.project_id,
                         use_existing_mappings: true,
                         source_database: 'sql'
                     })
@@ -644,7 +724,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        project_name: currentProject.name,
+                        project_name: currentProject.project_id,
                         use_existing_mappings: true,
                         source_database: 'snow'
                     })
@@ -892,26 +972,38 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/setup`, {
+            console.log('[SETUP] Loading existing configuration from YAML files...');
+
+            // Use the new setup-from-existing endpoint to load existing YAML files
+            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/setup-from-existing`, {
                 method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    connection: 'sqlserver',
-                    schema: 'dbo'
-                })
+                headers
             });
 
             const data = await response.json();
 
             if (response.ok) {
+                console.log(`[SETUP] Loaded ${data.sql_table_count} SQL tables, ${data.snowflake_table_count} Snowflake tables`);
+                console.log(`[SETUP] Loaded ${data.relationship_count} relationships from existing config`);
+                console.log(`[SETUP] Generated ${data.pipeline_count} validation pipelines`);
+
                 setProjectMetadata(data.metadata);
                 setProjectRelationships(data.relationships);
-                alert(`Success! Extracted ${data.table_count} tables and inferred ${data.relationship_count} relationships.`);
+
+                const pipelineList = data.pipeline_files && data.pipeline_files.length > 0
+                    ? `\n\nCreated Pipelines:\n${data.pipeline_files.map((p: string) => `  • ${p}`).join('\n')}`
+                    : '';
+
+                alert(`Success! Generated ${data.pipeline_count} validation pipelines using existing configuration:\n\n` +
+                      `- ${data.sql_table_count} SQL Server tables\n` +
+                      `- ${data.snowflake_table_count} Snowflake tables\n` +
+                      `- ${data.relationship_count} inferred relationships${pipelineList}\n\n` +
+                      `Pipelines are ready for execution!`);
             } else {
-                setError(data.detail || 'Failed to setup project automation');
+                setError(data.detail || 'Failed to load existing configuration');
             }
         } catch (err) {
-            setError(`Failed to setup project: ${err}`);
+            setError(`Failed to load configuration: ${err}`);
         }
 
         setSetupLoading(false);
@@ -990,7 +1082,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/automate`, {
+            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/create-comprehensive-pipelines`, {
                 method: 'POST',
                 headers
             });
@@ -999,9 +1091,18 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
 
             if (response.ok) {
                 setAutomationResult(data);
-                alert(`Success! Created ${data.pipelines_created} pipelines.\nBatch: ${data.batch_name}`);
+
+                const pipelineList = data.pipelines_created && data.pipelines_created.length > 0
+                    ? `\n\nCreated Pipelines:\n${data.pipelines_created.map((p: string) => `  • ${p}`).join('\n')}`
+                    : '';
+
+                alert(`Success! Comprehensive Pipeline Automation Complete!\n\n` +
+                      `Tables Processed: ${data.summary.total_tables_processed}\n` +
+                      `Relationships: ${data.summary.total_relationships}\n` +
+                      `Batch Pipeline: ${data.batch_pipeline}.yaml${pipelineList}\n\n` +
+                      `All pipelines include intelligent validations and custom queries with joins!`);
             } else {
-                setError(data.detail || 'Failed to automate project');
+                setError(data.detail || 'Failed to create comprehensive pipelines');
             }
         } catch (err) {
             setError(`Failed to automate project: ${err}`);
@@ -1040,6 +1141,37 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 setExtractionResult(data);
                 // Reload existing mappings to show the newly created ones
                 await loadExistingMappings();
+
+                // Reload full project config into sessionStorage so Pipeline Builder can see tables
+                if (currentProject?.project_id) {
+                    try {
+                        const projectResponse = await fetch(`http://localhost:8000/projects/${currentProject.project_id}`);
+                        const projectData = await projectResponse.json();
+                        if (projectResponse.ok && projectData.config) {
+                            const fullProject = {
+                                ...currentProject,
+                                ...projectData.metadata,
+                                config: projectData.config
+                            };
+                            setCurrentProject(fullProject);
+                            sessionStorage.setItem('currentProject', JSON.stringify(fullProject));
+                            console.log('[EXTRACT] Updated sessionStorage with full project config including tables');
+                        }
+                    } catch (err) {
+                        console.error('[EXTRACT] Failed to reload project config:', err);
+                    }
+                }
+
+                // Automatically infer relationships and generate diagram after extraction
+                if (data.relationships && data.relationships.length > 0) {
+                    console.log(`[EXTRACT] Auto-loading ${data.relationships.length} relationships after extraction`);
+                    console.log('[EXTRACT] Calling inferRelationships to generate beautiful diagrams');
+
+                    // Use the existing inferRelationships function which generates beautiful diagrams
+                    await inferRelationships();
+                } else {
+                    console.log('[EXTRACT] No relationships in extraction response');
+                }
             } else {
                 setError(data.detail || 'Metadata extraction failed');
             }

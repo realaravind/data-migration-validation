@@ -24,7 +24,6 @@ import {
     Paper,
     Divider,
     IconButton,
-    Tooltip,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -41,18 +40,13 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CodeIcon from '@mui/icons-material/Code';
 import ChatIcon from '@mui/icons-material/Chat';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
-import InfoIcon from '@mui/icons-material/Info';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import QuerySuggestions from '../components/QuerySuggestions';
-
-interface PipelineBuilderProps {
-    currentProject?: any;
-}
+import * as yaml from 'js-yaml';
 
 interface SuggestedCheck {
     category: string;
@@ -62,9 +56,12 @@ interface SuggestedCheck {
     priority: string;
     applicable_columns?: any;
     examples?: string[];
+    business_rules?: string[];
+    aggregation_grains?: string[];
 }
 
-export default function PipelineBuilder({ currentProject }: PipelineBuilderProps) {
+export default function PipelineBuilder() {
+    const [currentProject, setCurrentProject] = useState<any>(null);
     const [activeTab, setActiveTab] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -95,57 +92,118 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
     // Query Suggestions State
     const [showQuerySuggestions, setShowQuerySuggestions] = useState(false);
 
+    // Load active project from backend API (NOT sessionStorage)
+    useEffect(() => {
+        const loadActiveProject = async () => {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const headers: any = {};
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                // Get active project from backend
+                const activeResponse = await fetch('http://localhost:8000/projects/active', { headers });
+                const activeData = await activeResponse.json();
+
+                if (activeResponse.ok && activeData.active_project) {
+                    const projectId = activeData.active_project.project_id;
+
+                    // Get full project with config
+                    const projectResponse = await fetch(`http://localhost:8000/projects/${projectId}`, { headers });
+                    const projectData = await projectResponse.json();
+
+                    if (projectResponse.ok && projectData.config) {
+                        setCurrentProject({
+                            ...activeData.active_project,
+                            config: projectData.config
+                        });
+                        console.log('[PipelineBuilder] Loaded active project:', projectId);
+                    }
+                }
+            } catch (err) {
+                console.error('[PipelineBuilder] Failed to load active project:', err);
+            }
+        };
+
+        loadActiveProject();
+    }, []);
+
     // Load available tables from current project (Snowflake target tables)
     useEffect(() => {
-        if (currentProject && currentProject.config) {
-            const tables: any[] = [];
+        const loadTables = async () => {
+            if (!currentProject?.project_id) {
+                console.log('PipelineBuilder - No project ID available');
+                return;
+            }
 
-            console.log('PipelineBuilder - Loading tables from project config:', {
-                hasConfig: !!currentProject.config,
-                hasColumnMappings: !!currentProject.config.column_mappings,
-                hasTables: !!currentProject.config.tables,
-                hasTablesSnow: !!currentProject.config.tables?.snow,
-                configKeys: Object.keys(currentProject.config)
-            });
+            try {
+                // Fetch project config from API directly (same pattern as loadSavedPipelines)
+                const token = localStorage.getItem('auth_token');
+                const headers: any = {};
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
 
-            // Option 1: Use column_mappings if available (has both SQL and Snowflake table names)
-            if (currentProject.config.column_mappings) {
-                console.log('Using column_mappings:', Object.keys(currentProject.config.column_mappings));
-                const mappings = currentProject.config.column_mappings;
-                for (const [sqlTable, mapping] of Object.entries(mappings)) {
-                    if (mapping && typeof mapping === 'object' && (mapping as any).target_table) {
+                const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}`, { headers });
+                const data = await response.json();
+
+                if (!response.ok || !data.config) {
+                    console.log('PipelineBuilder - No config available from API');
+                    setAvailableTables([]);
+                    return;
+                }
+
+                const config = data.config;
+                const tables: any[] = [];
+
+                console.log('PipelineBuilder - Loading tables from API config:', {
+                    hasConfig: !!config,
+                    hasColumnMappings: !!config.column_mappings,
+                    hasTables: !!config.tables,
+                    hasTablesSnow: !!config.tables?.snow,
+                    configKeys: Object.keys(config)
+                });
+
+                // Option 1: Use column_mappings if available (has both SQL and Snowflake table names)
+                if (config.column_mappings) {
+                    console.log('Using column_mappings:', Object.keys(config.column_mappings));
+                    const mappings = config.column_mappings;
+                    for (const [sqlTable, mapping] of Object.entries(mappings)) {
+                        if (mapping && typeof mapping === 'object' && (mapping as any).target_table) {
+                            tables.push({
+                                sql_server_table: sqlTable,
+                                snowflake_table: (mapping as any).target_table,
+                                sql_columns: config.tables?.sql?.[sqlTable] || {},
+                                snowflake_columns: config.tables?.snow?.[(mapping as any).target_table] || {}
+                            });
+                        }
+                    }
+                }
+                // Option 2: Fallback to tables.snow if column_mappings not available
+                else if (config.tables?.snow) {
+                    console.log('Using tables.snow:', Object.keys(config.tables.snow));
+                    const snowTables = config.tables.snow;
+                    for (const [tableName, columns] of Object.entries(snowTables)) {
                         tables.push({
-                            sql_server_table: sqlTable,
-                            snowflake_table: (mapping as any).target_table,
-                            sql_columns: currentProject.config.tables?.sql?.[sqlTable] || {},
-                            snowflake_columns: currentProject.config.tables?.snow?.[(mapping as any).target_table] || {}
+                            sql_server_table: tableName,  // Use same name as placeholder
+                            snowflake_table: tableName,
+                            sql_columns: {},
+                            snowflake_columns: columns
                         });
                     }
                 }
-            }
-            // Option 2: Fallback to tables.snow if column_mappings not available
-            else if (currentProject.config.tables?.snow) {
-                console.log('Using tables.snow:', Object.keys(currentProject.config.tables.snow));
-                const snowTables = currentProject.config.tables.snow;
-                for (const [tableName, columns] of Object.entries(snowTables)) {
-                    tables.push({
-                        sql_server_table: tableName,  // Use same name as placeholder
-                        snowflake_table: tableName,
-                        sql_columns: {},
-                        snowflake_columns: columns
-                    });
-                }
-            }
 
-            console.log('PipelineBuilder - Loaded tables:', tables.length, tables.map(t => t.snowflake_table));
-            setAvailableTables(tables);
-        } else {
-            console.log('PipelineBuilder - No project or config available:', {
-                hasProject: !!currentProject,
-                hasConfig: !!currentProject?.config
-            });
-        }
-    }, [currentProject]);
+                console.log('PipelineBuilder - Loaded tables from API:', tables.length, tables.map(t => t.snowflake_table));
+                setAvailableTables(tables);
+            } catch (err) {
+                console.error('PipelineBuilder - Failed to load tables from API:', err);
+                setAvailableTables([]);
+            }
+        };
+
+        loadTables();
+    }, [currentProject?.project_id]);
 
     // Load saved pipelines for current project
     useEffect(() => {
@@ -159,7 +217,14 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
         if (!currentProject?.project_id) return;
 
         try {
-            const response = await fetch(`http://localhost:8000/pipelines/custom/project/${currentProject.project_id}`);
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            const headers: any = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`http://localhost:8000/pipelines/custom/project/${currentProject.project_id}`, { headers });
             const data = await response.json();
 
             if (response.ok) {
@@ -193,6 +258,16 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
                     setAdvancedYaml(data.content);
                 }
 
+                // Parse YAML to extract table name and set it in dropdown
+                try {
+                    const parsedYaml: any = yaml.load(data.content);
+                    if (parsedYaml?.pipeline?.target?.table) {
+                        setSelectedTable(parsedYaml.pipeline.target.table);
+                    }
+                } catch (parseError) {
+                    console.warn('Could not parse YAML to extract table name:', parseError);
+                }
+
                 setPipelineName(pipelineName);
                 setPipelineDescription(data.metadata?.description || '');
                 setShowLoadDialog(false);
@@ -215,9 +290,20 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
         setLoading(true);
 
         try {
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            console.log('[DELETE_PIPELINE] Token found:', !!token);
+            const headers: any = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            console.log('[DELETE_PIPELINE] Deleting:', `${currentProject.project_id}/${pipelineName}`);
+            console.log('[DELETE_PIPELINE] Headers:', headers);
+
             const response = await fetch(
                 `http://localhost:8000/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`,
-                { method: 'DELETE' }
+                { method: 'DELETE', headers }
             );
 
             if (response.ok) {
@@ -264,17 +350,46 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
             }));
 
             // Extract relationships - look for relationships where this table is the fact table
-            // Check both the relationships array and the old format
+            // Use Snowflake relationships for Snowflake pipelines, SQL relationships for SQL pipelines
             let relationships: any[] = [];
-            if (Array.isArray(currentProject?.config?.relationships)) {
-                relationships = currentProject.config.relationships;
-            } else if (currentProject?.config?.relationships?.relationships) {
-                relationships = currentProject.config.relationships.relationships;
+            const databaseType = 'snowflake'; // Using Snowflake as target database
+
+            // Load the appropriate relationship file based on database type
+            if (databaseType === 'snowflake') {
+                // Use Snowflake relationships (uppercase table names)
+                if (currentProject?.config?.snow_relationships?.relationships) {
+                    relationships = currentProject.config.snow_relationships.relationships;
+                }
+            } else {
+                // Use SQL Server relationships (lowercase table names)
+                if (currentProject?.config?.sql_relationships?.relationships) {
+                    relationships = currentProject.config.sql_relationships.relationships;
+                }
             }
 
-            const tableRelationships = relationships.filter(
-                (rel: any) => rel.fact_table === selectedTable || rel.fact_table === tableMetadata.sql_server_table
-            );
+            // Fallback to old relationships format if no database-specific relationships found
+            if (relationships.length === 0) {
+                if (Array.isArray(currentProject?.config?.relationships)) {
+                    relationships = currentProject.config.relationships;
+                } else if (currentProject?.config?.relationships?.relationships) {
+                    relationships = currentProject.config.relationships.relationships;
+                }
+            }
+
+            console.log('[PIPELINE_BUILDER] Database type:', databaseType);
+            console.log('[PIPELINE_BUILDER] All relationships:', relationships);
+            console.log('[PIPELINE_BUILDER] Selected table:', selectedTable);
+            console.log('[PIPELINE_BUILDER] SQL Server table:', tableMetadata.sql_server_table);
+
+            // Case-insensitive matching for fact_table
+            const tableRelationships = relationships.filter((rel: any) => {
+                const factTable = rel.fact_table?.toLowerCase();
+                const selected = selectedTable?.toLowerCase();
+                const sqlTable = tableMetadata.sql_server_table?.toLowerCase();
+                return factTable === selected || factTable === sqlTable;
+            });
+
+            console.log('[PIPELINE_BUILDER] Filtered relationships:', tableRelationships);
 
             // Call intelligent suggest API
             const response = await fetch('http://localhost:8000/pipelines/suggest-for-fact', {
@@ -302,7 +417,7 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
 
                 // Initialize all checks as selected
                 const initialSelection: {[key: string]: boolean} = {};
-                data.suggested_checks.forEach((check: SuggestedCheck, idx: number) => {
+                data.suggested_checks.forEach((_check: SuggestedCheck, idx: number) => {
                     initialSelection[`check_${idx}`] = true;
                 });
                 setSelectedChecks(initialSelection);
@@ -320,31 +435,29 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
 
     // Handle Query Suggestions selection
     const handleQuerySuggestionsSelect = (queries: any[]) => {
-        // Convert queries to YAML format and append to existing pipeline
-        let customQueriesYaml = '\n  custom_queries:\n';
-
-        queries.forEach(query => {
-            customQueriesYaml += `    - name: "${query.name}"\n`;
-            customQueriesYaml += `      comparison_type: "${query.comparison_type}"\n`;
-            if (query.tolerance) {
-                customQueriesYaml += `      tolerance: ${query.tolerance}\n`;
-            }
-            if (query.limit) {
-                customQueriesYaml += `      limit: ${query.limit}\n`;
-            }
-            customQueriesYaml += `      sql_query: |\n`;
-            query.sql_query.split('\n').forEach((line: string) => {
-                customQueriesYaml += `        ${line}\n`;
-            });
-            customQueriesYaml += `      snow_query: |\n`;
-            query.snow_query.split('\n').forEach((line: string) => {
-                customQueriesYaml += `        ${line}\n`;
-            });
-        });
-
-        // Append to current pipeline YAML
         const currentYaml = pipelineYaml || '';
-        setPipelineYaml(currentYaml + customQueriesYaml);
+
+        // Parse current YAML and inject custom_queries in the correct location (inside pipeline section)
+        const parsed = yaml.load(currentYaml) as any;
+        const pipelineSection = parsed.pipeline || {};
+
+        // Convert queries to proper format
+        const customQueries = queries.map(query => ({
+            name: query.name,
+            comparison_type: query.comparison_type,
+            ...(query.tolerance && { tolerance: query.tolerance }),
+            ...(query.limit && { limit: query.limit }),
+            sql_query: query.sql_query,
+            snow_query: query.snow_query
+        }));
+
+        // Add custom_queries to pipeline section (NOT at root level!)
+        pipelineSection.custom_queries = customQueries;
+        parsed.pipeline = pipelineSection;
+
+        // Convert back to YAML
+        const updatedYaml = yaml.dump(parsed);
+        setPipelineYaml(updatedYaml);
         setSuccess(`Added ${queries.length} custom queries to pipeline!`);
     };
 
@@ -423,9 +536,16 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
         setError(null);
 
         try {
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch('http://localhost:8000/pipelines/custom/save', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     project_id: currentProject.project_id,
                     pipeline_name: pipelineName,
@@ -465,12 +585,20 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
         setError(null);
 
         try {
+            // Get auth token
+            const token = localStorage.getItem('auth_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch('http://localhost:8000/pipelines/execute', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     pipeline_yaml: yamlToExecute,
-                    pipeline_name: selectedTable || 'custom_pipeline'
+                    pipeline_name: selectedTable || 'custom_pipeline',
+                    project_id: currentProject?.project_id || null
                 })
             });
 
@@ -507,14 +635,7 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
     return (
         <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Box>
-                    <Typography variant="h4">Pipeline Builder</Typography>
-                    {savedPipelines.length > 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                            {savedPipelines.length} saved pipeline{savedPipelines.length !== 1 ? 's' : ''}
-                        </Typography>
-                    )}
-                </Box>
+                <Typography variant="h4">Pipeline Builder</Typography>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                         variant="outlined"
@@ -531,14 +652,6 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
                         disabled={loading || !currentProject}
                     >
                         Save Pipeline
-                    </Button>
-                    <Button
-                        variant="contained"
-                        startIcon={<PlayArrowIcon />}
-                        onClick={handleExecutePipeline}
-                        disabled={loading}
-                    >
-                        Execute Pipeline
                     </Button>
                 </Box>
             </Box>
@@ -562,7 +675,7 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
             )}
 
             <Paper sx={{ mb: 3 }}>
-                <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
+                <Tabs value={activeTab} onChange={(_e, newValue) => setActiveTab(newValue)}>
                     <Tab icon={<AutoFixHighIcon />} label="Quick Build" iconPosition="start" />
                     <Tab icon={<ChatIcon />} label="Natural Language" iconPosition="start" />
                     <Tab icon={<CodeIcon />} label="Advanced YAML" iconPosition="start" />
@@ -588,54 +701,49 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
 
                     <Card sx={{ mb: 3 }}>
                         <CardContent>
-                            <Typography variant="h6" gutterBottom>
-                                Select Fact Table
-                            </Typography>
-
-                            <FormControl fullWidth sx={{ mb: 3 }}>
-                                <InputLabel>Fact Table (Target)</InputLabel>
-                                <Select
-                                    value={selectedTable}
-                                    onChange={(e) => setSelectedTable(e.target.value)}
-                                    label="Fact Table (Target)"
-                                    disabled={availableTables.length === 0}
-                                >
-                                    {availableTables.length === 0 ? (
-                                        <MenuItem disabled value="">
-                                            No tables found. Please complete Database Mapping first.
-                                        </MenuItem>
-                                    ) : (
-                                        availableTables.map((table) => (
-                                            <MenuItem key={table.snowflake_table} value={table.snowflake_table}>
-                                                {table.snowflake_table} {table.sql_server_table !== table.snowflake_table && `(← ${table.sql_server_table})`}
+                            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                <FormControl sx={{ flex: 1, minWidth: 250 }}>
+                                    <InputLabel>Select Table</InputLabel>
+                                    <Select
+                                        value={selectedTable}
+                                        onChange={(e) => setSelectedTable(e.target.value)}
+                                        label="Select Table"
+                                        disabled={availableTables.length === 0}
+                                    >
+                                        {availableTables.length === 0 ? (
+                                            <MenuItem disabled value="">
+                                                No tables found. Please complete Database Mapping first.
                                             </MenuItem>
-                                        ))
-                                    )}
-                                </Select>
-                            </FormControl>
+                                        ) : (
+                                            availableTables.map((table) => (
+                                                <MenuItem key={table.snowflake_table} value={table.snowflake_table}>
+                                                    {table.snowflake_table} {table.sql_server_table !== table.snowflake_table && `(← ${table.sql_server_table})`}
+                                                </MenuItem>
+                                            ))
+                                        )}
+                                    </Select>
+                                </FormControl>
 
-                            <Button
-                                variant="contained"
-                                startIcon={<AutoFixHighIcon />}
-                                onClick={handleAnalyzeTable}
-                                disabled={!selectedTable || loading}
-                                fullWidth
-                                size="large"
-                            >
-                                {loading ? <CircularProgress size={24} /> : 'Analyze Table & Suggest Validations'}
-                            </Button>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AutoFixHighIcon />}
+                                    onClick={handleAnalyzeTable}
+                                    disabled={!selectedTable || loading}
+                                    sx={{ whiteSpace: 'nowrap' }}
+                                >
+                                    {loading ? <CircularProgress size={24} /> : 'Analyze & Suggest'}
+                                </Button>
 
-                            <Button
-                                variant="outlined"
-                                startIcon={<AutoAwesomeIcon />}
-                                onClick={() => setShowQuerySuggestions(true)}
-                                disabled={!selectedTable || loading}
-                                fullWidth
-                                size="large"
-                                sx={{ mt: 2 }}
-                            >
-                                Suggest Custom Queries with Joins
-                            </Button>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<AutoAwesomeIcon />}
+                                    onClick={() => setShowQuerySuggestions(true)}
+                                    disabled={!selectedTable || loading}
+                                    sx={{ whiteSpace: 'nowrap' }}
+                                >
+                                    Custom Queries
+                                </Button>
+                            </Box>
                         </CardContent>
                     </Card>
 
@@ -658,10 +766,14 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
                                                 <Checkbox
                                                     checked={selectedChecks[`check_${idx}`] || false}
-                                                    onChange={(e) => setSelectedChecks({
-                                                        ...selectedChecks,
-                                                        [`check_${idx}`]: e.target.checked
-                                                    })}
+                                                    onChange={(e) => {
+                                                        const checkKey = `check_${idx}`;
+                                                        const newValue = e.target.checked;
+                                                        setSelectedChecks(prev => ({
+                                                            ...prev,
+                                                            [checkKey]: newValue
+                                                        }));
+                                                    }}
                                                     onClick={(e) => e.stopPropagation()}
                                                 />
                                                 <Typography sx={{ flexGrow: 1 }}>
@@ -727,7 +839,7 @@ export default function PipelineBuilder({ currentProject }: PipelineBuilderProps
                                                     <Typography variant="caption" color="primary" display="block" fontWeight="bold">
                                                         Business Rules:
                                                     </Typography>
-                                                    {suggestion.business_rules.map((rule, ruleIdx) => (
+                                                    {suggestion.business_rules.map((rule: string, ruleIdx: number) => (
                                                         <Typography key={ruleIdx} variant="body2" sx={{ mt: 0.5 }} color="text.primary">
                                                             ✓ {rule}
                                                         </Typography>

@@ -49,9 +49,7 @@ diagram: "erDiagram\n    DIM_CUSTOMER {\n        VARCHAR CUSTOMER_ID\n        NU
   \ STORE_TYPE\n    }\n    FACT_SALES {\n        NUMBER COST_AMOUNT\n        NUMBER\
   \ DIM_CUSTOMER_KEY\n        NUMBER DIM_DATE_KEY\n        NUMBER DIM_PRODUCT_KEY\n\
   \        NUMBER DIM_STORE_KEY\n        NUMBER DISCOUNT_AMOUNT\n        NUMBER QUANTITY\n\
-  \        NUMBER SALES_AMOUNT\n        string more_columns_2\n    }\n    OMBUDSMAN_RESULTS\
-  \ {\n        NUMBER ID\n        VARCHAR MESSAGE\n        VARCHAR PIPELINE_NAME\n\
-  \        TIMESTAMP_LTZ RUN_TIMESTAMP\n        VARCHAR STATUS\n        VARCHAR STEP_NAME\n\
-  \    }\n    DIM_CUSTOMER ||--o{ FACT_SALES : DIM_CUSTOMER_KEY\n    DIM_DATE ||--o{\
-  \ FACT_SALES : DIM_DATE_KEY\n    DIM_PRODUCT ||--o{ FACT_SALES : DIM_PRODUCT_KEY\n\
-  \    DIM_STORE ||--o{ FACT_SALES : DIM_STORE_KEY"
+  \        NUMBER SALES_AMOUNT\n        string more_columns_2\n    }\n    DIM_CUSTOMER\
+  \ ||--o{ FACT_SALES : DIM_CUSTOMER_KEY\n    DIM_DATE ||--o{ FACT_SALES : DIM_DATE_KEY\n\
+  \    DIM_PRODUCT ||--o{ FACT_SALES : DIM_PRODUCT_KEY\n    DIM_STORE ||--o{ FACT_SALES\
+  \ : DIM_STORE_KEY"

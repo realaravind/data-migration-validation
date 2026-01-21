@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import * as yaml from 'js-yaml';
 import {
   Box,
   Card,
@@ -7,7 +8,6 @@ import {
   Typography,
   Button,
   List,
-  ListItem,
   ListItemText,
   ListItemButton,
   Divider,
@@ -26,7 +26,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   IconButton,
-  Tooltip
+  Tooltip,
+  LinearProgress
 } from "@mui/material";
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -48,7 +49,6 @@ export default function PipelineExecution({ currentProject }: any) {
   const [savedPipelines, setSavedPipelines] = useState<any[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<any>(null);
   const [pipelineRuns, setPipelineRuns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -71,14 +71,35 @@ export default function PipelineExecution({ currentProject }: any) {
   }, [currentProject]);
 
   const loadSavedPipelines = async () => {
-    // Use current project or fallback to 'default_project' for workload-generated pipelines
-    const projectId = currentProject?.project_id || 'default_project';
+    // Try to get project from prop, sessionStorage, or fallback to 'default_project'
+    let projectId = currentProject?.project_id;
+
+    if (!projectId) {
+      const sessionProject = sessionStorage.getItem('currentProject');
+      if (sessionProject) {
+        try {
+          const project = JSON.parse(sessionProject);
+          projectId = project.project_id;
+        } catch (e) {
+          console.error('Failed to parse session project:', e);
+        }
+      }
+    }
+
+    projectId = projectId || 'default_project';
     console.log('[PipelineExecution] Loading pipelines for project:', projectId);
 
     try {
+      // Get auth token
+      const token = localStorage.getItem('auth_token');
+      const headers: any = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const url = `http://localhost:8000/pipelines/custom/project/${projectId}`;
       console.log('[PipelineExecution] Fetching from:', url);
-      const response = await fetch(url);
+      const response = await fetch(url, { headers });
       const data = await response.json();
       console.log('[PipelineExecution] Response:', data);
 
@@ -161,26 +182,69 @@ export default function PipelineExecution({ currentProject }: any) {
         return;
       }
 
+      // Inject project's connection configuration into the YAML
+      let enrichedYaml = yamlContent;
+      console.log('[PIPELINE EXEC] Starting config injection');
+      console.log('[PIPELINE EXEC] currentProject:', currentProject);
+      console.log('[PIPELINE EXEC] currentProject.config:', currentProject?.config);
+      console.log('[PIPELINE EXEC] currentProject.config.snowflake:', currentProject?.config?.snowflake);
+
+      if (currentProject?.config?.snowflake) {
+        console.log('[PIPELINE EXEC] Snowflake config exists, parsing YAML');
+        // Parse YAML to check if connections already present
+        const yamlParsed = yaml.load(yamlContent) as any;
+        console.log('[PIPELINE EXEC] Parsed YAML:', yamlParsed);
+        console.log('[PIPELINE EXEC] Has connections?', !!yamlParsed.connections);
+        console.log('[PIPELINE EXEC] Has snowflake?', !!yamlParsed.snowflake);
+
+        if (!yamlParsed.connections && !yamlParsed.snowflake) {
+          console.log('[PIPELINE EXEC] Injecting snowflake config:', currentProject.config.snowflake);
+
+          // IMPORTANT: Don't use yaml.dump() as it may strip custom_queries!
+          // Instead, append snowflake config as YAML string to preserve original content
+          const snowflakeYaml = yaml.dump({ snowflake: currentProject.config.snowflake });
+          enrichedYaml = yamlContent + '\n' + snowflakeYaml;
+
+          console.log('[PIPELINE EXEC] Enriched YAML (appended snowflake):', enrichedYaml);
+        } else {
+          console.log('[PIPELINE EXEC] YAML already has connections/snowflake, skipping injection');
+        }
+      } else {
+        console.log('[PIPELINE EXEC] No snowflake config in currentProject, using original YAML');
+      }
+
       // Execute pipeline
+      // Get auth token
+      const token = localStorage.getItem('auth_token');
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const requestBody = {
+        pipeline_yaml: enrichedYaml,
+        pipeline_name: selectedPipeline.pipeline_name,
+        project_id: currentProject?.project_id || null
+      };
+      console.log('[PIPELINE EXEC] Sending request to backend:', requestBody);
+      console.log('[PIPELINE EXEC] YAML being sent:', enrichedYaml);
+
       const response = await fetch("http://localhost:8000/pipelines/execute", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pipeline_yaml: yamlContent,
-          pipeline_name: selectedPipeline.pipeline_name
-        })
+        headers,
+        body: JSON.stringify(requestBody)
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        setSuccess(`Pipeline executed successfully! Run ID: ${result.run_id}`);
+        setSuccess(`Pipeline started successfully! Run ID: ${result.run_id}. Watch execution history below for status updates.`);
         // Reload runs list
         await loadAllRuns();
         // Auto-expand the new run
         setExpandedRun(result.run_id);
       } else {
-        setError(result.detail || 'Failed to execute pipeline');
+        setError(result.detail || 'Failed to start pipeline');
       }
     } catch (err) {
       setError(`Error executing pipeline: ${err}`);
@@ -195,9 +259,19 @@ export default function PipelineExecution({ currentProject }: any) {
     }
 
     try {
+      // Get auth token
+      const token = localStorage.getItem('auth_token');
+      const headers: any = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       // Delete all runs
       const deletePromises = pipelineRuns.map(run =>
-        fetch(`http://localhost:8000/pipelines/${run.run_id}`, { method: 'DELETE' })
+        fetch(`http://localhost:8000/pipelines/${run.run_id}`, {
+          method: 'DELETE',
+          headers
+        })
       );
 
       await Promise.all(deletePromises);
@@ -255,16 +329,23 @@ export default function PipelineExecution({ currentProject }: any) {
       });
 
       // Save updated pipeline
+      const token = localStorage.getItem('auth_token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const saveResponse = await fetch(
         `http://localhost:8000/pipelines/custom/save`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             project_id: currentProject.project_id,
             pipeline_name: selectedPipeline.pipeline_name,
-            content: updatedYaml,
-            description: selectedPipeline.description || ''
+            pipeline_yaml: updatedYaml,
+            description: selectedPipeline.description || '',
+            tags: []
           })
         }
       );
@@ -303,7 +384,7 @@ export default function PipelineExecution({ currentProject }: any) {
     return "default";
   };
 
-  const getSummaryMessage = (validatorName: string, details: any): string => {
+  const getSummaryMessage = (_validatorName: string, details: any): string | null => {
     // Handle errors/exceptions specially
     if (details.exception) {
       // Clean up Python error messages
@@ -329,12 +410,12 @@ export default function PipelineExecution({ currentProject }: any) {
 
     // Generate human-readable summary based on validator type and results
 
-    if (validatorName === 'validate_record_counts') {
+    if (_validatorName === 'validate_record_counts') {
       const diff = Math.abs((details.sql_count || 0) - (details.snow_count || 0));
       return `Row count mismatch: SQL has ${details.sql_count?.toLocaleString()} rows, Snowflake has ${details.snow_count?.toLocaleString()} rows (difference: ${diff.toLocaleString()})`;
     }
 
-    if (validatorName === 'validate_schema_columns') {
+    if (_validatorName === 'validate_schema_columns') {
       const missing = details.mismatch_count || (details.missing_in_sql?.length || 0) + (details.missing_in_snow?.length || 0);
       if (missing > 0) {
         const parts = [];
@@ -345,7 +426,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'All columns match between systems';
     }
 
-    if (validatorName === 'validate_schema_datatypes') {
+    if (_validatorName === 'validate_schema_datatypes') {
       const count = details.mismatch_count || details.mismatches?.length || 0;
       if (count > 0) {
         return `${count} column${count > 1 ? 's have' : ' has'} different data types between SQL Server and Snowflake`;
@@ -353,7 +434,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'All data types match';
     }
 
-    if (validatorName === 'validate_schema_nullability') {
+    if (_validatorName === 'validate_schema_nullability') {
       const count = details.mismatch_count || details.mismatches?.length || 0;
       if (count > 0) {
         return `${count} column${count > 1 ? 's have' : ' has'} different nullability constraints`;
@@ -361,7 +442,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'All nullability constraints match';
     }
 
-    if (validatorName === 'validate_metric_sums') {
+    if (_validatorName === 'validate_metric_sums') {
       const count = details.issues?.length || 0;
       if (count > 0) {
         return `${count} metric column${count > 1 ? 's have' : ' has'} different sum values between systems`;
@@ -369,7 +450,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'All metric sums match';
     }
 
-    if (validatorName === 'validate_ts_duplicates') {
+    if (_validatorName === 'validate_ts_duplicates') {
       const count = details.duplicate_count || details.duplicates?.length || 0;
       if (count > 0) {
         return `Found ${count} duplicate timestamp${count > 1 ? 's' : ''}`;
@@ -377,7 +458,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'No duplicate timestamps';
     }
 
-    if (validatorName === 'validate_ts_continuity') {
+    if (_validatorName === 'validate_ts_continuity') {
       const missing = details.missing_count || 0;
       if (missing > 0) {
         return `${missing} date${missing > 1 ? 's are' : ' is'} missing in the time series (${details.min_date} to ${details.max_date})`;
@@ -385,7 +466,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'Complete time series with no gaps';
     }
 
-    if (validatorName === 'validate_ts_rolling_drift') {
+    if (_validatorName === 'validate_ts_rolling_drift') {
       const count = details.issues?.length || 0;
       if (count > 0) {
         return `Found ${count} rolling window drift issue${count > 1 ? 's' : ''} across 7-day and 30-day windows`;
@@ -393,7 +474,7 @@ export default function PipelineExecution({ currentProject }: any) {
       return 'No rolling window drift detected';
     }
 
-    if (validatorName === 'validate_period_over_period') {
+    if (_validatorName === 'validate_period_over_period') {
       const count = details.issues?.length || 0;
       if (count > 0) {
         return `Found ${count} period-over-period comparison issue${count > 1 ? 's' : ''} (WoW/MoM/YoY)`;
@@ -404,7 +485,7 @@ export default function PipelineExecution({ currentProject }: any) {
     return null;
   };
 
-  const formatDetailValue = (validatorName: string, key: string, value: any): React.ReactNode => {
+  const formatDetailValue = (_validatorName: string, key: string, value: any): React.ReactNode => {
     // Show special formatting for arrays of objects (mismatches, issues, etc.)
     // Handle these FIRST before checking for large arrays
     if ((key === 'mismatches' || key === 'issues' || key === 'duplicates' || key === 'results' || key === 'details' || key === 'outliers') && Array.isArray(value) && value.length > 0) {
@@ -455,7 +536,6 @@ export default function PipelineExecution({ currentProject }: any) {
       // Handle arrays of arrays (like duplicates from validate_ts_duplicates)
       if (Array.isArray(value[0])) {
         const showCount = 20;
-        const numCols = value[0].length;
 
         return (
           <TableContainer component={Paper} sx={{ mt: 0.5, mb: 1 }}>
@@ -969,7 +1049,7 @@ export default function PipelineExecution({ currentProject }: any) {
                                                                   <Typography variant="caption" sx={{ fontSize: '0.6rem', color: '#666' }}>SQL Server:</Typography>
                                                                   {Object.entries(data.sql_distribution).map(([bucket, count]) => (
                                                                     <Typography key={bucket} variant="caption" sx={{ fontSize: '0.6rem', display: 'block' }}>
-                                                                      {bucket}: {count}
+                                                                      {bucket}: {count as React.ReactNode}
                                                                     </Typography>
                                                                   ))}
                                                                 </Box>
@@ -977,7 +1057,7 @@ export default function PipelineExecution({ currentProject }: any) {
                                                                   <Typography variant="caption" sx={{ fontSize: '0.6rem', color: '#666' }}>Snowflake:</Typography>
                                                                   {Object.entries(data.snow_distribution).map(([bucket, count]) => (
                                                                     <Typography key={bucket} variant="caption" sx={{ fontSize: '0.6rem', display: 'block' }}>
-                                                                      {bucket}: {count}
+                                                                      {bucket}: {count as React.ReactNode}
                                                                     </Typography>
                                                                   ))}
                                                                 </Box>
@@ -1056,7 +1136,7 @@ export default function PipelineExecution({ currentProject }: any) {
                                                                 {Object.entries(data.queries).map(([qType, query]) => (
                                                                   <Box key={qType} sx={{ mb: 0.5 }}>
                                                                     <Typography variant="caption" sx={{ fontSize: '0.55rem', fontWeight: 'bold', color: '#666' }}>{qType}:</Typography>
-                                                                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{query}</pre>
+                                                                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{query as React.ReactNode}</pre>
                                                                   </Box>
                                                                 ))}
                                                               </Box>
@@ -1083,13 +1163,34 @@ export default function PipelineExecution({ currentProject }: any) {
                             </TableContainer>
                           </Box>
                         ) : (
-                          <Alert severity="info" sx={{ py: 0.5 }}>
-                            <Typography variant="caption">
-                              {run.status === 'running' ? 'Running...' :
-                               run.status === 'pending' ? 'Pending...' :
-                               'No results'}
-                            </Typography>
-                          </Alert>
+                          <Box>
+                            {run.status === 'running' || run.status === 'pending' ? (
+                              <Box sx={{ width: '100%', p: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {run.current_step_name || 'Starting pipeline...'}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Step {run.current_step || 0}/{run.total_steps || 0}
+                                  </Typography>
+                                </Box>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={run.total_steps > 0 ? (run.current_step / run.total_steps) * 100 : 0}
+                                  sx={{ height: 8, borderRadius: 1 }}
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                  {run.status === 'running' ? 'Executing...' : 'Pending...'}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Alert severity="info" sx={{ py: 0.5 }}>
+                                <Typography variant="caption">
+                                  No results
+                                </Typography>
+                              </Alert>
+                            )}
+                          </Box>
                         )}
                       </AccordionDetails>
                     </Accordion>

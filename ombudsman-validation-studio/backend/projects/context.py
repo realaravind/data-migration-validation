@@ -19,10 +19,16 @@ def set_active_project(project_id: str, metadata: Dict[str, Any]):
     _active_project_id = project_id
     _active_project_metadata = metadata
 
-    # Persist to file
+    # Persist to JSON file (new format)
     os.makedirs(os.path.dirname(ACTIVE_PROJECT_FILE), exist_ok=True)
     with open(ACTIVE_PROJECT_FILE, "w") as f:
         json.dump({"project_id": project_id, "metadata": metadata}, f, indent=2)
+
+    # ALSO persist to plain text file for legacy compatibility (used by bug reports)
+    legacy_file = "/data/active_project.txt"
+    os.makedirs(os.path.dirname(legacy_file), exist_ok=True)
+    with open(legacy_file, "w") as f:
+        f.write(project_id)
 
 
 def get_active_project() -> Optional[Dict[str, Any]]:
@@ -59,8 +65,14 @@ def clear_active_project():
     _active_project_id = None
     _active_project_metadata = None
 
+    # Remove JSON file (new format)
     if os.path.exists(ACTIVE_PROJECT_FILE):
         os.remove(ACTIVE_PROJECT_FILE)
+
+    # ALSO remove legacy plain text file
+    legacy_file = "/data/active_project.txt"
+    if os.path.exists(legacy_file):
+        os.remove(legacy_file)
 
 
 def get_project_config_dir(project_id: Optional[str] = None) -> str:

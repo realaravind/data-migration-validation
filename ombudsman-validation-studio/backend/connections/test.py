@@ -152,3 +152,86 @@ async def get_all_connection_status():
         connections["snowflake"]["message"] = str(e)
 
     return {"connections": connections}
+
+
+@router.get("/databases/sqlserver")
+async def list_sqlserver_databases():
+    """List all databases available in SQL Server"""
+    try:
+        import pyodbc
+        import os
+
+        # Use environment variables to connect to SQL Server
+        conn_str = (
+            f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+            f"SERVER={os.getenv('MSSQL_HOST', 'sqlserver')},{os.getenv('MSSQL_PORT', '1433')};"
+            f"DATABASE=master;"  # Connect to master to list all databases
+            f"UID={os.getenv('MSSQL_USER', 'sa')};"
+            f"PWD={os.getenv('MSSQL_PASSWORD', '')};"
+            f"TrustServerCertificate=yes;"
+        )
+
+        # Query to list all user databases (excluding system databases if desired)
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT name
+            FROM sys.databases
+            WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')
+            ORDER BY name
+        """)
+
+        databases = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+
+        return {
+            "status": "success",
+            "databases": databases,
+            "count": len(databases)
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to list SQL Server databases: {str(e)}",
+            "databases": []
+        }
+
+
+@router.get("/databases/snowflake")
+async def list_snowflake_databases():
+    """List all databases available in Snowflake"""
+    try:
+        import snowflake.connector
+        import os
+
+        # Connect to Snowflake using environment variables
+        conn = snowflake.connector.connect(
+            user=os.getenv('SNOWFLAKE_USER', ''),
+            password=os.getenv('SNOWFLAKE_PASSWORD', ''),
+            account=os.getenv('SNOWFLAKE_ACCOUNT', ''),
+            warehouse=os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+            role=os.getenv('SNOWFLAKE_ROLE', '')
+        )
+
+        cursor = conn.cursor()
+        cursor.execute("SHOW DATABASES")
+
+        # Fetch all databases
+        databases = [row[1] for row in cursor.fetchall()]  # row[1] contains the database name
+        cursor.close()
+        conn.close()
+
+        return {
+            "status": "success",
+            "databases": databases,
+            "count": len(databases)
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to list Snowflake databases: {str(e)}",
+            "databases": []
+        }

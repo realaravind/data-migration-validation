@@ -17,8 +17,7 @@ import {
     List,
     ListItem,
     ListItemText,
-    Divider,
-    Paper
+    Divider
 } from '@mui/material';
 import { Download as DownloadIcon } from '@mui/icons-material';
 
@@ -29,7 +28,11 @@ interface Schema {
     facts: string[];
 }
 
-export default function SampleDataGeneration() {
+interface SampleDataGenerationProps {
+    currentProject?: any;
+}
+
+export default function SampleDataGeneration(_props: SampleDataGenerationProps) {
     const [loading, setLoading] = useState(false);
     const [schemas, setSchemas] = useState<Schema[]>([]);
     const [selectedTarget, setSelectedTarget] = useState('both');

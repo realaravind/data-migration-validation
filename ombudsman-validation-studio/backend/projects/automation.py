@@ -35,7 +35,7 @@ class ProjectAutomation:
         """
         self.project_id = project_id
         self.project_name = project_name
-        self.projects_dir = Path("/app/projects")
+        self.projects_dir = Path("/data/projects")
         self.project_dir = self.projects_dir / project_id
 
         # Ensure project directory exists
@@ -81,18 +81,25 @@ class ProjectAutomation:
 
             # Get column metadata for this table
             try:
-                columns = loader.get_columns(table_name, table_schema)
+                # Pass schema.table format to get_columns (it expects a single parameter)
+                full_table_name = f"{table_schema}.{table_name}"
+                columns_list = loader.get_columns(full_table_name)
+
+                # Convert columns list to dict format expected by RelationshipInferrer
+                # From: [{"name": "col1", "data_type": "INT", ...}, ...]
+                # To: {"col1": "INT", "col2": "VARCHAR", ...}
+                columns_dict = {col["name"]: col["data_type"] for col in columns_list}
 
                 # Build metadata structure
                 table_key = f"{table_schema}.{table_name}"
                 metadata[table_key] = {
-                    "columns": columns,
+                    "columns": columns_dict,
                     "schema": table_schema,
                     "table": table_name,
                     "object_type": "TABLE"
                 }
 
-                print(f"[ProjectAutomation]   - {table_key}: {len(columns)} columns")
+                print(f"[ProjectAutomation]   - {table_key}: {len(columns_dict)} columns")
 
             except Exception as e:
                 print(f"[ProjectAutomation] Warning: Could not extract metadata for {table_schema}.{table_name}: {e}")

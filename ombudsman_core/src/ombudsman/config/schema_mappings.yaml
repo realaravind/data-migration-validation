@@ -1,3 +1,2 @@
-dbo: PUBLIC
-dim: DIM
-fact: FACT
+SAMPLE_DIM: DIM
+SAMPLE_FACT: FACT

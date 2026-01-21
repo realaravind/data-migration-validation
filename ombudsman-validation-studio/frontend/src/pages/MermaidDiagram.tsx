@@ -12,7 +12,11 @@ import mermaid from "mermaid";
 
 mermaid.initialize({ startOnLoad: false });
 
-export default function MermaidDiagram() {
+interface MermaidDiagramProps {
+    currentProject?: any;
+}
+
+export default function MermaidDiagram(_props: MermaidDiagramProps) {
   const [text, setText] = useState("graph TD;\n    A[Start] --> B[End]");
   const [svg, setSvg] = useState("");
 

@@ -193,6 +193,7 @@ def list_all_tables():
 
 class InferRelationshipsRequest(BaseModel):
     """Request to infer relationships from metadata"""
+    project_name: Optional[str] = None  # Project name - if not provided, uses active project
     use_existing_mappings: bool = True  # Load from YAML files
     source_database: str = "sql"  # "sql" or "snow"
     target_database: str = "snow"  # "sql" or "snow"
@@ -207,14 +208,31 @@ def infer_relationships(request: InferRelationshipsRequest):
     try:
         from ombudsman.core.relationship_inferrer import RelationshipInferrer
 
-        # Load table metadata from YAML files
-        config_dir = "/core/src/ombudsman/config"
+        # Get project name - use provided or fallback to active project
+        project_name = request.project_name
+        if not project_name:
+            # Try to get active project from session/state
+            import sys
+            sys.path.insert(0, "/app/projects")
+            from context import get_active_project
+
+            active_project = get_active_project()
+            if active_project:
+                project_name = active_project.get("project_id", "default_project")
+            else:
+                project_name = "default_project"
+
+        # Load table metadata from project-specific YAML files
+        config_dir = f"/data/projects/{project_name}/config"
         tables_file = f"{config_dir}/tables.yaml"
+
+        print(f"[INFER] Looking for tables.yaml at: {tables_file}")
+        print(f"[INFER] File exists: {os.path.exists(tables_file)}")
 
         if not os.path.exists(tables_file):
             raise HTTPException(
                 status_code=404,
-                detail="No table metadata found. Please extract metadata first using Database Mapping."
+                detail=f"No table metadata found at {tables_file}. Please extract metadata first using Database Mapping."
             )
 
         # Load tables.yaml
@@ -272,11 +290,21 @@ def infer_relationships(request: InferRelationshipsRequest):
                 by_fact_table[fact] = []
             by_fact_table[fact].append(rel)
 
+        # Save relationships to project's relationships.yaml
+        relationships_file = f"{config_dir}/relationships.yaml"
+        os.makedirs(config_dir, exist_ok=True)
+
+        with open(relationships_file, "w") as f:
+            yaml.dump(inferred, f, default_flow_style=False, sort_keys=False)
+
+        print(f"[INFO] Saved {len(inferred)} relationships to {relationships_file}")
+
         return {
             "status": "success",
             "relationships": inferred,
             "source_database": request.source_database,
             "target_database": request.target_database,
+            "saved_to": relationships_file,
             "metrics": {
                 "total_relationships": total_relationships,
                 "high_confidence": high_confidence,
@@ -380,7 +408,19 @@ def save_relationships(request: SaveRelationshipsRequest):
     Creates backup before overwriting.
     """
     try:
-        config_dir = "/core/src/ombudsman/config"
+        # Get active project's config directory
+        import sys
+        sys.path.insert(0, "/app/projects")
+        from context import get_active_project, get_project_config_dir
+
+        active_project = get_active_project()
+        if active_project:
+            project_name = active_project.get("project_id", "default_project")
+        else:
+            project_name = "default_project"
+
+        config_dir = get_project_config_dir()
+        os.makedirs(config_dir, exist_ok=True)
         relationships_file = f"{config_dir}/relationships.yaml"
 
         # Backup existing file

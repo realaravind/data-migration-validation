@@ -26,8 +26,11 @@ RUN npm install -g serve
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /app/dist
 
+# Copy serve configuration
+COPY serve.json /app/serve.json
+
 # Expose port
 EXPOSE 3000
 
-# Serve the built app
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Serve the built app with configuration
+CMD ["serve", "-s", "dist", "-l", "3000", "--no-clipboard", "-c", "/app/serve.json"]

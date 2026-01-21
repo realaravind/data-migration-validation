@@ -27,8 +27,7 @@ import {
   ArrowBack,
   Search,
   Download,
-  FilterList,
-  CompareArrows,
+  ContentCopy
 } from '@mui/icons-material';
 
 interface ComparisonRow {
@@ -61,6 +60,10 @@ interface ComparisonData {
     sql_row_count?: number;
     snowflake_row_count?: number;
   };
+  queries?: {
+    sql_query?: string;
+    snow_query?: string;
+  } | null;
 }
 
 const ComparisonViewer: React.FC = () => {
@@ -80,27 +83,35 @@ const ComparisonViewer: React.FC = () => {
   const fetchComparisonData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `http://localhost:8000/execution/results/${runId}/step/${stepName}/comparison`
-      );
-      const result = await response.json();
+      setError(null);
 
-      if (result.error) {
-        setError(result.error);
+      console.log('[ComparisonViewer] Fetching comparison for:', { runId, stepName });
+      const url = `http://localhost:8000/results/${runId}/step/${encodeURIComponent(stepName || '')}/comparison`;
+      console.log('[ComparisonViewer] URL:', url);
+
+      const response = await fetch(url);
+      console.log('[ComparisonViewer] Response status:', response.status);
+
+      const result = await response.json();
+      console.log('[ComparisonViewer] Raw response:', result);
+
+      if (!response.ok || result.error) {
+        const errorMsg = result.error || result.message || `HTTP ${response.status}: ${response.statusText}`;
+        console.error('[ComparisonViewer] Error:', errorMsg);
+        setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
       } else {
-        console.log('[ComparisonViewer] Received data:', result);
-        console.log('[ComparisonViewer] Comparison rows:', result.comparison?.rows);
-        console.log('[ComparisonViewer] Row count:', result.comparison?.rows?.length);
+        console.log('[ComparisonViewer] Data loaded successfully');
+        console.log('[ComparisonViewer] Comparison rows count:', result.comparison?.rows?.length);
         setData(result);
         // Auto-select 'different' filter mode if there are differing rows
-        // Otherwise default to 'all' to show matching rows
-        if (result.summary.differing_rows > 0) {
+        if (result.summary?.differing_rows > 0) {
           setFilterMode('different');
         } else {
           setFilterMode('all');
         }
       }
     } catch (err) {
+      console.error('[ComparisonViewer] Exception:', err);
       setError(`Failed to load comparison data: ${err}`);
     } finally {
       setLoading(false);
@@ -465,6 +476,64 @@ const ComparisonViewer: React.FC = () => {
             No rows match your current filters
           </Typography>
         </Box>
+      )}
+
+      {/* Debugging Queries Section */}
+      {data.queries && (data.queries.sql_query || data.queries.snow_query) && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h5" gutterBottom>
+            Debugging SQL Queries
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            These are the exact queries used for this validation. Use them to investigate data differences.
+          </Typography>
+
+          <Stack spacing={2}>
+            {data.queries.sql_query && (
+              <Box>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                    SQL Server Query
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() => navigator.clipboard.writeText(data.queries!.sql_query!)}
+                    title="Copy to clipboard"
+                  >
+                    <ContentCopy fontSize="small" />
+                  </IconButton>
+                </Stack>
+                <Paper sx={{ p: 2, bgcolor: '#263238', color: '#aed581', overflow: 'auto' }}>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '13px', fontFamily: 'monospace' }}>
+                    {data.queries.sql_query}
+                  </pre>
+                </Paper>
+              </Box>
+            )}
+
+            {data.queries.snow_query && (
+              <Box>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                    Snowflake Query
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() => navigator.clipboard.writeText(data.queries!.snow_query!)}
+                    title="Copy to clipboard"
+                  >
+                    <ContentCopy fontSize="small" />
+                  </IconButton>
+                </Stack>
+                <Paper sx={{ p: 2, bgcolor: '#263238', color: '#aed581', overflow: 'auto' }}>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '13px', fontFamily: 'monospace' }}>
+                    {data.queries.snow_query}
+                  </pre>
+                </Paper>
+              </Box>
+            )}
+          </Stack>
+        </Paper>
       )}
     </Box>
   );

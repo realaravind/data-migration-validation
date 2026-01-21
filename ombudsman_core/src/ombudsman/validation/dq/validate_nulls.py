@@ -5,7 +5,23 @@ def validate_nulls(sql_conn, snow_conn, table, mapping, metadata):
     sql_table = escape_sql_server_identifier(mapping[table]["sql"])
     snow_table = escape_snowflake_identifier(mapping[table]["snow"])
 
-    cols = metadata[table]["columns"]
+    # Extract column names from metadata
+    table_metadata = metadata[table]
+
+    # DEBUG: Print metadata structure
+    print(f"[validate_nulls] table={table}")
+    print(f"[validate_nulls] table_metadata keys: {list(table_metadata.keys()) if isinstance(table_metadata, dict) else 'NOT A DICT'}")
+    print(f"[validate_nulls] columns type: {type(table_metadata.get('columns'))}")
+    print(f"[validate_nulls] columns value: {table_metadata.get('columns')}")
+
+    if isinstance(table_metadata.get("columns"), dict):
+        # New structure: columns is a dict {col_name: type}
+        cols = list(table_metadata["columns"].keys())
+    else:
+        # Old structure: columns is a list
+        cols = table_metadata.get("columns", [])
+
+    print(f"[validate_nulls] Extracted {len(cols)} columns: {cols}")
 
     results = []
     issues = []
