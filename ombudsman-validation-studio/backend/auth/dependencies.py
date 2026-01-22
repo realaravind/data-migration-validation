@@ -8,6 +8,7 @@ Provides dependency functions for:
 - API key authentication
 """
 
+import os
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
@@ -15,13 +16,21 @@ from datetime import datetime, timezone
 
 from .models import User, UserInDB, UserRole, TokenData
 from .security import verify_token
-from .sqlite_repository import SQLiteAuthRepository
 
 # Security scheme
 security = HTTPBearer()
 
-# Repository singleton (using SQLite)
-auth_repo = SQLiteAuthRepository()
+# Repository singleton - choose based on AUTH_BACKEND environment variable
+AUTH_BACKEND = os.getenv("AUTH_BACKEND", "sqlite").lower()
+
+if AUTH_BACKEND == "sqlserver":
+    from .sqlserver_auth_repository import SQLServerAuthRepository
+    auth_repo = SQLServerAuthRepository()
+    print("Using SQL Server for authentication")
+else:
+    from .sqlite_repository import SQLiteAuthRepository
+    auth_repo = SQLiteAuthRepository()
+    print("Using SQLite for authentication")
 
 
 async def get_current_user(

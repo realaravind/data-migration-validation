@@ -37,7 +37,17 @@
       "Bash(then cat /Users/aravind/sourcecode/projects/data-migration-validator/ombudsman-validation-studio/backend/data/projects/ps5/config/schema_mappings.yaml)",
       "Bash(else echo \"Schema mappings file does not exist for project ps5\")",
       "Bash(tree:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git push)",
+      "Bash(git rm:*)",
+      "Bash(git push:*)",
+      "Bash(docker compose:*)",
+      "Bash(open:*)",
+      "Bash(docker info:*)",
+      "Bash(git tag:*)",
+      "Bash(.claude/hooks/play-tts.sh:*)",
+      "Bash(ls:*)",
+      "Bash(git check-ignore:*)"
     ],
     "deny": [],
     "ask": []

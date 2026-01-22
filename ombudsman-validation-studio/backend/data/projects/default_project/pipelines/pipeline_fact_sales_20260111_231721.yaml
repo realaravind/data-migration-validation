@@ -1,0 +1,37 @@
+metadata:
+  name: fact_sales_workload_validation
+  description: Workload-based validations for fact_sales
+  generated_from: workload_wl_20260111_231702_96e267c9
+  project_id: default_project
+  created_at: '2026-01-11T23:17:21.771660'
+  validation_count: 1
+  active: true
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: FACT
+  table: fact_sales
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: FACT
+  table: FACT_SALES
+steps:
+- name: validation_1_workload_query
+  type: comparative
+  description: Actual workload query (executed 2100 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_query: SELECT COUNT(*) FROM FACT.fact_sales
+    snow_query: SELECT COUNT(*) FROM FACT.FACT_SALES
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 4
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 125.5

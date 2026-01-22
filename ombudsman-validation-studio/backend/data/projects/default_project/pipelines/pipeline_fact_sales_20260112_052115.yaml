@@ -1,0 +1,43 @@
+metadata:
+  name: fact_sales_workload_validation
+  description: Workload-based validations for fact_sales
+  generated_from: workload_wl_20260112_052105_68f03b88
+  project_id: default_project
+  created_at: '2026-01-12T05:21:15.816630'
+  validation_count: 1
+  active: true
+source:
+  type: sqlserver
+  database: ${SQL_DATABASE}
+  schema: SAMPLE_FACT
+  table: fact_sales
+target:
+  type: snowflake
+  database: ${SNOWFLAKE_DATABASE}
+  schema: SAMPLE_FACT
+  table: FACT_SALES
+steps:
+- name: validation_1_workload_query
+  type: comparative
+  description: Actual workload query (executed 1117 times)
+  confidence: 95.0
+  enabled: true
+  validator: custom_sql
+  config:
+    sql_query: SELECT d.year, st.region, SUM(s.sales_amount) as total_sales, COUNT(*)
+      as transaction_count FROM SAMPLE_FACT.fact_sales s JOIN SAMPLE_DIM.dim_date
+      d ON s.date_key = d.date_key JOIN SAMPLE_DIM.dim_store st ON s.store_key = st.store_key
+      GROUP BY d.year, st.region
+    snow_query: SELECT d.year, st.region, SUM(s.sales_amount) as total_sales, COUNT(*)
+      as transaction_count FROM SAMPLE_FACT.FACT_SALES s JOIN SAMPLE_DIM.DIM_DATE
+      d ON s.date_key = d.date_key JOIN SAMPLE_DIM.DIM_STORE st ON s.store_key = st.store_key
+      GROUP BY d.year, st.region
+    compare_mode: result_set
+    tolerance: 0.01
+    ignore_column_order: true
+    ignore_row_order: false
+  metadata:
+    query_id: 70
+    validation_type: workload_query
+    total_executions: 0
+    avg_duration_ms: 783.49
