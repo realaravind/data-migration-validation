@@ -8,19 +8,34 @@
 # Load Environment File
 # ==============================================
 ENV_FILE="${OMBUDSMAN_ENV_FILE:-/data/ombudsman/ombudsman.env}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE_FILE="$SCRIPT_DIR/ombudsman.env"
 
-if [ -f "$ENV_FILE" ]; then
-    echo "Loading config from: $ENV_FILE"
-    # Export all variables from .env file (skip comments and empty lines)
-    set -a
-    source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
-    set +a
-else
-    echo "Warning: Config file not found at $ENV_FILE"
-    echo "Using default values. Create config with:"
-    echo "  cp deploy/ombudsman.env /data/ombudsman/ombudsman.env"
-    echo ""
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Config file not found at $ENV_FILE"
+    if [ -f "$TEMPLATE_FILE" ]; then
+        echo "Copying template from $TEMPLATE_FILE..."
+        cp "$TEMPLATE_FILE" "$ENV_FILE"
+        echo ""
+        echo "=========================================="
+        echo "IMPORTANT: Edit your config file!"
+        echo "=========================================="
+        echo "Run: nano $ENV_FILE"
+        echo "Update your database credentials, then run this script again."
+        echo "=========================================="
+        echo ""
+        exit 1
+    else
+        echo "Error: Template file not found at $TEMPLATE_FILE"
+        exit 1
+    fi
 fi
+
+echo "Loading config from: $ENV_FILE"
+# Export all variables from .env file (skip comments and empty lines)
+set -a
+source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
+set +a
 
 # ==============================================
 # Configuration - Defaults (overridden by .env)
