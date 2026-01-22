@@ -48,6 +48,19 @@ check_sudo() {
 }
 
 # ==============================================
+# Fix apt_pkg issue (common on Ubuntu)
+# ==============================================
+fix_apt_pkg() {
+    echo ""
+    echo "=========================================="
+    echo "Fixing apt_pkg if needed..."
+    echo "=========================================="
+
+    apt-get install --reinstall -y python3-apt 2>/dev/null || true
+    print_status "python3-apt reinstalled"
+}
+
+# ==============================================
 # Install system dependencies
 # ==============================================
 install_system_deps() {
@@ -56,6 +69,7 @@ install_system_deps() {
     echo "Installing system dependencies..."
     echo "=========================================="
 
+    fix_apt_pkg
     apt-get update
     apt-get install -y \
         python3 \
