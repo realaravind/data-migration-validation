@@ -39,7 +39,8 @@ ombudsman-validation-studio/backend/data/auth/
 ombudsman-validation-studio/backend/data/audit_logs/
 ombudsman-validation-studio/backend/data/batch_jobs/
 ombudsman-validation-studio/backend/data/workloads/
-ombudsman-validation-studio/backend/results/
+# Ignore result JSON files but keep Python source files
+ombudsman-validation-studio/backend/results/*.json
 
 # Keep default project template
 !ombudsman-validation-studio/backend/data/projects/default_project/
