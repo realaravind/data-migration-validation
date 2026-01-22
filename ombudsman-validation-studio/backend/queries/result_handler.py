@@ -20,6 +20,8 @@ import hashlib
 from collections import defaultdict
 import logging
 
+from config.paths import paths
+
 logger = logging.getLogger(__name__)
 
 
@@ -398,8 +400,8 @@ class ResultExporter:
 class QueryResultHistory:
     """Track and manage query execution history"""
 
-    def __init__(self, storage_path: str = "data/query_history"):
-        self.storage_path = Path(storage_path)
+    def __init__(self, storage_path: str = None):
+        self.storage_path = Path(storage_path) if storage_path else paths.query_history_dir
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
     def save_result(

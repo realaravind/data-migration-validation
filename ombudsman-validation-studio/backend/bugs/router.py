@@ -10,6 +10,7 @@ from typing import Optional, List
 from pathlib import Path
 import json
 
+from config.paths import paths
 from .models import (
     GenerateBugReportRequest,
     BugReportGenerateResponse,
@@ -59,14 +60,14 @@ async def generate_bug_report(
         # Get active project if not provided
         if not project_id:
             # Read active project from file
-            active_project_file = Path("data/active_project.txt")
+            active_project_file = paths.active_project_file_legacy
             if active_project_file.exists():
                 project_id = active_project_file.read_text().strip()
             else:
                 project_id = "default"  # Fallback
 
         # Get project name
-        project_data_dir = Path("data/projects") / project_id
+        project_data_dir = paths.get_project_dir(project_id)
         project_file = project_data_dir / "metadata.json"
         if not project_file.exists():
             project_file = project_data_dir / "project.json"
@@ -378,7 +379,7 @@ async def submit_bugs_to_azure_devops(
 
         # 2. Load project's Azure DevOps configuration
         project_id = report.project_id
-        project_data_dir = Path("data/projects") / project_id
+        project_data_dir = paths.get_project_dir(project_id)
 
         # Try both metadata.json and project.json for backward compatibility
         project_file = project_data_dir / "metadata.json"

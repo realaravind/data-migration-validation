@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import json
 from pathlib import Path
 
+from config.paths import paths
 from .storage import WorkloadStorage
 from .engine import WorkloadEngine
 from .pipeline_generator import PipelineGenerator
@@ -209,9 +210,9 @@ async def get_batch(batch_name: str, project_id: Optional[str] = None):
         # Search in project directory first, then global
         search_paths = []
         if project_id:
-            search_paths.append(Path(f"/data/projects/{project_id}/pipelines"))
-        search_paths.append(Path("/data/pipelines"))
-        search_paths.append(Path("/data/batch_jobs"))
+            search_paths.append(paths.get_project_pipelines_dir(project_id))
+        search_paths.append(paths.pipelines_dir)
+        search_paths.append(paths.batch_jobs_dir)
 
         for search_path in search_paths:
             batch_file = search_path / batch_name
@@ -250,15 +251,15 @@ async def save_batch(request: BatchSaveRequest, project_id: Optional[str] = None
 
         # Determine save location
         if project_id:
-            batch_dir = Path(f"/data/projects/{project_id}/pipelines")
+            batch_dir = paths.get_project_pipelines_dir(project_id)
         else:
             # Try to get active project
             from projects.context import get_active_project
             active = get_active_project()
             if active and active.get("project_id"):
-                batch_dir = Path(f"/data/projects/{active['project_id']}/pipelines")
+                batch_dir = paths.get_project_pipelines_dir(active['project_id'])
             else:
-                batch_dir = Path("/data/batch_jobs")
+                batch_dir = paths.batch_jobs_dir
 
         batch_dir.mkdir(parents=True, exist_ok=True)
 
@@ -337,9 +338,9 @@ async def delete_batch(batch_name: str, project_id: Optional[str] = None, delete
         # Search for batch file in project directory first, then global
         search_paths = []
         if project_id:
-            search_paths.append(Path(f"/data/projects/{project_id}/pipelines"))
-        search_paths.append(Path("/data/pipelines"))
-        search_paths.append(Path("/data/batch_jobs"))
+            search_paths.append(paths.get_project_pipelines_dir(project_id))
+        search_paths.append(paths.pipelines_dir)
+        search_paths.append(paths.batch_jobs_dir)
 
         print(f"[DELETE_BATCH] Will search in these paths:")
         for sp in search_paths:
@@ -423,8 +424,8 @@ async def delete_pipeline(pipeline_name: str, project_id: Optional[str] = None):
         # Search for pipeline file in project directory first, then global
         search_paths = []
         if project_id:
-            search_paths.append(Path(f"/data/projects/{project_id}/pipelines"))
-        search_paths.append(Path("/data/pipelines"))
+            search_paths.append(paths.get_project_pipelines_dir(project_id))
+        search_paths.append(paths.pipelines_dir)
 
         pipeline_file = None
         for search_path in search_paths:
@@ -676,7 +677,7 @@ async def save_pipelines_to_project(request: SavePipelinesToProjectRequest):
         from pathlib import Path
 
         # Define project pipelines directory
-        project_pipelines_dir = Path(f"/data/projects/{request.project_id}/pipelines")
+        project_pipelines_dir = paths.get_project_pipelines_dir(request.project_id)
         project_pipelines_dir.mkdir(parents=True, exist_ok=True)
 
         saved_files = []
@@ -727,7 +728,7 @@ async def list_batch_templates():
         import yaml
         from datetime import datetime
 
-        templates_dir = Path("/data/batch_templates")
+        templates_dir = paths.batch_templates_dir
         templates_dir.mkdir(parents=True, exist_ok=True)
 
         templates = []
@@ -784,7 +785,7 @@ async def get_batch_template(template_id: str):
         from pathlib import Path
         import yaml
 
-        templates_dir = Path("/data/batch_templates")
+        templates_dir = paths.batch_templates_dir
         template_file = templates_dir / f"{template_id}.yaml"
 
         if not template_file.exists():
@@ -821,7 +822,7 @@ async def save_batch_template(request: BatchTemplateSaveRequest):
         import yaml
         from datetime import datetime
 
-        templates_dir = Path("/data/batch_templates")
+        templates_dir = paths.batch_templates_dir
         templates_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate template ID from name (slugify)
@@ -870,7 +871,7 @@ async def delete_batch_template(template_id: str):
     try:
         from pathlib import Path
 
-        templates_dir = Path("/data/batch_templates")
+        templates_dir = paths.batch_templates_dir
         template_file = templates_dir / f"{template_id}.yaml"
 
         if not template_file.exists():

@@ -11,6 +11,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+
+from config.paths import paths
 from .models import AuditLog, AuditLogCreate, AuditLogFilter, AuditLogSummary
 
 
@@ -28,7 +30,7 @@ class AuditLogStorage:
             storage_dir: Directory to store audit logs
         """
         if storage_dir is None:
-            storage_dir = os.getenv("AUDIT_LOG_DIR", "./backend/data/audit_logs")
+            storage_dir = str(paths.audit_logs_dir)
 
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)

@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 import asyncio
 
+from config.paths import paths
+
 # Import existing intelligent modules
 from .intelligent_suggest import (
     _extract_metadata_structure,
@@ -30,12 +32,12 @@ class ComprehensivePipelineAutomation:
     Automates pipeline creation for all tables in a project using intelligent analysis
     """
 
-    def __init__(self, project_id: str, projects_dir: str = "/data/projects"):
+    def __init__(self, project_id: str, projects_dir: str = None):
         self.project_id = project_id
-        self.projects_dir = projects_dir
-        self.project_dir = f"{projects_dir}/{project_id}"
-        self.config_dir = f"{self.project_dir}/config"
-        self.pipelines_dir = f"{self.project_dir}/pipelines"
+        self.projects_dir = projects_dir or str(paths.projects_dir)
+        self.project_dir = str(paths.get_project_dir(project_id))
+        self.config_dir = str(paths.get_project_config_dir(project_id))
+        self.pipelines_dir = str(paths.get_project_pipelines_dir(project_id))
 
         # Ensure pipelines directory exists
         os.makedirs(self.pipelines_dir, exist_ok=True)
@@ -575,7 +577,7 @@ ORDER BY TOTAL_{measure.upper()} DESC
 
 # API endpoint wrapper functions
 
-async def create_comprehensive_automation(project_id: str, projects_dir: str = "/data/projects") -> Dict[str, Any]:
+async def create_comprehensive_automation(project_id: str, projects_dir: str = None) -> Dict[str, Any]:
     """
     Main entry point for comprehensive pipeline automation.
     Uses Pipeline Builder's existing "Analyze & Suggest" and custom query generation.

@@ -7,12 +7,14 @@ from datetime import datetime
 import yaml
 from pathlib import Path
 
+from config.paths import paths
+
 
 class PipelineGenerator:
     """Generate YAML validation pipelines from selected validations"""
 
-    def __init__(self, pipelines_dir: str = "data/pipelines"):
-        self.pipelines_dir = Path(pipelines_dir)
+    def __init__(self, pipelines_dir: str = None):
+        self.pipelines_dir = Path(pipelines_dir) if pipelines_dir else paths.pipelines_dir
         self.pipelines_dir.mkdir(parents=True, exist_ok=True)
         self.column_mappings = {}  # Will be loaded per project
         self.schema_mappings = {}  # Will be loaded per project
@@ -25,7 +27,7 @@ class PipelineGenerator:
             Dict mapping table_key -> {source_col_lower -> (source_col_actual, target_col)}
         """
         print(f"[DEBUG] _load_column_mappings called with project_id: '{project_id}'")
-        mappings_path = Path(f"data/projects/{project_id}/config/column_mappings.yaml")
+        mappings_path = paths.get_project_config_dir(project_id) / "column_mappings.yaml"
         print(f"[DEBUG] Looking for mappings at: {mappings_path}")
         print(f"[DEBUG] Absolute path: {mappings_path.absolute()}")
         print(f"[DEBUG] File exists: {mappings_path.exists()}")
@@ -63,7 +65,7 @@ class PipelineGenerator:
             Dict mapping source schema names to target schema names (e.g., {"SAMPLE_DIM": "DIM", "SAMPLE_FACT": "FACT"})
         """
         print(f"[SCHEMA_MAPPING] Loading schema mappings for project_id: '{project_id}'")
-        mappings_path = Path(f"data/projects/{project_id}/config/schema_mappings.yaml")
+        mappings_path = paths.get_project_config_dir(project_id) / "schema_mappings.yaml"
         print(f"[SCHEMA_MAPPING] Looking for mappings at: {mappings_path}")
 
         if not mappings_path.exists():
@@ -809,7 +811,7 @@ class PipelineGenerator:
         pipelines = []
 
         # Scan both the flat pipelines_dir and project-specific directories
-        projects_base = Path("/data/projects")
+        projects_base = paths.projects_dir
 
         search_paths = []
 
@@ -943,7 +945,7 @@ class PipelineGenerator:
             True if successful, False otherwise
         """
         # Search for the file in multiple locations
-        projects_base = Path("/data/projects")
+        projects_base = paths.projects_dir
         search_paths = [self.pipelines_dir]
 
         # Add all project pipeline directories

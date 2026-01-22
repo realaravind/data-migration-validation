@@ -9,6 +9,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Dict, List, Optional
 
+from config.paths import paths
 from errors import (
     InvalidPipelineConfigError,
     PipelineNotFoundError,
@@ -23,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Results directory
-RESULTS_DIR = "results"
+# Results directory - using centralized path config
+RESULTS_DIR = paths.results_dir
 
 # Store pipeline executions in memory (in production, use a database)
 pipeline_runs = {}
@@ -441,7 +442,7 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                     else:
                         # If it's just a string (project_id), load the metadata
                         print(f"[CONFIG] Found active project ID: {active_project}")
-                        project_dir = f"/data/projects/{active_project}"
+                        project_dir = paths.get_project_dir(active_project)
                         if os.path.exists(f"{project_dir}/project.json"):
                             with open(f"{project_dir}/project.json", "r") as f:
                                 metadata = json.load(f)
@@ -921,7 +922,7 @@ async def delete_pipeline_run(
 # Custom Pipeline Management for Projects
 # ========================================
 
-PROJECTS_DIR = "/data/projects"  # Same as projects/manager.py
+PROJECTS_DIR = paths.projects_dir  # Using centralized path config
 
 class SavePipelineRequest(BaseModel):
     project_id: str

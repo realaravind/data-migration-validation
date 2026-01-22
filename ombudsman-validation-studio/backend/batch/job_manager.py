@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from threading import Thread, Lock
 
+from config.paths import paths
 from .models import (
     BatchJob,
     BatchJobStatus,
@@ -49,10 +50,8 @@ class BatchJobManager:
 
     def _initialize(self):
         """Initialize the job manager"""
-        # Set storage directory
-        self._job_storage_dir = Path(
-            os.getenv("BATCH_JOBS_DIR", "./backend/data/batch_jobs")
-        )
+        # Set storage directory from centralized config
+        self._job_storage_dir = paths.batch_jobs_dir
         self._job_storage_dir.mkdir(parents=True, exist_ok=True)
 
         # Load existing jobs from storage

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+from config.paths import paths
 from .models import (
     NotificationChannel,
     NotificationPriority,
@@ -71,7 +72,7 @@ class NotificationService:
     @classmethod
     def _load_rules(cls):
         """Load notification rules from storage"""
-        rules_file = Path(os.getenv("NOTIFICATION_RULES_FILE", "./backend/data/notification_rules.json"))
+        rules_file = Path(os.getenv("NOTIFICATION_RULES_FILE", str(paths.notification_rules_file)))
 
         if rules_file.exists():
             try:
@@ -87,7 +88,7 @@ class NotificationService:
     @classmethod
     def _save_rules(cls):
         """Save notification rules to storage"""
-        rules_file = Path(os.getenv("NOTIFICATION_RULES_FILE", "./backend/data/notification_rules.json"))
+        rules_file = Path(os.getenv("NOTIFICATION_RULES_FILE", str(paths.notification_rules_file)))
         rules_file.parent.mkdir(parents=True, exist_ok=True)
 
         try:

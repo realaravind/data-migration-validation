@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Thread
 
+from config.paths import paths
 from .models import (
     BatchJob,
     BatchJobStatus,
@@ -263,8 +264,8 @@ class BatchExecutor:
 
         # Search in project directories and flat pipelines directory
         search_paths = [
-            Path("/data/pipelines"),  # Flat directory
-            Path("/data/projects")    # Project-based directories
+            paths.pipelines_dir,  # Flat directory
+            paths.projects_dir    # Project-based directories
         ]
 
         for base_path in search_paths:
@@ -547,7 +548,7 @@ class BatchExecutor:
         print(f"[Batch {job.job_id}] Found {len(run_ids)} pipeline runs to consolidate")
 
         # Load all pipeline results
-        results_dir = Path("results")
+        results_dir = paths.results_dir
         all_results = []
 
         for run_id in run_ids:

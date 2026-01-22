@@ -15,6 +15,8 @@ import json
 import yaml
 from pathlib import Path
 
+from config.paths import paths
+
 # Add core to Python path
 sys.path.insert(0, "/core/src")
 
@@ -35,8 +37,8 @@ class ProjectAutomation:
         """
         self.project_id = project_id
         self.project_name = project_name
-        self.projects_dir = Path("/data/projects")
-        self.project_dir = self.projects_dir / project_id
+        self.projects_dir = paths.projects_dir
+        self.project_dir = paths.get_project_dir(project_id)
 
         # Ensure project directory exists
         self.project_dir.mkdir(parents=True, exist_ok=True)

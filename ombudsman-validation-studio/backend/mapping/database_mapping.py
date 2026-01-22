@@ -7,6 +7,8 @@ import os
 import yaml
 import json
 
+from config.paths import paths
+
 router = APIRouter()
 
 
@@ -226,14 +228,14 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
             print(f"[EXTRACT] Inferred {len(relationships)} relationships")
 
             # Save relationships to config/relationships.yaml
-            config_dir = f"/data/projects/{active_project['project_id']}/config"
+            config_dir = str(paths.get_project_config_dir(active_project['project_id']))
             relationships_yaml_path = f"{config_dir}/relationships.yaml"
             with open(relationships_yaml_path, "w") as f:
                 yaml.dump(relationships, f, default_flow_style=False, sort_keys=False)
             print(f"[EXTRACT] Saved {len(relationships)} relationships to {relationships_yaml_path}")
 
             # Update project metadata
-            project_dir = f"/data/projects/{active_project['project_id']}"
+            project_dir = str(paths.get_project_dir(active_project['project_id']))
             project_json_path = f"{project_dir}/project.json"
             if os.path.exists(project_json_path):
                 with open(project_json_path, "r") as f:
@@ -669,7 +671,7 @@ async def get_existing_mappings():
         if not active_project:
             try:
                 import glob
-                project_dirs = glob.glob("/data/projects/*/project.json")
+                project_dirs = glob.glob(str(paths.projects_dir / "*/project.json"))
                 if project_dirs:
                     # Sort by modification time, get most recent
                     latest_project = max(project_dirs, key=os.path.getmtime)

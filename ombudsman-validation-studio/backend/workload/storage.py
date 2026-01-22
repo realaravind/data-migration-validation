@@ -10,12 +10,14 @@ from typing import Dict, List, Optional
 from pathlib import Path
 import uuid
 
+from config.paths import paths
+
 
 class WorkloadStorage:
     """Manage workload data storage"""
 
-    def __init__(self, base_path: str = "data/workloads"):
-        self.base_path = Path(base_path)
+    def __init__(self, base_path: str = None):
+        self.base_path = Path(base_path) if base_path else paths.workloads_dir
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def _get_project_path(self, project_id: str) -> Path:

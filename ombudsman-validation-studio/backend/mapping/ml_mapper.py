@@ -22,6 +22,8 @@ import numpy as np
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
+from config.paths import paths
+
 
 @dataclass
 class MappingPattern:
@@ -71,8 +73,7 @@ class IntelligentMapper:
             storage_dir: Directory for storing learned patterns and models
         """
         if storage_dir is None:
-            # Use environment variable or default to relative path for local dev
-            storage_dir = os.getenv("MAPPING_INTELLIGENCE_DIR", "./data/mapping_intelligence")
+            storage_dir = str(paths.mapping_intelligence_dir)
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 

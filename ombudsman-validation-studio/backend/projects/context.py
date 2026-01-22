@@ -5,12 +5,11 @@ import json
 import os
 from typing import Optional, Dict, Any
 
+from config.paths import paths
+
 # Global variable to track active project
 _active_project_id: Optional[str] = None
 _active_project_metadata: Optional[Dict[str, Any]] = None
-
-PROJECTS_DIR = "/data/projects"
-ACTIVE_PROJECT_FILE = "/data/.active_project"
 
 
 def set_active_project(project_id: str, metadata: Dict[str, Any]):
@@ -20,13 +19,14 @@ def set_active_project(project_id: str, metadata: Dict[str, Any]):
     _active_project_metadata = metadata
 
     # Persist to JSON file (new format)
-    os.makedirs(os.path.dirname(ACTIVE_PROJECT_FILE), exist_ok=True)
-    with open(ACTIVE_PROJECT_FILE, "w") as f:
+    active_project_file = paths.active_project_file
+    os.makedirs(active_project_file.parent, exist_ok=True)
+    with open(active_project_file, "w") as f:
         json.dump({"project_id": project_id, "metadata": metadata}, f, indent=2)
 
     # ALSO persist to plain text file for legacy compatibility (used by bug reports)
-    legacy_file = "/data/active_project.txt"
-    os.makedirs(os.path.dirname(legacy_file), exist_ok=True)
+    legacy_file = paths.active_project_file_legacy
+    os.makedirs(legacy_file.parent, exist_ok=True)
     with open(legacy_file, "w") as f:
         f.write(project_id)
 
@@ -43,9 +43,10 @@ def get_active_project() -> Optional[Dict[str, Any]]:
         }
 
     # Try to load from file
-    if os.path.exists(ACTIVE_PROJECT_FILE):
+    active_project_file = paths.active_project_file
+    if active_project_file.exists():
         try:
-            with open(ACTIVE_PROJECT_FILE, "r") as f:
+            with open(active_project_file, "r") as f:
                 data = json.load(f)
                 _active_project_id = data.get("project_id")
                 _active_project_metadata = data.get("metadata", {})
@@ -66,12 +67,13 @@ def clear_active_project():
     _active_project_metadata = None
 
     # Remove JSON file (new format)
-    if os.path.exists(ACTIVE_PROJECT_FILE):
-        os.remove(ACTIVE_PROJECT_FILE)
+    active_project_file = paths.active_project_file
+    if active_project_file.exists():
+        os.remove(active_project_file)
 
     # ALSO remove legacy plain text file
-    legacy_file = "/data/active_project.txt"
-    if os.path.exists(legacy_file):
+    legacy_file = paths.active_project_file_legacy
+    if legacy_file.exists():
         os.remove(legacy_file)
 
 
@@ -83,10 +85,10 @@ def get_project_config_dir(project_id: Optional[str] = None) -> str:
             project_id = active.get("project_id")
 
     if project_id:
-        return f"{PROJECTS_DIR}/{project_id}/config"
+        return str(paths.get_project_config_dir(project_id))
     else:
         # Fallback to core config directory
-        return "/core/src/ombudsman/config"
+        return str(paths.core_config_dir)
 
 
 def get_project_database_config(project_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -103,8 +105,8 @@ def get_project_database_config(project_id: Optional[str] = None) -> Optional[Di
             }
     else:
         # Load from project file
-        project_file = f"{PROJECTS_DIR}/{project_id}/project.json"
-        if os.path.exists(project_file):
+        project_file = paths.get_project_dir(project_id) / "project.json"
+        if project_file.exists():
             with open(project_file, "r") as f:
                 metadata = json.load(f)
                 return {

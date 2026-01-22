@@ -24,11 +24,12 @@ from .models import (
     UserRole, EventType
 )
 from .security import hash_password
+from config.paths import paths
 
 logger = logging.getLogger(__name__)
 
-# Database file path
-DB_DIR = "/data/auth"
+# Database file path - use centralized config
+DB_DIR = str(paths.auth_dir)
 DB_FILE = os.path.join(DB_DIR, "ombudsman_auth.db")
 
 

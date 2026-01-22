@@ -7,6 +7,7 @@ Provides secure configuration and secrets management with:
 - Integration with external secret managers (AWS, Azure, HashiCorp Vault)
 - Configuration validation
 - Hot-reload capabilities
+- Centralized path management
 """
 
 from .manager import ConfigManager, get_config
@@ -18,6 +19,7 @@ from .models import (
 )
 from .secrets import SecretsManager, SecretProvider
 from .validation import ConfigValidator
+from .paths import paths, init_paths, get_projects_dir, get_core_config_dir, get_data_dir
 
 __all__ = [
     'ConfigManager',
@@ -28,5 +30,10 @@ __all__ = [
     'ConfigSource',
     'SecretsManager',
     'SecretProvider',
-    'ConfigValidator'
+    'ConfigValidator',
+    'paths',
+    'init_paths',
+    'get_projects_dir',
+    'get_core_config_dir',
+    'get_data_dir'
 ]

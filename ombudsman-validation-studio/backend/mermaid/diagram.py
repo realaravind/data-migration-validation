@@ -6,6 +6,8 @@ import json
 import sys
 import yaml
 
+from config.paths import paths
+
 # Add core to Python path
 sys.path.insert(0, "/core/src")
 
@@ -79,7 +81,7 @@ def generate_from_yaml(request: GenerateFromYamlRequest):
             else:
                 project_name = "default_project"
 
-        config_dir = f"/data/projects/{project_name}/config"
+        config_dir = str(paths.get_project_config_dir(project_name))
         tables_file = f"{config_dir}/tables.yaml"
         relationships_file = f"{config_dir}/relationships.yaml"
         sql_relationships_file = f"{config_dir}/sql_relationships.yaml"

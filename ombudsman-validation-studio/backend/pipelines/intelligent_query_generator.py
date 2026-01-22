@@ -8,12 +8,14 @@ from typing import List, Dict, Any, Tuple
 import yaml
 import os
 
+from config.paths import paths
+
 
 class IntelligentQueryGenerator:
     """Generate intelligent validation queries based on star schema patterns"""
 
-    def __init__(self, metadata_path: str = "/core/src/ombudsman/config"):
-        self.metadata_path = metadata_path
+    def __init__(self, metadata_path: str = None):
+        self.metadata_path = metadata_path or str(paths.core_config_dir)
         self.tables = {}
         self.relationships = []
         self._load_metadata()

@@ -15,15 +15,12 @@ EnvironmentFile=/opt/ombudsman/.env
 # Python path setup
 Environment="PYTHONPATH=/opt/ombudsman/backend:/opt/ombudsman/core/src"
 
-# Data storage paths
-Environment="MAPPING_INTELLIGENCE_DIR=/var/lib/ombudsman/data/mapping_intelligence"
-Environment="QUERY_HISTORY_DIR=/var/lib/ombudsman/data/query_history"
-Environment="PIPELINE_RUNS_DIR=/var/lib/ombudsman/data/pipeline_runs"
-Environment="CONFIG_BACKUPS_DIR=/var/lib/ombudsman/data/config_backups"
-Environment="AUTH_DATA_DIR=/var/lib/ombudsman/data/auth"
-Environment="AUDIT_LOG_DIR=/var/lib/ombudsman/data/audit_logs"
-Environment="BATCH_JOBS_DIR=/var/lib/ombudsman/data/batch_jobs"
-Environment="NOTIFICATION_RULES_FILE=/var/lib/ombudsman/data/notification_rules.json"
+# Centralized path configuration - ALL paths derive from these two variables
+# Set ENVIRONMENT=production to use production paths
+Environment="ENVIRONMENT=production"
+Environment="OMBUDSMAN_DATA_DIR=/var/lib/ombudsman/data"
+Environment="OMBUDSMAN_CORE_DIR=/opt/ombudsman/core/src/ombudsman/config"
+Environment="OMBUDSMAN_LOG_DIR=/var/log/ombudsman"
 
 # Ollama URL for native Linux (localhost instead of host.docker.internal)
 Environment="OLLAMA_BASE_URL=http://localhost:11434"

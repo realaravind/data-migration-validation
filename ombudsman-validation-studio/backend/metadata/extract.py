@@ -6,6 +6,8 @@ import sys
 import os
 import yaml
 
+from config.paths import paths
+
 # Add core to Python path
 sys.path.insert(0, "/core/src")
 
@@ -223,7 +225,7 @@ def infer_relationships(request: InferRelationshipsRequest):
                 project_name = "default_project"
 
         # Load table metadata from project-specific YAML files
-        config_dir = f"/data/projects/{project_name}/config"
+        config_dir = str(paths.get_project_config_dir(project_name))
         tables_file = f"{config_dir}/tables.yaml"
 
         print(f"[INFER] Looking for tables.yaml at: {tables_file}")

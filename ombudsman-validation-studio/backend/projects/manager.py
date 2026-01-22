@@ -9,11 +9,15 @@ import shutil
 
 from auth.dependencies import require_user_or_admin, optional_authentication
 from auth.models import UserInDB
+from config.paths import paths
 from .automation import ProjectAutomation
 
 router = APIRouter()
 
-PROJECTS_DIR = "/data/projects"  # Persistent storage for projects
+# Use configurable paths - set via OMBUDSMAN_DATA_DIR environment variable
+def get_projects_dir() -> str:
+    """Get projects directory path."""
+    return str(paths.projects_dir)
 
 class AzureDevOpsConfig(BaseModel):
     """Azure DevOps configuration for a project"""
@@ -65,11 +69,11 @@ async def create_project(
     Requires: User or Admin role
     """
     try:
-        os.makedirs(PROJECTS_DIR, exist_ok=True)
+        os.makedirs(get_projects_dir(), exist_ok=True)
 
         # Create project directory
         project_id = project.name.lower().replace(" ", "_")
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
 
         if os.path.exists(project_dir):
             raise HTTPException(status_code=400, detail=f"Project '{project.name}' already exists")
@@ -138,11 +142,11 @@ async def get_active_project():
 async def list_projects():
     """List all projects"""
     try:
-        os.makedirs(PROJECTS_DIR, exist_ok=True)
+        os.makedirs(get_projects_dir(), exist_ok=True)
 
         projects = []
-        for project_id in os.listdir(PROJECTS_DIR):
-            project_dir = f"{PROJECTS_DIR}/{project_id}"
+        for project_id in os.listdir(get_projects_dir()):
+            project_dir = f"{get_projects_dir()}/{project_id}"
             metadata_file = f"{project_dir}/project.json"
 
             if os.path.isdir(project_dir) and os.path.exists(metadata_file):
@@ -169,7 +173,7 @@ async def load_project(project_id: str):
     try:
         from .context import set_active_project
 
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
 
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -211,7 +215,7 @@ async def load_project(project_id: str):
                 config["snow_relationships"] = yaml.safe_load(f)
 
         # Merge SQL and Snowflake relationships into main relationships.yaml for core engine
-        core_config_dir = "/core/src/ombudsman/config"
+        core_config_dir = str(paths.core_config_dir)
         merged_relationships = []
 
         # Load SQL relationships
@@ -279,13 +283,13 @@ async def save_project(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
 
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
         # Copy config files from core engine to project
-        core_config_dir = "/core/src/ombudsman/config"
+        core_config_dir = str(paths.core_config_dir)
         project_config_dir = f"{project_dir}/config"
 
         for filename in ["tables.yaml", "relationships.yaml", "column_mappings.yaml", "schema_mappings.yaml", "sql_relationships.yaml", "snow_relationships.yaml"]:
@@ -335,7 +339,7 @@ async def update_schema_mappings(
         Success message
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         metadata_file = f"{project_dir}/project.json"
 
         if not os.path.exists(metadata_file):
@@ -382,7 +386,7 @@ async def delete_project(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
 
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -418,7 +422,7 @@ async def delete_project(
         print(f"[PROJECT_DELETE] Found {len(pipeline_names)} pipelines to track")
 
         # 2. Delete associated batch jobs
-        batch_jobs_dir = "/data/batch_jobs"
+        batch_jobs_dir = str(paths.batch_jobs_dir)
         if os.path.exists(batch_jobs_dir):
             for batch_file in os.listdir(batch_jobs_dir):
                 if not batch_file.endswith('.json'):
@@ -453,7 +457,7 @@ async def delete_project(
                     print(f"[PROJECT_DELETE] Warning: Could not process batch file {batch_file}: {e}")
 
         # 3. Delete associated results
-        results_dir = "/data/results"
+        results_dir = str(paths.results_dir)
         if os.path.exists(results_dir):
             for result_file in os.listdir(results_dir):
                 if not result_file.endswith('.json'):
@@ -476,7 +480,7 @@ async def delete_project(
                     print(f"[PROJECT_DELETE] Warning: Could not process result file {result_file}: {e}")
 
         # 4. Delete project-specific query store data
-        queries_dir = "/data/queries"
+        queries_dir = str(paths.queries_dir)
         if os.path.exists(queries_dir):
             project_queries_dir = f"{queries_dir}/{project_id}"
             if os.path.exists(project_queries_dir):
@@ -536,7 +540,7 @@ async def save_relationships(project_id: str, database_type: str, relationships_
         if database_type not in ['sql', 'snow']:
             raise HTTPException(status_code=400, detail="database_type must be 'sql' or 'snow'")
 
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -633,7 +637,7 @@ async def extract_metadata(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -681,7 +685,7 @@ async def infer_relationships_endpoint(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -737,7 +741,7 @@ async def setup_project(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -895,7 +899,7 @@ async def setup_project_from_existing(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         config_dir = f"{project_dir}/config"
 
         if not os.path.exists(project_dir):
@@ -1046,7 +1050,7 @@ async def create_comprehensive_pipelines(
         from pipelines.comprehensive_automation import create_comprehensive_automation
 
         # Execute comprehensive automation (now async - uses Pipeline Builder logic)
-        result = await create_comprehensive_automation(project_id, PROJECTS_DIR)
+        result = await create_comprehensive_automation(project_id, get_projects_dir())
 
         print(f"[COMPREHENSIVE_AUTOMATION] Completed successfully")
         print(f"[COMPREHENSIVE_AUTOMATION] Pipelines created: {len(result['pipelines_created'])}")
@@ -1072,7 +1076,7 @@ async def get_relationships(project_id: str):
     Returns the relationships that were inferred during setup.
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -1114,7 +1118,7 @@ async def update_relationships(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -1153,7 +1157,7 @@ async def get_setup_status(project_id: str):
     and whether it's ready for automation.
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -1195,7 +1199,7 @@ async def automate_project(
     Requires: User or Admin role
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
@@ -1369,7 +1373,7 @@ async def configure_azure_devops(
         Success message with configuration status
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         metadata_file = f"{project_dir}/project.json"
         
         if not os.path.exists(metadata_file):
@@ -1411,7 +1415,7 @@ async def get_azure_devops_config(project_id: str):
         Azure DevOps configuration or None if not configured
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         metadata_file = f"{project_dir}/project.json"
         
         if not os.path.exists(metadata_file):
@@ -1460,7 +1464,7 @@ async def delete_azure_devops_config(
         Success message
     """
     try:
-        project_dir = f"{PROJECTS_DIR}/{project_id}"
+        project_dir = f"{get_projects_dir()}/{project_id}"
         metadata_file = f"{project_dir}/project.json"
         
         if not os.path.exists(metadata_file):
