@@ -7,7 +7,13 @@
         "dev": "vite",
         "build": "tsc && vite build",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "test": "playwright test",
+        "test:ui": "playwright test --ui",
+        "test:headed": "playwright test --headed",
+        "test:debug": "playwright test --debug",
+        "test:report": "playwright show-report",
+        "test:install": "playwright install --with-deps"
     },
     "dependencies": {
         "@emotion/react": "^11.11.1",
@@ -25,6 +31,7 @@
         "recharts": "^3.5.1"
     },
     "devDependencies": {
+        "@playwright/test": "^1.41.0",
         "@types/js-yaml": "^4.0.9",
         "@types/react": "^18.2.43",
         "@types/react-dom": "^18.2.17",

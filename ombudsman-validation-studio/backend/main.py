@@ -49,7 +49,7 @@ register_error_handlers(app)
 
 # Add CORS middleware
 # Note: In production, restrict allow_origins to your actual frontend domains
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3002,http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
