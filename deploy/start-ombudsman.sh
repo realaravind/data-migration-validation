@@ -5,28 +5,44 @@
 #
 
 # ==============================================
-# Configuration - Edit these paths as needed
+# Load Environment File
 # ==============================================
-BASE_DIR="/data/ombudsman"
+ENV_FILE="${OMBUDSMAN_ENV_FILE:-/data/ombudsman/ombudsman.env}"
+
+if [ -f "$ENV_FILE" ]; then
+    echo "Loading config from: $ENV_FILE"
+    # Export all variables from .env file (skip comments and empty lines)
+    set -a
+    source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
+    set +a
+else
+    echo "Warning: Config file not found at $ENV_FILE"
+    echo "Using default values. Create config with:"
+    echo "  cp deploy/ombudsman.env /data/ombudsman/ombudsman.env"
+    echo ""
+fi
+
+# ==============================================
+# Configuration - Defaults (overridden by .env)
+# ==============================================
+BASE_DIR="${BASE_DIR:-/data/ombudsman}"
 BACKEND_DIR="$BASE_DIR/ombudsman-validation-studio/backend"
 FRONTEND_DIR="$BASE_DIR/ombudsman-validation-studio/frontend"
 CORE_DIR="$BASE_DIR/ombudsman_core/src"
-DATA_DIR="$BASE_DIR/data"
-LOG_DIR="$BASE_DIR/logs"
+DATA_DIR="${OMBUDSMAN_DATA_DIR:-$BASE_DIR/data}"
+LOG_DIR="${OMBUDSMAN_LOG_DIR:-$BASE_DIR/logs}"
 
-# Backend settings
+# Server settings
 BACKEND_HOST="0.0.0.0"
-BACKEND_PORT="8000"
-
-# Frontend settings
+BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_HOST="0.0.0.0"
-FRONTEND_PORT="3000"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 # ==============================================
-# Environment Variables
+# Environment Variables for Python
 # ==============================================
 export OMBUDSMAN_DATA_DIR="$DATA_DIR"
-export OMBUDSMAN_CORE_DIR="$CORE_DIR/ombudsman/config"
+export OMBUDSMAN_CORE_DIR="${OMBUDSMAN_CORE_DIR:-$CORE_DIR/ombudsman/config}"
 export OMBUDSMAN_LOG_DIR="$LOG_DIR"
 export PYTHONPATH="$BACKEND_DIR:$CORE_DIR"
 
