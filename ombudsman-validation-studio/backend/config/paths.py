@@ -86,18 +86,23 @@ class PathConfig:
         logger.info(f"  Log directory: {self._log_dir}")
 
     def _ensure_directories(self):
-        """Create all required directories if they don't exist."""
+        """Create all required directories if they don't exist.
+
+        Note: This method is called during initialization, so we must use
+        direct path construction (self._data_dir / "subdir") instead of
+        property accessors (self.projects_dir) to avoid infinite recursion.
+        """
         directories = [
-            self.projects_dir,
-            self.pipelines_dir,
-            self.batch_jobs_dir,
-            self.batch_templates_dir,
-            self.auth_dir,
-            self.results_dir,
-            self.queries_dir,
-            self.workloads_dir,
-            self.audit_logs_dir,
-            self.mapping_intelligence_dir,
+            self._data_dir / "projects",
+            self._data_dir / "pipelines",
+            self._data_dir / "batch_jobs",
+            self._data_dir / "batch_templates",
+            self._data_dir / "auth",
+            self._data_dir / "results",
+            self._data_dir / "queries",
+            self._data_dir / "workloads",
+            self._data_dir / "audit_logs",
+            self._data_dir / "mapping_intelligence",
             self._log_dir,
         ]
 
