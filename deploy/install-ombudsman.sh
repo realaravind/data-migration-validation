@@ -191,8 +191,20 @@ setup_frontend() {
     echo "=========================================="
 
     REAL_USER="${SUDO_USER:-$USER}"
+    ENV_FILE="$BASE_DIR/ombudsman.env"
 
     cd "$FRONTEND_DIR"
+
+    # Create frontend .env file from main config
+    if [ -f "$ENV_FILE" ]; then
+        # Extract VITE_API_URL from main config
+        VITE_API_URL=$(grep "^VITE_API_URL=" "$ENV_FILE" | cut -d'=' -f2-)
+        if [ -n "$VITE_API_URL" ]; then
+            echo "VITE_API_URL=$VITE_API_URL" > .env
+            chown "$REAL_USER:$REAL_USER" .env
+            print_status "Frontend .env created with API URL: $VITE_API_URL"
+        fi
+    fi
 
     # Install npm dependencies
     sudo -u "$REAL_USER" npm install

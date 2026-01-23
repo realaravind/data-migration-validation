@@ -334,8 +334,15 @@ case "${1:-start}" in
     setup-auth)
         setup_auth
         ;;
+    rebuild-frontend)
+        echo "Rebuilding frontend with API URL: ${VITE_API_URL:-http://localhost:8000}"
+        cd "$FRONTEND_DIR"
+        echo "VITE_API_URL=${VITE_API_URL:-http://localhost:8000}" > .env
+        npm run build
+        echo "Frontend rebuilt. Restart frontend to apply changes."
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth}"
+        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend}"
         exit 1
         ;;
 esac
