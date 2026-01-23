@@ -116,7 +116,7 @@ export default function PipelineExecution({ currentProject }: any) {
 
   const loadAllRuns = async () => {
     try {
-      const response = await fetch("http://localhost:8000/pipelines/list");
+      const response = await fetch(__API_URL__ + "/pipelines/list");
       const data = await response.json();
 
       // Fetch full details for each run
@@ -229,7 +229,7 @@ export default function PipelineExecution({ currentProject }: any) {
       console.log('[PIPELINE EXEC] Sending request to backend:', requestBody);
       console.log('[PIPELINE EXEC] YAML being sent:', enrichedYaml);
 
-      const response = await fetch("http://localhost:8000/pipelines/execute", {
+      const response = await fetch(__API_URL__ + "/pipelines/execute", {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody)

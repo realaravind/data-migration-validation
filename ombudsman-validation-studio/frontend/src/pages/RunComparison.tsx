@@ -201,7 +201,7 @@ export default function RunComparison() {
             // Fetch active project first to filter runs by project
             let activeProjectId: string | null = null;
             try {
-                const projectResponse = await fetch('http://localhost:8000/projects/active');
+                const projectResponse = await fetch(__API_URL__ + '/projects/active');
                 const projectData = await projectResponse.json();
                 if (projectData.status === 'success' && projectData.active_project) {
                     activeProjectId = projectData.active_project.project_id;
@@ -212,11 +212,11 @@ export default function RunComparison() {
             }
 
             // Fetch pipeline runs
-            const runsResponse = await fetch('http://localhost:8000/results');
+            const runsResponse = await fetch(__API_URL__ + '/results');
             const runsData = await runsResponse.json();
 
             // Fetch batch jobs
-            const batchResponse = await fetch('http://localhost:8000/batch/jobs');
+            const batchResponse = await fetch(__API_URL__ + '/batch/jobs');
             const batchData = await batchResponse.json();
 
             // Process pipeline runs

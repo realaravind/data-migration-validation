@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setToken(savedToken);
         try {
           // Verify token and get user info
-          const response = await fetch('http://localhost:8000/auth/me', {
+          const response = await fetch(__API_URL__ + '/auth/me', {
             headers: {
               'Authorization': `Bearer ${savedToken}`
             }
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('[AuthContext] Sending POST request to http://localhost:8000/auth/login');
 
-      const response = await fetch('http://localhost:8000/auth/login', {
+      const response = await fetch(__API_URL__ + '/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Get user info
       console.log('[AuthContext] Fetching user info from /auth/me');
-      const userResponse = await fetch('http://localhost:8000/auth/me', {
+      const userResponse = await fetch(__API_URL__ + '/auth/me', {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
@@ -140,7 +140,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (username: string, email: string, password: string, fullName: string) => {
     try {
-      const response = await fetch('http://localhost:8000/auth/register', {
+      const response = await fetch(__API_URL__ + '/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

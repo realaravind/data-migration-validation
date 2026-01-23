@@ -27,7 +27,7 @@ export default function ConnectionStatus() {
     const fetchConnectionStatus = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/connections/status');
+            const response = await fetch(__API_URL__ + '/connections/status');
             const data = await response.json();
             setConnectionStatus(data.connections);
         } catch (error) {
@@ -39,7 +39,7 @@ export default function ConnectionStatus() {
     const testSqlServer = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/connections/sqlserver', {
+            const response = await fetch(__API_URL__ + '/connections/sqlserver', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ use_env: true })
@@ -56,7 +56,7 @@ export default function ConnectionStatus() {
     const testSnowflake = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/connections/snowflake', {
+            const response = await fetch(__API_URL__ + '/connections/snowflake', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ use_env: true })

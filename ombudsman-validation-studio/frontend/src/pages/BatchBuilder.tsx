@@ -140,7 +140,7 @@ const BatchBuilder: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get('http://localhost:8000/workload/pipelines/list');
+            const response = await axios.get(__API_URL__ + '/workload/pipelines/list');
             // Filter to show only individual pipelines (not batch files)
             const pipelines = response.data.pipelines.filter((p: Pipeline) => p.type === 'pipeline');
             setAvailablePipelines(pipelines);
@@ -156,7 +156,7 @@ const BatchBuilder: React.FC = () => {
         setError(null);
         try {
             // Get active project first
-            const projectResponse = await axios.get('http://localhost:8000/projects/active');
+            const projectResponse = await axios.get(__API_URL__ + '/projects/active');
             const projectId = projectResponse.data.active_project.project_id;
 
             // Load the batch YAML file with project_id
@@ -203,7 +203,7 @@ const BatchBuilder: React.FC = () => {
 
     const loadTemplates = async () => {
         try {
-            const response = await axios.get('http://localhost:8000/workload/batch/templates/list');
+            const response = await axios.get(__API_URL__ + '/workload/batch/templates/list');
             setAvailableTemplates(response.data.templates || []);
         } catch (err: any) {
             console.error('Failed to load templates:', err);
@@ -257,7 +257,7 @@ const BatchBuilder: React.FC = () => {
                 }))
             };
 
-            await axios.post('http://localhost:8000/workload/batch/templates/save', {
+            await axios.post(__API_URL__ + '/workload/batch/templates/save', {
                 template_name: templateName,
                 description: templateDescription,
                 tags: tags,
@@ -324,7 +324,7 @@ const BatchBuilder: React.FC = () => {
             };
 
             // Save the batch file
-            await axios.post('http://localhost:8000/workload/batch/save', {
+            await axios.post(__API_URL__ + '/workload/batch/save', {
                 filename: `${batchConfig.name}_batch.yaml`,
                 content: batchYaml
             });

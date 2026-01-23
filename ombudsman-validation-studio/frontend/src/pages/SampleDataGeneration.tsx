@@ -51,7 +51,7 @@ export default function SampleDataGeneration(_props: SampleDataGenerationProps) 
 
     const fetchSchemas = async () => {
         try {
-            const response = await fetch('http://localhost:8000/data/schemas');
+            const response = await fetch(__API_URL__ + '/data/schemas');
             const data = await response.json();
             setSchemas(data.schemas || []);
         } catch (error) {
@@ -71,7 +71,7 @@ export default function SampleDataGeneration(_props: SampleDataGenerationProps) 
         setJobStatus(null);
 
         try {
-            const response = await fetch('http://localhost:8000/data/generate', {
+            const response = await fetch(__API_URL__ + '/data/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -120,7 +120,7 @@ export default function SampleDataGeneration(_props: SampleDataGenerationProps) 
     const clearData = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/data/clear', {
+            const response = await fetch(__API_URL__ + '/data/clear', {
                 method: 'DELETE'
             });
             const result = await response.json();

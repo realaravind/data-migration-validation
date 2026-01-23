@@ -89,8 +89,8 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
         setLoadingDatabases(true);
         try {
             const [sqlResponse, snowResponse] = await Promise.all([
-                fetch('http://localhost:8000/connections/databases/sqlserver'),
-                fetch('http://localhost:8000/connections/databases/snowflake')
+                fetch(__API_URL__ + '/connections/databases/sqlserver'),
+                fetch(__API_URL__ + '/connections/databases/snowflake')
             ]);
 
             const sqlData = await sqlResponse.json();
@@ -158,7 +158,7 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8000/projects/list');
+            const response = await fetch(__API_URL__ + '/projects/list');
             const data = await response.json();
 
             if (response.ok) {
@@ -187,7 +187,7 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch('http://localhost:8000/projects/create', {
+            const response = await fetch(__API_URL__ + '/projects/create', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({

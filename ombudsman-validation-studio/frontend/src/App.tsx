@@ -178,7 +178,7 @@ function AppContent() {
 
             try {
                 // Fetch all projects from backend
-                const response = await fetch('http://localhost:8000/projects/list');
+                const response = await fetch(__API_URL__ + '/projects/list');
                 if (!response.ok) {
                     console.error('Failed to fetch projects');
                     return;
@@ -238,7 +238,7 @@ function AppContent() {
 
     const fetchConnectionStatus = async () => {
         try {
-            const response = await fetch('http://localhost:8000/connections/status');
+            const response = await fetch(__API_URL__ + '/connections/status');
             const data = await response.json();
             setConnectionStatus(data.connections || {
                 sqlserver: { status: 'unknown' },

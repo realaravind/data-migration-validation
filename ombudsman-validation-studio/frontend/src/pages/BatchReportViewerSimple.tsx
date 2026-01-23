@@ -190,7 +190,7 @@ const BatchReportViewerSimple: React.FC = () => {
   const handleGenerateBugReport = async () => {
     setGeneratingBugReport(true);
     try {
-      const response = await fetch('http://localhost:8000/bug-reports/generate', {
+      const response = await fetch(__API_URL__ + '/bug-reports/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

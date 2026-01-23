@@ -113,7 +113,7 @@ interface NotificationStats {
   recent_failures: NotificationHistory[];
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = __API_URL__ + '';
 
 const NotificationSettings: React.FC = () => {
   // State Management

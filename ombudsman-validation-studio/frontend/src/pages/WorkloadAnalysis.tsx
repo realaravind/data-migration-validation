@@ -106,7 +106,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
             formData.append('file', file);
             formData.append('project_id', projectId);
 
-            const response = await fetch('http://localhost:8000/workload/upload', {
+            const response = await fetch(__API_URL__ + '/workload/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -136,7 +136,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
     const analyzeWorkload = async (workloadId: string) => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/workload/analyze', {
+            const response = await fetch(__API_URL__ + '/workload/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -198,7 +198,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
                 });
             });
 
-            const response = await fetch('http://localhost:8000/workload/generate-pipelines', {
+            const response = await fetch(__API_URL__ + '/workload/generate-pipelines', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -228,7 +228,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8000/workload/generate-comparative-pipelines', {
+            const response = await fetch(__API_URL__ + '/workload/generate-comparative-pipelines', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -266,7 +266,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8000/workload/save-pipelines-to-project', {
+            const response = await fetch(__API_URL__ + '/workload/save-pipelines-to-project', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -290,7 +290,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
     };
 
     const handleDownloadQueryGenerator = () => {
-        window.open('http://localhost:8000/workload/download-query-generator', '_blank');
+        window.open(__API_URL__ + '/workload/download-query-generator', '_blank');
     };
 
     const getConfidenceColor = (confidence: number) => {

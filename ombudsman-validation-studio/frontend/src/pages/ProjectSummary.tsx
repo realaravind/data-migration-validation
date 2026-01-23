@@ -79,7 +79,7 @@ export default function ProjectSummary() {
     const fetchProjectSummary = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:8000/results/project-summary');
+            const response = await fetch(__API_URL__ + '/results/project-summary');
             const result = await response.json();
 
             if (result.status === 'no_data') {

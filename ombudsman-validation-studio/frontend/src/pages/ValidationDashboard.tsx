@@ -4,7 +4,7 @@ export default function ValidationDashboard() {
     const [rows, setRows] = useState([]);
 
     useEffect(() => {
-        fetch("http://localhost:8000/execution/results")
+        fetch(__API_URL__ + "/execution/results")
             .then(res => res.json())
             .then(data => setRows(data.results));
     }, []);

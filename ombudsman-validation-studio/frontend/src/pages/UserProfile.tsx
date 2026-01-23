@@ -75,7 +75,7 @@ export default function UserProfile() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/auth/me/password', {
+      const response = await fetch(__API_URL__ + '/auth/me/password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

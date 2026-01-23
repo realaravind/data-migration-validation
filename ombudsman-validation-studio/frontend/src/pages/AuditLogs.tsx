@@ -85,7 +85,7 @@ interface SummaryStats {
   recent_errors_count: number;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = __API_URL__ + '';
 
 const AuditLogs: React.FC = () => {
   // State Management

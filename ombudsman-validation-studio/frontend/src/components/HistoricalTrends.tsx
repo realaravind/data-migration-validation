@@ -118,7 +118,7 @@ export default function HistoricalTrends({ pipelineName, limit = 10 }: Historica
 
     const fetchBaseline = async () => {
         try {
-            const response = await fetch('http://localhost:8000/results/baseline');
+            const response = await fetch(__API_URL__ + '/results/baseline');
             if (!response.ok) {
                 console.warn('Failed to fetch baseline');
                 return;
@@ -132,7 +132,7 @@ export default function HistoricalTrends({ pipelineName, limit = 10 }: Historica
 
     const handleSetBaseline = async (runId: string) => {
         try {
-            const response = await fetch('http://localhost:8000/results/baseline/set', {
+            const response = await fetch(__API_URL__ + '/results/baseline/set', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ run_id: runId })
@@ -151,7 +151,7 @@ export default function HistoricalTrends({ pipelineName, limit = 10 }: Historica
 
     const handleClearBaseline = async () => {
         try {
-            const response = await fetch('http://localhost:8000/results/baseline', {
+            const response = await fetch(__API_URL__ + '/results/baseline', {
                 method: 'DELETE'
             });
 

@@ -123,7 +123,7 @@ export default function LandingPage() {
                 {
                     title: 'User Manual',
                     description: 'Complete guide with step-by-step instructions and best practices',
-                    path: 'http://localhost:8000/docs/user-manual',
+                    path: __API_URL__ + '/docs/user-manual',
                     icon: <UserManualIcon />,
                     color: '#5e35b1',
                     isExternal: true,
@@ -132,7 +132,7 @@ export default function LandingPage() {
                 {
                     title: 'Technical Manual',
                     description: 'Developer documentation with architecture and API reference',
-                    path: 'http://localhost:8000/docs/technical-manual',
+                    path: __API_URL__ + '/docs/technical-manual',
                     icon: <TechManualIcon />,
                     color: '#1565c0',
                     isExternal: true,
@@ -141,7 +141,7 @@ export default function LandingPage() {
                 {
                     title: 'Architecture Diagrams',
                     description: 'Interactive Mermaid diagrams visualizing system architecture',
-                    path: 'http://localhost:8000/docs/architecture-diagrams',
+                    path: __API_URL__ + '/docs/architecture-diagrams',
                     icon: <DiagramIcon />,
                     color: '#00897b',
                     isExternal: true,

@@ -9,7 +9,7 @@ export default function PipelineYamlEditor(_props: PipelineYamlEditorProps) {
     const [yaml, setYaml] = useState("");
 
     const runPipeline = async () => {
-        const response = await fetch("http://localhost:8000/execution/run", {
+        const response = await fetch(__API_URL__ + "/execution/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ yaml_content: yaml })

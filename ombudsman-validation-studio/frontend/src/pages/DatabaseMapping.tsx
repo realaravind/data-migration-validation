@@ -148,7 +148,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         // Auto-load extraction results if they exist
         const autoLoadExtraction = async () => {
             try {
-                const response = await fetch('http://localhost:8000/database-mapping/mappings');
+                const response = await fetch(__API_URL__ + '/database-mapping/mappings');
                 const data = await response.json();
 
                 if (data.status === 'success' && data.mappings && data.mappings.length > 0) {
@@ -233,7 +233,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                             headers['Authorization'] = `Bearer ${token}`;
                         }
 
-                        const response = await fetch('http://localhost:8000/diagram/generate-from-yaml', {
+                        const response = await fetch(__API_URL__ + '/diagram/generate-from-yaml', {
                             method: 'POST',
                             headers,
                             body: JSON.stringify({
@@ -309,7 +309,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
 
     const fetchAvailableDatabases = async () => {
         try {
-            const response = await fetch('http://localhost:8000/database-mapping/available-databases');
+            const response = await fetch(__API_URL__ + '/database-mapping/available-databases');
             const data = await response.json();
             setAvailableDatabases(data);
         } catch (err) {
@@ -319,7 +319,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
 
     const loadExistingMappings = async () => {
         try {
-            const response = await fetch('http://localhost:8000/database-mapping/mappings');
+            const response = await fetch(__API_URL__ + '/database-mapping/mappings');
             const data = await response.json();
 
             if (data.status === 'success') {
@@ -367,7 +367,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
             }
 
             // Fallback to global schema mappings endpoint
-            const response = await fetch('http://localhost:8000/database-mapping/schema-mappings');
+            const response = await fetch(__API_URL__ + '/database-mapping/schema-mappings');
             const data = await response.json();
 
             if (data.status === 'success') {
@@ -395,7 +395,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8000/database-mapping/schema-mappings', {
+            const response = await fetch(__API_URL__ + '/database-mapping/schema-mappings', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -467,7 +467,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 }
             });
 
-            const response = await fetch('http://localhost:8000/database-mapping/mappings', {
+            const response = await fetch(__API_URL__ + '/database-mapping/mappings', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -548,7 +548,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
             }
 
             // Create new project
-            const response = await fetch('http://localhost:8000/projects/create', {
+            const response = await fetch(__API_URL__ + '/projects/create', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -711,7 +711,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         try {
             // Infer relationships for BOTH SQL and Snowflake
             const [sqlResponse, snowResponse] = await Promise.all([
-                fetch('http://localhost:8000/metadata/infer-relationships', {
+                fetch(__API_URL__ + '/metadata/infer-relationships', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -720,7 +720,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                         source_database: 'sql'
                     })
                 }),
-                fetch('http://localhost:8000/metadata/infer-relationships', {
+                fetch(__API_URL__ + '/metadata/infer-relationships', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -793,7 +793,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
 
     const generateMermaidDiagram = async (relationships: any[], sourceDatabase: 'sql' | 'snow'): Promise<string> => {
         try {
-            const response = await fetch('http://localhost:8000/mermaid/generate-with-inference', {
+            const response = await fetch(__API_URL__ + '/mermaid/generate-with-inference', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1122,7 +1122,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 ? schemaMappings
                 : { 'dbo': 'PUBLIC' }; // Default fallback
 
-            const response = await fetch('http://localhost:8000/database-mapping/extract', {
+            const response = await fetch(__API_URL__ + '/database-mapping/extract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1785,7 +1785,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                                                                                 onClick={async () => {
                                                                                     // Save column mappings
                                                                                     try {
-                                                                                        const response = await fetch('http://localhost:8000/database-mapping/column-mappings', {
+                                                                                        const response = await fetch(__API_URL__ + '/database-mapping/column-mappings', {
                                                                                             method: 'PUT',
                                                                                             headers: { 'Content-Type': 'application/json' },
                                                                                             body: JSON.stringify({

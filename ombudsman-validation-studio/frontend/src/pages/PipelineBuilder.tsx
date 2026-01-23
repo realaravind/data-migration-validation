@@ -103,7 +103,7 @@ export default function PipelineBuilder() {
                 }
 
                 // Get active project from backend
-                const activeResponse = await fetch('http://localhost:8000/projects/active', { headers });
+                const activeResponse = await fetch(__API_URL__ + '/projects/active', { headers });
                 const activeData = await activeResponse.json();
 
                 if (activeResponse.ok && activeData.active_project) {
@@ -392,7 +392,7 @@ export default function PipelineBuilder() {
             console.log('[PIPELINE_BUILDER] Filtered relationships:', tableRelationships);
 
             // Call intelligent suggest API
-            const response = await fetch('http://localhost:8000/pipelines/suggest-for-fact', {
+            const response = await fetch(__API_URL__ + '/pipelines/suggest-for-fact', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -472,7 +472,7 @@ export default function PipelineBuilder() {
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8000/pipelines/create-from-nl', {
+            const response = await fetch(__API_URL__ + '/pipelines/create-from-nl', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -543,7 +543,7 @@ export default function PipelineBuilder() {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch('http://localhost:8000/pipelines/custom/save', {
+            const response = await fetch(__API_URL__ + '/pipelines/custom/save', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -592,7 +592,7 @@ export default function PipelineBuilder() {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch('http://localhost:8000/pipelines/execute', {
+            const response = await fetch(__API_URL__ + '/pipelines/execute', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({

@@ -153,7 +153,7 @@ const BatchOperations: React.FC = () => {
 
     const fetchJobs = async () => {
         try {
-            const response = await fetch('http://localhost:8000/batch/jobs?limit=100');
+            const response = await fetch(__API_URL__ + '/batch/jobs?limit=100');
             const data = await response.json();
             setJobs(data.jobs || []);
         } catch (error) {
@@ -165,7 +165,7 @@ const BatchOperations: React.FC = () => {
         console.log('[BATCH] Fetching pipelines from: http://localhost:8000/workload/pipelines/list?active_only=true');
         try {
             // Fetch generated pipelines from workload API (active only)
-            const response = await fetch('http://localhost:8000/workload/pipelines/list?active_only=true');
+            const response = await fetch(__API_URL__ + '/workload/pipelines/list?active_only=true');
             const data = await response.json();
             console.log('[BATCH] Response status:', response.status, 'Data:', data);
 
@@ -185,7 +185,7 @@ const BatchOperations: React.FC = () => {
 
     const fetchActiveProject = async () => {
         try {
-            const response = await fetch('http://localhost:8000/projects/active');
+            const response = await fetch(__API_URL__ + '/projects/active');
             const data = await response.json();
             if (response.ok && data.active_project) {
                 setActiveProjectId(data.active_project.project_id);
@@ -214,7 +214,7 @@ const BatchOperations: React.FC = () => {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch('http://localhost:8000/batch/pipelines/bulk-execute', {
+            const response = await fetch(__API_URL__ + '/batch/pipelines/bulk-execute', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -252,7 +252,7 @@ const BatchOperations: React.FC = () => {
 
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/batch/data/bulk-generate', {
+            const response = await fetch(__API_URL__ + '/batch/data/bulk-generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -97,7 +97,7 @@ export default function MetadataExtraction(_props: MetadataExtractionProps) {
     setMetadata([]);
 
     try {
-      const response = await fetch("http://localhost:8000/metadata/tables/all");
+      const response = await fetch(__API_URL__ + "/metadata/tables/all");
       const data = await response.json();
 
       if (response.ok) {
@@ -140,7 +140,7 @@ export default function MetadataExtraction(_props: MetadataExtractionProps) {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:8000/metadata/extract", {
+      const response = await fetch(__API_URL__ + "/metadata/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

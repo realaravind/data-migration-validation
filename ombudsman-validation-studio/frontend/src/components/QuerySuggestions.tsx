@@ -77,7 +77,7 @@ export default function QuerySuggestions({ open, onClose, onSelectQueries, selec
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch('http://localhost:8000/custom-queries/intelligent-suggest', {
+            const response = await fetch(__API_URL__ + '/custom-queries/intelligent-suggest', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
