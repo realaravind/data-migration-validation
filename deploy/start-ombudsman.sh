@@ -65,6 +65,16 @@ export PYTHONPATH="$BACKEND_DIR:$CORE_DIR"
 # Functions
 # ==============================================
 
+kill_process_on_port() {
+    local port=$1
+    local pids=$(lsof -t -i:$port 2>/dev/null)
+    if [ -n "$pids" ]; then
+        echo "Killing processes on port $port: $pids"
+        echo "$pids" | xargs kill -9 2>/dev/null
+        sleep 1
+    fi
+}
+
 create_directories() {
     echo "Creating directories..."
     mkdir -p "$DATA_DIR"
@@ -80,12 +90,17 @@ create_directories() {
 start_backend() {
     echo "Starting backend..."
 
+    # Kill any existing process on the backend port
+    kill_process_on_port "$BACKEND_PORT"
+
     if [ -f "$LOG_DIR/backend.pid" ]; then
         PID=$(cat "$LOG_DIR/backend.pid")
         if ps -p $PID > /dev/null 2>&1; then
-            echo "Backend already running (PID: $PID)"
-            return
+            echo "Stopping existing backend (PID: $PID)"
+            kill $PID 2>/dev/null
+            sleep 2
         fi
+        rm -f "$LOG_DIR/backend.pid"
     fi
 
     cd "$BACKEND_DIR"
@@ -128,12 +143,17 @@ start_backend() {
 start_frontend() {
     echo "Starting frontend..."
 
+    # Kill any existing process on the frontend port
+    kill_process_on_port "$FRONTEND_PORT"
+
     if [ -f "$LOG_DIR/frontend.pid" ]; then
         PID=$(cat "$LOG_DIR/frontend.pid")
         if ps -p $PID > /dev/null 2>&1; then
-            echo "Frontend already running (PID: $PID)"
-            return
+            echo "Stopping existing frontend (PID: $PID)"
+            kill $PID 2>/dev/null
+            sleep 2
         fi
+        rm -f "$LOG_DIR/frontend.pid"
     fi
 
     cd "$FRONTEND_DIR"
@@ -150,7 +170,7 @@ start_frontend() {
         npm run build
     fi
 
-    nohup npm run preview -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
+    nohup npm run preview -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort \
         > "$LOG_DIR/frontend.log" 2>&1 &
 
     echo $! > "$LOG_DIR/frontend.pid"
@@ -172,6 +192,8 @@ stop_backend() {
     else
         echo "No backend PID file found"
     fi
+    # Also kill any orphaned processes on the port
+    kill_process_on_port "$BACKEND_PORT"
 }
 
 stop_frontend() {
@@ -188,6 +210,8 @@ stop_frontend() {
     else
         echo "No frontend PID file found"
     fi
+    # Also kill any orphaned processes on the port
+    kill_process_on_port "$FRONTEND_PORT"
 }
 
 status() {

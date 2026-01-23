@@ -94,9 +94,33 @@ def create_database():
         print(f"  ✗ Error creating database: {e}")
         return False
 
+def drop_existing_tables():
+    """Drop existing tables to recreate with correct schema"""
+    print("\nStep 2: Dropping existing tables (if any)...")
+    try:
+        conn = pyodbc.connect(conn_str_ovs)
+        cursor = conn.cursor()
+
+        # Drop in reverse order of dependencies
+        tables = ['audit_logs', 'refresh_tokens', 'users']
+        for table in tables:
+            print(f"  - Dropping '{table}' table if exists...")
+            cursor.execute(f'''
+                IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{table}') AND type in (N'U'))
+                DROP TABLE {table}
+            ''')
+            print(f"    ✓ '{table}' dropped")
+
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"  ✗ Error dropping tables: {e}")
+        return False
+
 def create_tables():
     """Create all required tables"""
-    print("\nStep 2: Creating tables...")
+    print("\nStep 3: Creating tables...")
     try:
         conn = pyodbc.connect(conn_str_ovs)
         cursor = conn.cursor()
@@ -128,15 +152,14 @@ def create_tables():
         cursor.execute('''
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'refresh_tokens') AND type in (N'U'))
             CREATE TABLE refresh_tokens (
-                token_id INT IDENTITY(1,1) PRIMARY KEY,
+                token_id VARCHAR(50) PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
                 refresh_token VARCHAR(500) UNIQUE NOT NULL,
                 expires_at DATETIME2 NOT NULL,
-                created_at DATETIME2 NOT NULL,
-                revoked_at DATETIME2,
-                is_revoked BIT NOT NULL DEFAULT 0,
                 device_info VARCHAR(500),
                 ip_address VARCHAR(50),
+                created_at DATETIME2 NOT NULL,
+                is_revoked BIT NOT NULL DEFAULT 0,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             )
         ''')
@@ -147,9 +170,9 @@ def create_tables():
         cursor.execute('''
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'audit_logs') AND type in (N'U'))
             CREATE TABLE audit_logs (
-                log_id INT IDENTITY(1,1) PRIMARY KEY,
+                log_id VARCHAR(50) PRIMARY KEY,
                 user_id VARCHAR(50),
-                event_type VARCHAR(50) NOT NULL,
+                event_type VARCHAR(50),
                 event_description TEXT,
                 ip_address VARCHAR(50),
                 user_agent VARCHAR(500),
@@ -178,6 +201,11 @@ def main():
         print("\n✗ Setup failed at database creation")
         sys.exit(1)
 
+    # Drop existing tables to ensure correct schema
+    if not drop_existing_tables():
+        print("\n✗ Setup failed at dropping tables")
+        sys.exit(1)
+
     if not create_tables():
         print("\n✗ Setup failed at table creation")
         sys.exit(1)
@@ -187,6 +215,7 @@ def main():
     print("="*60)
     print("\nYou can now use SQL Server authentication.")
     print(f"The database '{DB_NAME}' is ready with all required tables.")
+    print("\nRun './start-ombudsman.sh setup-auth' to create default admin user.")
 
 if __name__ == "__main__":
     main()
