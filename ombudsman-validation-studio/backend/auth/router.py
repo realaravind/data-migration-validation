@@ -26,7 +26,6 @@ from .models import (
     SuccessResponse,
     UserRole, EventType
 )
-from .sqlite_repository import SQLiteAuthRepository
 from .security import (
     verify_password, hash_password,
     create_access_token, create_refresh_token, verify_token,
@@ -34,13 +33,12 @@ from .security import (
 )
 from .models import RefreshTokenCreate, AuditLogCreate
 from .dependencies import (
-    get_current_user, require_admin, get_current_active_user
+    get_current_user, require_admin, get_current_active_user, auth_repo
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# Initialize repository (using SQLite)
-auth_repo = SQLiteAuthRepository()
+# auth_repo is imported from dependencies.py which uses the configured backend
 
 
 # ============================================================================
