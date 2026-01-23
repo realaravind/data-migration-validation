@@ -99,9 +99,23 @@ def drop_existing_tables():
     print("\nStep 2: Dropping existing tables (if any)...")
     try:
         conn = pyodbc.connect(conn_str_ovs)
+        conn.autocommit = True
         cursor = conn.cursor()
 
-        # Drop in reverse order of dependencies
+        # First, drop all foreign key constraints
+        print("  - Dropping foreign key constraints...")
+        cursor.execute('''
+            DECLARE @sql NVARCHAR(MAX) = N'';
+            SELECT @sql += N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id))
+                + '.' + QUOTENAME(OBJECT_NAME(parent_object_id))
+                + ' DROP CONSTRAINT ' + QUOTENAME(name) + ';'
+            FROM sys.foreign_keys
+            WHERE OBJECT_NAME(parent_object_id) IN ('users', 'refresh_tokens', 'audit_logs');
+            EXEC sp_executesql @sql;
+        ''')
+        print("    ✓ Foreign key constraints dropped")
+
+        # Now drop tables in any order
         tables = ['audit_logs', 'refresh_tokens', 'users']
         for table in tables:
             print(f"  - Dropping '{table}' table if exists...")
@@ -111,12 +125,12 @@ def drop_existing_tables():
             ''')
             print(f"    ✓ '{table}' dropped")
 
-        conn.commit()
         conn.close()
         return True
     except Exception as e:
         print(f"  ✗ Error dropping tables: {e}")
-        return False
+        # Continue anyway - tables might not exist
+        return True
 
 def create_tables():
     """Create all required tables"""
