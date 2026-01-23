@@ -89,7 +89,32 @@ start_backend() {
     fi
 
     cd "$BACKEND_DIR"
-    nohup ./venv/bin/python -m uvicorn main:app \
+
+    # Export all environment variables for the backend process
+    nohup env \
+        OMBUDSMAN_DATA_DIR="$OMBUDSMAN_DATA_DIR" \
+        OMBUDSMAN_CORE_DIR="$OMBUDSMAN_CORE_DIR" \
+        OMBUDSMAN_LOG_DIR="$OMBUDSMAN_LOG_DIR" \
+        PYTHONPATH="$PYTHONPATH" \
+        AUTH_BACKEND="${AUTH_BACKEND:-sqlite}" \
+        AUTH_DB_SERVER="${AUTH_DB_SERVER:-}" \
+        AUTH_DB_NAME="${AUTH_DB_NAME:-}" \
+        AUTH_DB_USER="${AUTH_DB_USER:-}" \
+        AUTH_DB_PASSWORD="${AUTH_DB_PASSWORD:-}" \
+        MSSQL_HOST="${MSSQL_HOST:-}" \
+        MSSQL_PORT="${MSSQL_PORT:-1433}" \
+        MSSQL_USER="${MSSQL_USER:-}" \
+        MSSQL_PASSWORD="${MSSQL_PASSWORD:-}" \
+        MSSQL_DATABASE="${MSSQL_DATABASE:-}" \
+        SNOWFLAKE_USER="${SNOWFLAKE_USER:-}" \
+        SNOWFLAKE_PASSWORD="${SNOWFLAKE_PASSWORD:-}" \
+        SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-}" \
+        SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-}" \
+        SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-}" \
+        SNOWFLAKE_DATABASE="${SNOWFLAKE_DATABASE:-}" \
+        SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-}" \
+        SECRET_KEY="${SECRET_KEY:-change-me}" \
+        ./venv/bin/python -m uvicorn main:app \
         --host "$BACKEND_HOST" \
         --port "$BACKEND_PORT" \
         > "$LOG_DIR/backend.log" 2>&1 &
@@ -223,6 +248,48 @@ show_logs() {
 # Main
 # ==============================================
 
+setup_auth() {
+    echo "Setting up authentication database..."
+
+    if [ "${AUTH_BACKEND:-sqlite}" = "sqlserver" ]; then
+        if [ -n "$AUTH_DB_SERVER" ] && [ -n "$AUTH_DB_USER" ] && [ -n "$AUTH_DB_PASSWORD" ]; then
+            cd "$BACKEND_DIR"
+
+            echo "Creating auth tables in SQL Server..."
+            AUTH_DB_SERVER="$AUTH_DB_SERVER" \
+            AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
+            AUTH_DB_USER="$AUTH_DB_USER" \
+            AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
+            ./venv/bin/python auth/setup_sql_server_auth.py
+
+            echo "Creating default admin user..."
+            AUTH_DB_SERVER="$AUTH_DB_SERVER" \
+            AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
+            AUTH_DB_USER="$AUTH_DB_USER" \
+            AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
+            ./venv/bin/python -c "
+from auth.sqlserver_auth_repository import SQLServerAuthRepository
+from auth.models import UserCreate, UserRole
+repo = SQLServerAuthRepository()
+try:
+    user = UserCreate(username='admin', email='admin@localhost', password='admin123', role=UserRole.ADMIN)
+    repo.create_user(user)
+    print('Default admin user created (admin/admin123)')
+except ValueError as e:
+    print('Admin user already exists')
+except Exception as e:
+    print(f'Could not create admin user: {e}')
+"
+            echo "Auth setup complete!"
+        else
+            echo "ERROR: AUTH_BACKEND=sqlserver but credentials not set in $ENV_FILE"
+            exit 1
+        fi
+    else
+        echo "Using SQLite for authentication. No setup needed."
+    fi
+}
+
 case "${1:-start}" in
     start)
         create_directories
@@ -264,8 +331,11 @@ case "${1:-start}" in
     frontend)
         start_frontend
         ;;
+    setup-auth)
+        setup_auth
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend}"
+        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth}"
         exit 1
         ;;
 esac

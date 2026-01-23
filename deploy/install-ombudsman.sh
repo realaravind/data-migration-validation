@@ -227,6 +227,67 @@ setup_config() {
 }
 
 # ==============================================
+# Setup SQL Server Auth Database
+# ==============================================
+setup_auth_db() {
+    echo ""
+    echo "=========================================="
+    echo "Setting up authentication database..."
+    echo "=========================================="
+
+    ENV_FILE="$BASE_DIR/ombudsman.env"
+    REAL_USER="${SUDO_USER:-$USER}"
+
+    # Load env file
+    if [ -f "$ENV_FILE" ]; then
+        set -a
+        source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
+        set +a
+    fi
+
+    # Check if using SQL Server auth
+    if [ "${AUTH_BACKEND:-sqlite}" = "sqlserver" ]; then
+        if [ -n "$AUTH_DB_SERVER" ] && [ -n "$AUTH_DB_USER" ] && [ -n "$AUTH_DB_PASSWORD" ]; then
+            echo "Creating auth tables in SQL Server..."
+            cd "$BACKEND_DIR"
+            sudo -u "$REAL_USER" \
+                AUTH_DB_SERVER="$AUTH_DB_SERVER" \
+                AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
+                AUTH_DB_USER="$AUTH_DB_USER" \
+                AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
+                ./venv/bin/python auth/setup_sql_server_auth.py
+
+            # Create default admin user
+            echo "Creating default admin user..."
+            sudo -u "$REAL_USER" \
+                AUTH_DB_SERVER="$AUTH_DB_SERVER" \
+                AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
+                AUTH_DB_USER="$AUTH_DB_USER" \
+                AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
+                ./venv/bin/python -c "
+from auth.sqlserver_auth_repository import SQLServerAuthRepository
+from auth.models import UserCreate, UserRole
+repo = SQLServerAuthRepository()
+try:
+    user = UserCreate(username='admin', email='admin@localhost', password='admin123', role=UserRole.ADMIN)
+    repo.create_user(user)
+    print('  Default admin user created (admin/admin123)')
+except ValueError as e:
+    print(f'  Admin user already exists')
+except Exception as e:
+    print(f'  Could not create admin user: {e}')
+"
+            print_status "SQL Server auth database configured"
+        else
+            print_warning "AUTH_BACKEND=sqlserver but credentials not set. Skipping auth DB setup."
+            print_warning "Edit $ENV_FILE and run: ./start-ombudsman.sh setup-auth"
+        fi
+    else
+        print_status "Using SQLite for authentication (default)"
+    fi
+}
+
+# ==============================================
 # Main
 # ==============================================
 main() {
@@ -242,6 +303,7 @@ main() {
     setup_python_venv
     setup_frontend
     setup_config
+    setup_auth_db
 
     echo ""
     echo "=========================================="
@@ -249,7 +311,7 @@ main() {
     echo "=========================================="
     echo ""
     echo "Next steps:"
-    echo "1. Edit your config file:"
+    echo "1. Edit your config file (if not already done):"
     echo "   nano $BASE_DIR/ombudsman.env"
     echo ""
     echo "2. Start the services:"
@@ -259,6 +321,8 @@ main() {
     echo "3. Access the application:"
     echo "   Frontend: http://your-server:3000"
     echo "   Backend:  http://your-server:8000"
+    echo ""
+    echo "Default login: admin / admin123"
     echo ""
 }
 
