@@ -114,6 +114,7 @@ start_backend() {
         SNOWFLAKE_DATABASE="${SNOWFLAKE_DATABASE:-}" \
         SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-}" \
         SECRET_KEY="${SECRET_KEY:-change-me}" \
+        CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:3000}" \
         ./venv/bin/python -m uvicorn main:app \
         --host "$BACKEND_HOST" \
         --port "$BACKEND_PORT" \
