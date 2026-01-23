@@ -465,11 +465,17 @@ class SQLServerAuthRepository:
     # ========================================================================
 
     def _row_to_user(self, row) -> UserInDB:
-        """Convert database row to UserInDB model"""
+        """Convert database row to UserInDB model
+
+        Table column order:
+        0: user_id, 1: username, 2: email, 3: hashed_password, 4: full_name,
+        5: role, 6: is_active, 7: is_verified, 8: failed_login_attempts,
+        9: locked_until, 10: created_at, 11: updated_at, 12: last_login
+        """
         # Convert locked_until to timezone-aware if present
         locked_until = None
-        if len(row) > 12 and row[12]:
-            locked_until = row[12].replace(tzinfo=timezone.utc) if row[12].tzinfo is None else row[12]
+        if len(row) > 9 and row[9]:
+            locked_until = row[9].replace(tzinfo=timezone.utc) if row[9].tzinfo is None else row[9]
 
         return UserInDB(
             user_id=row[0],
@@ -479,12 +485,12 @@ class SQLServerAuthRepository:
             full_name=row[4],
             role=UserRole(row[5]) if row[5] else UserRole.USER,
             is_active=bool(row[6]),
-            created_at=row[7] if len(row) > 7 and row[7] else datetime.now(timezone.utc),
-            updated_at=row[8] if len(row) > 8 and row[8] else datetime.now(timezone.utc),
-            is_verified=bool(row[9]) if len(row) > 9 and row[9] is not None else False,
-            last_login=row[10] if len(row) > 10 and row[10] else None,
-            failed_login_attempts=row[11] if len(row) > 11 and row[11] is not None else 0,
-            locked_until=locked_until
+            is_verified=bool(row[7]) if len(row) > 7 and row[7] is not None else False,
+            failed_login_attempts=row[8] if len(row) > 8 and row[8] is not None else 0,
+            locked_until=locked_until,
+            created_at=row[10] if len(row) > 10 and row[10] else datetime.now(timezone.utc),
+            updated_at=row[11] if len(row) > 11 and row[11] else datetime.now(timezone.utc),
+            last_login=row[12] if len(row) > 12 and row[12] else None
         )
 
     def _row_to_refresh_token(self, row) -> RefreshToken:
