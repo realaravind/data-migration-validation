@@ -102,34 +102,41 @@ def drop_existing_tables():
         conn.autocommit = True
         cursor = conn.cursor()
 
-        # First, drop all foreign key constraints
-        print("  - Dropping foreign key constraints...")
+        # Get and drop foreign key constraints one by one
+        print("  - Finding foreign key constraints...")
         cursor.execute('''
-            DECLARE @sql NVARCHAR(MAX) = N'';
-            SELECT @sql += N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id))
-                + '.' + QUOTENAME(OBJECT_NAME(parent_object_id))
-                + ' DROP CONSTRAINT ' + QUOTENAME(name) + ';'
-            FROM sys.foreign_keys
-            WHERE OBJECT_NAME(parent_object_id) IN ('users', 'refresh_tokens', 'audit_logs');
-            EXEC sp_executesql @sql;
+            SELECT
+                OBJECT_NAME(fk.parent_object_id) as table_name,
+                fk.name as constraint_name
+            FROM sys.foreign_keys fk
+            WHERE OBJECT_NAME(fk.parent_object_id) IN ('users', 'refresh_tokens', 'audit_logs')
         ''')
-        print("    ✓ Foreign key constraints dropped")
+        constraints = cursor.fetchall()
 
-        # Now drop tables in any order
+        for row in constraints:
+            table_name, constraint_name = row
+            print(f"  - Dropping constraint '{constraint_name}' from '{table_name}'...")
+            try:
+                cursor.execute(f'ALTER TABLE [{table_name}] DROP CONSTRAINT [{constraint_name}]')
+                print(f"    ✓ Constraint dropped")
+            except Exception as e:
+                print(f"    ⚠ Could not drop constraint: {e}")
+
+        # Now drop tables
         tables = ['audit_logs', 'refresh_tokens', 'users']
         for table in tables:
             print(f"  - Dropping '{table}' table if exists...")
-            cursor.execute(f'''
-                IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{table}') AND type in (N'U'))
-                DROP TABLE {table}
-            ''')
-            print(f"    ✓ '{table}' dropped")
+            try:
+                cursor.execute(f'DROP TABLE IF EXISTS [{table}]')
+                print(f"    ✓ '{table}' dropped")
+            except Exception as e:
+                print(f"    ⚠ Could not drop {table}: {e}")
 
         conn.close()
+        print("  ✓ Cleanup complete")
         return True
     except Exception as e:
-        print(f"  ✗ Error dropping tables: {e}")
-        # Continue anyway - tables might not exist
+        print(f"  ⚠ Warning during cleanup: {e}")
         return True
 
 def create_tables():
@@ -142,7 +149,6 @@ def create_tables():
         # Create users table
         print("  - Creating 'users' table...")
         cursor.execute('''
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'users') AND type in (N'U'))
             CREATE TABLE users (
                 user_id VARCHAR(50) PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
@@ -164,7 +170,6 @@ def create_tables():
         # Create refresh_tokens table
         print("  - Creating 'refresh_tokens' table...")
         cursor.execute('''
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'refresh_tokens') AND type in (N'U'))
             CREATE TABLE refresh_tokens (
                 token_id VARCHAR(50) PRIMARY KEY,
                 user_id VARCHAR(50) NOT NULL,
@@ -182,7 +187,6 @@ def create_tables():
         # Create audit_logs table
         print("  - Creating 'audit_logs' table...")
         cursor.execute('''
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'audit_logs') AND type in (N'U'))
             CREATE TABLE audit_logs (
                 log_id VARCHAR(50) PRIMARY KEY,
                 user_id VARCHAR(50),
