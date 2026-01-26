@@ -115,22 +115,8 @@ class SQLServerAuthRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        # Debug: Check what database we're connected to and list users
-        cursor.execute('SELECT DB_NAME()')
-        db_name = cursor.fetchone()[0]
-        print(f"DEBUG REPO: Connected to database: {db_name}")
-
-        cursor.execute('SELECT COUNT(*) FROM users')
-        user_count = cursor.fetchone()[0]
-        print(f"DEBUG REPO: Total users in table: {user_count}")
-
-        cursor.execute('SELECT username FROM users')
-        all_users = [row[0] for row in cursor.fetchall()]
-        print(f"DEBUG REPO: All usernames: {all_users}")
-
         cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
         row = cursor.fetchone()
-        print(f"DEBUG REPO: Query for '{username}' returned: {row}")
         conn.close()
 
         if row:

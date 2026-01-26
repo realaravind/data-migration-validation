@@ -136,16 +136,12 @@ async def login(login_request: LoginRequest, request: Request):
         403: If account is locked
     """
     # Get user by username or email
-    print(f"DEBUG: Attempting login for username: {login_request.username}")
     user = auth_repo.get_user_by_username(login_request.username)
-    print(f"DEBUG: get_user_by_username result: {user}")
     if not user:
         user = auth_repo.get_user_by_email(login_request.username)
-        print(f"DEBUG: get_user_by_email result: {user}")
 
     # Check if user exists
     if not user:
-        print(f"DEBUG: User not found!")
         auth_repo.log_audit_event(AuditLogCreate(
             event_type=EventType.FAILED_LOGIN,
             event_description=f"Login failed: user '{login_request.username}' not found",
@@ -167,10 +163,7 @@ async def login(login_request: LoginRequest, request: Request):
         )
 
     # Verify password
-    print(f"DEBUG: User found: {user.username}, hash: {user.hashed_password[:20]}...")
-    pwd_check = verify_password(login_request.password, user.hashed_password)
-    print(f"DEBUG: Password verification result: {pwd_check}")
-    if not pwd_check:
+    if not verify_password(login_request.password, user.hashed_password):
         # Increment failed login attempts
         failed_attempts = auth_repo.increment_failed_login_attempts(user.user_id)
 
