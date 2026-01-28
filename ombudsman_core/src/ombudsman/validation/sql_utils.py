@@ -77,49 +77,35 @@ def substitute_schema_names(sql_text, schema_mappings, target_database=None):
 def escape_sql_server_identifier(identifier):
     """
     Escape SQL Server identifiers (table names, column names) with square brackets.
-    Handles schema-qualified names and replaces first part with database name.
-
-    SQL Server uses 3-part naming: database.schema.table
-    Snowflake uses 2-part or 3-part naming: schema.table or database.schema.table
-
-    This function converts Snowflake-style names to SQL Server-style names by:
-    - If 3 parts: Replace first part (Snowflake database) with SQL Server database
-    - If 2 parts: Prepend SQL Server database name
-    - If 1 part: Prepend SQL Server database and default schema
+    Uses 2-part naming (schema.table) since the DATABASE is already set in the
+    connection string. This is compatible with both Azure SQL and on-prem SQL Server.
 
     Args:
-        identifier: Table name or column name, possibly schema-qualified
+        identifier: Table name, possibly schema-qualified (e.g. 'DIM.DIM_CUSTOMER')
 
     Returns:
-        Properly escaped identifier for SQL Server with database prefix
+        Properly escaped identifier for SQL Server (2-part: [schema].[table])
 
     Examples:
-        'customer' -> '[SampleDW].[dbo].[customer]'
-        'FACT.fact_sales' -> '[SampleDW].[FACT].[fact_sales]'
-        'PUBLIC.FACT.FACT_SALES' -> '[SampleDW].[FACT].[FACT_SALES]'
-        'DIM.DIM_CUSTOMER' -> '[SampleDW].[DIM].[DIM_CUSTOMER]'
+        'customer' -> '[dbo].[customer]'
+        'FACT.fact_sales' -> '[FACT].[fact_sales]'
+        'PUBLIC.FACT.FACT_SALES' -> '[FACT].[FACT_SALES]'
+        'DIM.DIM_CUSTOMER' -> '[DIM].[DIM_CUSTOMER]'
     """
     if not identifier:
         return identifier
 
-    # Get database name from environment
-    sql_database = os.getenv("SQL_DATABASE", "SampleDW")
-
     # Split by dots to handle schema-qualified names
     parts = identifier.split('.')
 
-    # Handle different formats
+    # Normalize to 2-part (schema.table) — database is set in connection string
     if len(parts) == 3:
-        # 3 parts: Assume first part is Snowflake database, replace with SQL Server database
-        # PUBLIC.FACT.FACT_SALES -> SampleDW.FACT.FACT_SALES
-        parts = [sql_database, parts[1], parts[2]]
-    elif len(parts) == 2:
-        # 2 parts (schema.table), add database as first part
-        parts = [sql_database] + parts
+        # 3 parts (database.schema.table): drop database prefix
+        parts = [parts[1], parts[2]]
     elif len(parts) == 1:
-        # 1 part (table), add database and default schema
+        # 1 part (table only): prepend default schema
         default_schema = os.getenv("SQL_SCHEMA", "dbo")
-        parts = [sql_database, default_schema] + parts
+        parts = [default_schema] + parts
 
     # Escape each part with square brackets
     escaped_parts = [f"[{part.strip()}]" for part in parts if part.strip()]
