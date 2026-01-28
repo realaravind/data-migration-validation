@@ -22,9 +22,12 @@ class CustomYAMLDumper(yaml.SafeDumper):
 
 
 def str_representer(dumper, data):
-    """Represent strings with literal style for multi-line strings"""
+    """Represent strings with literal style for multi-line strings, quoted if they contain special chars"""
     if '\n' in data:
         return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+    # Quote strings that contain YAML-special characters
+    if any(ch in data for ch in (':', '#', '{', '}', '[', ']', '&', '*', '?', '|', '>', '!')):
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
     return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
 

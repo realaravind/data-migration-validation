@@ -241,8 +241,9 @@ class ComprehensivePipelineAutomation:
                         description = query.get('description', '')
 
                         # Format as YAML with literal block scalars (|) for SQL
+                        safe_desc = description.replace('"', '\\"')
                         custom_step_yaml = f"""  - name: custom_sql_{idx+1}
-    description: {description}
+    description: "{safe_desc}"
     validator: custom_sql
     config:
       sql_query: |
