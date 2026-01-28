@@ -284,7 +284,15 @@ export default function BugReportPreview() {
       if (!submitResponse.ok) throw new Error('Failed to submit to Azure DevOps');
 
       const result = await submitResponse.json();
-      alert(`Successfully submitted ${result.created} bugs to Azure DevOps!`);
+
+      if (result.created > 0) {
+        alert(`Successfully submitted ${result.created} bugs to Azure DevOps!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+      } else if (result.failed > 0) {
+        const errorDetails = result.errors ? Object.values(result.errors).slice(0, 3).join('\n') : 'Unknown error';
+        alert(`Failed to submit bugs to Azure DevOps.\n\nErrors:\n${errorDetails}`);
+      } else {
+        alert('No bugs were submitted. Please select and approve bugs first.');
+      }
 
       // Clear selection and refresh
       setSelectedBugs(new Set());

@@ -9,6 +9,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional, List
 from pathlib import Path
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from config.paths import paths
 from .models import (
@@ -404,12 +407,18 @@ async def submit_bugs_to_azure_devops(
             )
 
         # 4. Get bugs to submit
+        logger.info(f"Submitting bugs for report {report_id}. Total bugs in report: {len(report.bugs)}")
+        for bug in report.bugs:
+            logger.info(f"  Bug {bug.bug_id}: status={bug.status} (type={type(bug.status).__name__})")
+
         if request and request.bug_ids:
             # Submit specific bugs requested
             bugs_to_submit = [bug for bug in report.bugs if bug.bug_id in request.bug_ids and bug.status == BugStatus.APPROVED]
         else:
             # Submit all approved bugs
             bugs_to_submit = [bug for bug in report.bugs if bug.status == BugStatus.APPROVED]
+
+        logger.info(f"Found {len(bugs_to_submit)} approved bugs to submit")
 
         if not bugs_to_submit:
             raise HTTPException(
@@ -456,6 +465,11 @@ async def submit_bugs_to_azure_devops(
             assigned_to=assigned_to,
             tags=all_tags
         )
+
+        logger.info(f"Azure DevOps submission results: created={submission_results['created']}, failed={submission_results['failed']}")
+        if submission_results.get('errors'):
+            for bug_id, err in submission_results['errors'].items():
+                logger.error(f"  Failed bug {bug_id}: {err}")
 
         # 9. Update bug report with work item IDs
         for work_item_info in submission_results['work_items']:
