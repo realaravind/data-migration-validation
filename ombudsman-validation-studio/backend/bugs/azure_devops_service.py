@@ -6,10 +6,13 @@ Handles interaction with Azure DevOps REST API for creating work items.
 
 import requests
 import base64
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from .models import Bug, BugReport, BugSeverity
+
+logger = logging.getLogger(__name__)
 
 
 class AzureDevOpsService:
@@ -193,12 +196,14 @@ class AzureDevOpsService:
             })
 
             # Make the API call
+            logger.info(f"Creating work item: POST {url}")
             response = requests.post(
                 url,
                 headers=self.headers,
                 json=operations,
                 timeout=30
             )
+            logger.info(f"Azure DevOps response: {response.status_code} - {response.text[:500] if response.text else '(empty)'}")
 
             if response.status_code in [200, 201]:
                 work_item = response.json()
@@ -212,7 +217,7 @@ class AzureDevOpsService:
             else:
                 return {
                     'success': False,
-                    'message': f"Failed to create work item: {response.status_code}",
+                    'message': f"Failed to create work item: {response.status_code} - {response.text[:200] if response.text else '(empty response)'}",
                     'error_details': response.text,
                     'response': response.json() if response.text else None
                 }
