@@ -254,12 +254,18 @@ class ComprehensivePipelineAutomation:
 
                         custom_queries_yaml.append(custom_step_yaml)
 
-                    # Append custom queries to the existing pipeline YAML
+                    # Insert custom queries before the execution: section
                     if custom_queries_yaml:
-                        # Find the steps section and append
-                        pipeline_yaml_str = pipeline_yaml_str.rstrip()
-                        for custom_yaml in custom_queries_yaml:
-                            pipeline_yaml_str += "\n" + custom_yaml
+                        custom_block = "\n".join(custom_queries_yaml)
+                        # Insert before 'execution:' so steps stay inside pipeline.steps
+                        if "\nexecution:" in pipeline_yaml_str:
+                            pipeline_yaml_str = pipeline_yaml_str.replace(
+                                "\nexecution:",
+                                "\n" + custom_block + "\n\nexecution:"
+                            )
+                        else:
+                            # Fallback: append at end if no execution section
+                            pipeline_yaml_str = pipeline_yaml_str.rstrip() + "\n" + custom_block
 
                     print(f"[AUTOMATION] Total steps: {total_validations + len(table_queries)}")
                 else:
