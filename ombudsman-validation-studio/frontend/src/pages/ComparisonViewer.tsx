@@ -86,7 +86,7 @@ const ComparisonViewer: React.FC = () => {
       setError(null);
 
       console.log('[ComparisonViewer] Fetching comparison for:', { runId, stepName });
-      const url = `http://localhost:8000/results/${runId}/step/${encodeURIComponent(stepName || '')}/comparison`;
+      const url = `${__API_URL__}/results/${runId}/step/${encodeURIComponent(stepName || '')}/comparison`;
       console.log('[ComparisonViewer] URL:', url);
 
       const response = await fetch(url);

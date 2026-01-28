@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('[AuthContext] Login attempt started for username:', username);
 
     try {
-      console.log('[AuthContext] Sending POST request to http://localhost:8000/auth/login');
+      console.log(`[AuthContext] Sending POST request to ${__API_URL__}/auth/login`);
 
       const response = await fetch(__API_URL__ + '/auth/login', {
         method: 'POST',

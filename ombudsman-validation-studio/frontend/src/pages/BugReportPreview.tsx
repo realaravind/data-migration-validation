@@ -169,7 +169,7 @@ export default function BugReportPreview() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`http://localhost:8000/bug-reports/${reportId}`);
+      const response = await fetch(`${__API_URL__}/bug-reports/${reportId}`);
       if (!response.ok) throw new Error('Failed to fetch bug report');
       const data = await response.json();
       setReport(data);
@@ -208,7 +208,7 @@ export default function BugReportPreview() {
         ? { report_id: reportId, approved_bug_ids: Array.from(selectedBugs), rejected_bug_ids: [] }
         : { report_id: reportId, approved_bug_ids: [], rejected_bug_ids: Array.from(selectedBugs) };
 
-      const response = await fetch(`http://localhost:8000/bug-reports/${reportId}/review`, {
+      const response = await fetch(`${__API_URL__}/bug-reports/${reportId}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -230,7 +230,7 @@ export default function BugReportPreview() {
 
     try {
       setDownloadingFormat(format);
-      const response = await fetch(`http://localhost:8000/bug-reports/${reportId}/download/${format}`);
+      const response = await fetch(`${__API_URL__}/bug-reports/${reportId}/download/${format}`);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -267,7 +267,7 @@ export default function BugReportPreview() {
         rejected_bug_ids: []
       };
 
-      const reviewResponse = await fetch(`http://localhost:8000/bug-reports/${reportId}/review`, {
+      const reviewResponse = await fetch(`${__API_URL__}/bug-reports/${reportId}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(approvePayload)
@@ -276,7 +276,7 @@ export default function BugReportPreview() {
       if (!reviewResponse.ok) throw new Error('Failed to approve bugs');
 
       // Step 2: Submit approved bugs to Azure DevOps
-      const submitResponse = await fetch(`http://localhost:8000/bug-reports/${reportId}/submit-to-azure`, {
+      const submitResponse = await fetch(`${__API_URL__}/bug-reports/${reportId}/submit-to-azure`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });

@@ -71,7 +71,7 @@ const BatchReportViewer: React.FC = () => {
   const fetchReport = async () => {
     try {
       console.log('[BatchReportViewer] Fetching report for job:', jobId);
-      const response = await fetch(`http://localhost:8000/batch/jobs/${jobId}/report`);
+      const response = await fetch(`${__API_URL__}/batch/jobs/${jobId}/report`);
       console.log('[BatchReportViewer] Response status:', response.status);
       if (!response.ok) throw new Error('Failed to fetch report');
       const data = await response.json();

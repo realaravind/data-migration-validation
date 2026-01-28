@@ -162,7 +162,7 @@ const BatchOperations: React.FC = () => {
     };
 
     const fetchAvailablePipelines = async () => {
-        console.log('[BATCH] Fetching pipelines from: http://localhost:8000/workload/pipelines/list?active_only=true');
+        console.log('[BATCH] Fetching pipelines from: ${__API_URL__}/workload/pipelines/list?active_only=true');
         try {
             // Fetch generated pipelines from workload API (active only)
             const response = await fetch(__API_URL__ + '/workload/pipelines/list?active_only=true');
@@ -285,7 +285,7 @@ const BatchOperations: React.FC = () => {
 
     const handleCancelJob = async (jobId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/batch/jobs/${jobId}/cancel`, {
+            const response = await fetch(`${__API_URL__}/batch/jobs/${jobId}/cancel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reason: 'User cancelled from UI' })
@@ -304,7 +304,7 @@ const BatchOperations: React.FC = () => {
 
     const handleRetryJob = async (jobId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/batch/jobs/${jobId}/retry`, {
+            const response = await fetch(`${__API_URL__}/batch/jobs/${jobId}/retry`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -326,7 +326,7 @@ const BatchOperations: React.FC = () => {
         }
 
         try {
-            const response = await fetch(`http://localhost:8000/batch/jobs/${jobId}`, {
+            const response = await fetch(`${__API_URL__}/batch/jobs/${jobId}`, {
                 method: 'DELETE'
             });
 
@@ -371,12 +371,12 @@ const BatchOperations: React.FC = () => {
 
             let url: string;
             if (pipeline.type === 'batch') {
-                url = `http://localhost:8000/workload/batch/${pipeline.filename}?delete_pipelines=${deletePipelines}`;
+                url = `${__API_URL__}/workload/batch/${pipeline.filename}?delete_pipelines=${deletePipelines}`;
                 if (activeProjectId) {
                     url += `&project_id=${activeProjectId}`;
                 }
             } else {
-                url = `http://localhost:8000/workload/pipeline/${pipeline.filename}`;
+                url = `${__API_URL__}/workload/pipeline/${pipeline.filename}`;
                 if (activeProjectId) {
                     url += `?project_id=${activeProjectId}`;
                 }
@@ -413,7 +413,7 @@ const BatchOperations: React.FC = () => {
 
     const handleViewDetails = async (jobId: string) => {
         try {
-            const response = await fetch(`http://localhost:8000/batch/jobs/${jobId}`);
+            const response = await fetch(`${__API_URL__}/batch/jobs/${jobId}`);
             const data = await response.json();
             setSelectedJob(data.job);
             setDetailsOpen(true);
@@ -461,7 +461,7 @@ const BatchOperations: React.FC = () => {
 
         setLoading(true);
         try {
-            const response = await fetch(`http://localhost:8000/batch/jobs/${job.job_id}/report`);
+            const response = await fetch(`${__API_URL__}/batch/jobs/${job.job_id}/report`);
 
             if (!response.ok) {
                 const error = await response.json();

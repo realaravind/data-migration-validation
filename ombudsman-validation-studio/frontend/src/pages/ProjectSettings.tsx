@@ -82,7 +82,7 @@ export default function ProjectSettings() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`http://localhost:8000/projects/${projectId}`);
+      const response = await fetch(`${__API_URL__}/projects/${projectId}`);
       if (!response.ok) {
         throw new Error(`Failed to load project: ${response.status}`);
       }
@@ -121,7 +121,7 @@ export default function ProjectSettings() {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:8000/projects/${projectId}/azure-devops/test`, {
+      const response = await fetch(`${__API_URL__}/projects/${projectId}/azure-devops/test`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ export default function ProjectSettings() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/projects/${projectId}/azure-devops/configure`, {
+      const response = await fetch(`${__API_URL__}/projects/${projectId}/azure-devops/configure`, {
         method: 'POST',
         headers,
         body: JSON.stringify(config),

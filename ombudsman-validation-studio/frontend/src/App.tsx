@@ -211,7 +211,7 @@ function AppContent() {
                 }
 
                 // Load full project config from backend (this also sets active project)
-                const projectResponse = await fetch(`http://localhost:8000/projects/${projectToLoad.project_id}`);
+                const projectResponse = await fetch(`${__API_URL__}/projects/${projectToLoad.project_id}`);
                 if (projectResponse.ok) {
                     const projectData = await projectResponse.json();
                     const fullProject = {
@@ -262,7 +262,7 @@ function AppContent() {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${project.project_id}`, { headers });
+            const response = await fetch(`${__API_URL__}/projects/${project.project_id}`, { headers });
             if (response.ok) {
                 const data = await response.json();
                 const fullProject = {

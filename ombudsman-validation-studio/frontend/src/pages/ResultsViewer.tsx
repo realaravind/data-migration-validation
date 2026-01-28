@@ -82,10 +82,10 @@ export default function ResultsViewer() {
       setError(null);
 
       // First try to get from the status endpoint
-      let response = await fetch(`http://localhost:8000/pipelines/status/${runId}`);
+      let response = await fetch(`${__API_URL__}/pipelines/status/${runId}`);
       if (!response.ok) {
         // If that fails, try the execution results endpoint
-        response = await fetch(`http://localhost:8000/execution/results?run_id=${runId}`);
+        response = await fetch(`${__API_URL__}/execution/results?run_id=${runId}`);
       }
 
       if (!response.ok) throw new Error('Failed to fetch results');
@@ -171,7 +171,7 @@ export default function ResultsViewer() {
     try {
       setExportingFormat(format);
 
-      const response = await fetch(`http://localhost:8000/results/export/${format}/${runId}`);
+      const response = await fetch(`${__API_URL__}/results/export/${format}/${runId}`);
 
       if (!response.ok) {
         throw new Error(`Export failed: ${response.statusText}`);

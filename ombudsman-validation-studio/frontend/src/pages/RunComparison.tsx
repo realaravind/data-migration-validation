@@ -391,7 +391,7 @@ export default function RunComparison() {
             setLoading(true);
             setError(null);
             const response = await fetch(
-                `http://localhost:8000/results/compare/${selectedRun1}/vs/${selectedRun2}`
+                `${__API_URL__}/results/compare/${selectedRun1}/vs/${selectedRun2}`
             );
             const data = await response.json();
 
@@ -418,7 +418,7 @@ export default function RunComparison() {
             // If we have both runs selected but no comparison data yet, fetch it first
             if (selectedRun1 && selectedRun2 && !comparisonData) {
                 const comparisonResponse = await fetch(
-                    `http://localhost:8000/results/compare/${selectedRun1}/vs/${selectedRun2}`
+                    `${__API_URL__}/results/compare/${selectedRun1}/vs/${selectedRun2}`
                 );
                 const comparisonJson = await comparisonResponse.json();
                 if (comparisonJson.status === 'success') {
@@ -432,7 +432,7 @@ export default function RunComparison() {
             // If we have comparison data with analysis, export that instead
             if (dataToExport && dataToExport.executive_summary) {
                 // Export the full comparison data with analysis
-                endpoint = `http://localhost:8000/results/export/${format}/comparison`;
+                endpoint = `${__API_URL__}/results/export/${format}/comparison`;
                 requestOptions = {
                     method: 'POST',
                     headers: {
@@ -444,8 +444,8 @@ export default function RunComparison() {
                 // Fallback to basic export (GET request)
                 const isBatch = selectedRun2.startsWith('batch_');
                 endpoint = isBatch
-                    ? `http://localhost:8000/results/export/${format}/batch/${selectedRun2}`
-                    : `http://localhost:8000/results/export/${format}/${selectedRun2}`;
+                    ? `${__API_URL__}/results/export/${format}/batch/${selectedRun2}`
+                    : `${__API_URL__}/results/export/${format}/${selectedRun2}`;
                 requestOptions = {
                     method: 'GET'
                 };

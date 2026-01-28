@@ -356,7 +356,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         try {
             // If we have a current project, load schema mappings from the project
             if (currentProject && currentProject.project_id) {
-                const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}`);
+                const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}`);
                 const data = await response.json();
 
                 if (data.status === 'success' && data.metadata?.schema_mappings) {
@@ -381,7 +381,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
     const fetchAvailableSchemas = async () => {
         try {
             const response = await fetch(
-                `http://localhost:8000/database-mapping/available-schemas?sql_database=${sqlDatabase}&snowflake_database=${snowflakeDatabase}`
+                `${__API_URL__}/database-mapping/available-schemas?sql_database=${sqlDatabase}&snowflake_database=${snowflakeDatabase}`
             );
             const data = await response.json();
             setAvailableSchemas(data);
@@ -409,7 +409,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 // Also update project metadata if we have a current project
                 if (currentProject && currentProject.project_id) {
                     try {
-                        const updateResponse = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/update-schema-mappings`, {
+                        const updateResponse = await fetch(`${__API_URL__}/projects/${currentProject.project_id}/update-schema-mappings`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -510,7 +510,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/save`, {
+            const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}/save`, {
                 method: 'POST',
                 headers
             });
@@ -765,12 +765,12 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 if (currentProject) {
                     try {
                         await Promise.all([
-                            fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships/sql`, {
+                            fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships/sql`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(sqlRelData)
                             }),
-                            fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships/snow`, {
+                            fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships/snow`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(snowRelData)
@@ -835,7 +835,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         // Auto-save to project if one is loaded
         if (currentProject) {
             try {
-                await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships/${selectedDatabase}`, {
+                await fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships/${selectedDatabase}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updatedData)
@@ -892,7 +892,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         // Auto-save to project if one is loaded
         if (currentProject) {
             try {
-                await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships/${selectedDatabase}`, {
+                await fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships/${selectedDatabase}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updatedData)
@@ -921,7 +921,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
             // Auto-save to project if one is loaded
             if (currentProject) {
                 try {
-                    await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships/${selectedDatabase}`, {
+                    await fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships/${selectedDatabase}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatedData)
@@ -975,7 +975,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
             console.log('[SETUP] Loading existing configuration from YAML files...');
 
             // Use the new setup-from-existing endpoint to load existing YAML files
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/setup-from-existing`, {
+            const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}/setup-from-existing`, {
                 method: 'POST',
                 headers
             });
@@ -1019,7 +1019,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships`, {
+            const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships`, {
                 headers
             });
 
@@ -1046,7 +1046,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/relationships`, {
+            const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}/relationships`, {
                 method: 'PUT',
                 headers,
                 body: JSON.stringify(projectRelationships)
@@ -1082,7 +1082,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}/create-comprehensive-pipelines`, {
+            const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}/create-comprehensive-pipelines`, {
                 method: 'POST',
                 headers
             });
@@ -1145,7 +1145,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                 // Reload full project config into sessionStorage so Pipeline Builder can see tables
                 if (currentProject?.project_id) {
                     try {
-                        const projectResponse = await fetch(`http://localhost:8000/projects/${currentProject.project_id}`);
+                        const projectResponse = await fetch(`${__API_URL__}/projects/${currentProject.project_id}`);
                         const projectData = await projectResponse.json();
                         if (projectResponse.ok && projectData.config) {
                             const fullProject = {

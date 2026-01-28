@@ -98,7 +98,7 @@ export default function HistoricalTrends({ pipelineName, limit = 10 }: Historica
             if (pipelineName) params.append('pipeline_name', pipelineName);
             params.append('limit', limit.toString());
 
-            const response = await fetch(`http://localhost:8000/results/history?${params.toString()}`);
+            const response = await fetch(`${__API_URL__}/results/history?${params.toString()}`);
 
             if (!response.ok) {
                 throw new Error(`Failed to fetch historical data: ${response.statusText}`);

@@ -110,7 +110,7 @@ export default function PipelineBuilder() {
                     const projectId = activeData.active_project.project_id;
 
                     // Get full project with config
-                    const projectResponse = await fetch(`http://localhost:8000/projects/${projectId}`, { headers });
+                    const projectResponse = await fetch(`${__API_URL__}/projects/${projectId}`, { headers });
                     const projectData = await projectResponse.json();
 
                     if (projectResponse.ok && projectData.config) {
@@ -145,7 +145,7 @@ export default function PipelineBuilder() {
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch(`http://localhost:8000/projects/${currentProject.project_id}`, { headers });
+                const response = await fetch(`${__API_URL__}/projects/${currentProject.project_id}`, { headers });
                 const data = await response.json();
 
                 if (!response.ok || !data.config) {
@@ -224,7 +224,7 @@ export default function PipelineBuilder() {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/pipelines/custom/project/${currentProject.project_id}`, { headers });
+            const response = await fetch(`${__API_URL__}/pipelines/custom/project/${currentProject.project_id}`, { headers });
             const data = await response.json();
 
             if (response.ok) {
@@ -244,7 +244,7 @@ export default function PipelineBuilder() {
 
         try {
             const response = await fetch(
-                `http://localhost:8000/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`
+                `${__API_URL__}/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`
             );
             const data = await response.json();
 
@@ -302,7 +302,7 @@ export default function PipelineBuilder() {
             console.log('[DELETE_PIPELINE] Headers:', headers);
 
             const response = await fetch(
-                `http://localhost:8000/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`,
+                `${__API_URL__}/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`,
                 { method: 'DELETE', headers }
             );
 

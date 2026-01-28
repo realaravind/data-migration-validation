@@ -103,7 +103,7 @@ export default function SampleDataGeneration(_props: SampleDataGenerationProps) 
     const pollJobStatus = async (jobId: string) => {
         const interval = setInterval(async () => {
             try {
-                const response = await fetch(`http://localhost:8000/data/status/${jobId}`);
+                const response = await fetch(`${__API_URL__}/data/status/${jobId}`);
                 const status = await response.json();
                 setJobStatus(status);
 
@@ -137,7 +137,7 @@ export default function SampleDataGeneration(_props: SampleDataGenerationProps) 
             // Use selected schema or default to Retail
             const schema = selectedSchema || 'Retail';
 
-            const response = await fetch(`http://localhost:8000/data/download-sample-workload?schema=${encodeURIComponent(schema)}`);
+            const response = await fetch(`${__API_URL__}/data/download-sample-workload?schema=${encodeURIComponent(schema)}`);
             if (!response.ok) {
                 throw new Error('Failed to download sample workload');
             }

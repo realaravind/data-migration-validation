@@ -119,7 +119,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
 
             // Fetch full workload details
             await fetch(
-                `http://localhost:8000/workload/${projectId}/${data.workload_id}`
+                `${__API_URL__}/workload/${projectId}/${data.workload_id}`
             );
 
             // Analyze the workload

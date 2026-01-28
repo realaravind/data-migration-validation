@@ -57,7 +57,7 @@ export default function StepDetailModal({ open, onClose, runId, stepName }: Step
         setError(null);
 
         try {
-            const response = await fetch(`http://localhost:8000/results/${runId}/step/${stepName}`);
+            const response = await fetch(`${__API_URL__}/results/${runId}/step/${stepName}`);
 
             if (!response.ok) {
                 throw new Error(`Failed to fetch step details: ${response.statusText}`);

@@ -160,7 +160,7 @@ const BatchBuilder: React.FC = () => {
             const projectId = projectResponse.data.active_project.project_id;
 
             // Load the batch YAML file with project_id
-            const response = await axios.get(`http://localhost:8000/workload/batch/${batchName}?project_id=${projectId}`);
+            const response = await axios.get(`${__API_URL__}/workload/batch/${batchName}?project_id=${projectId}`);
             const batchData = response.data.batch;
 
             setBatchConfig({
@@ -212,7 +212,7 @@ const BatchBuilder: React.FC = () => {
 
     const handleLoadFromTemplate = async (templateId: string) => {
         try {
-            const response = await axios.get(`http://localhost:8000/workload/batch/templates/${templateId}`);
+            const response = await axios.get(`${__API_URL__}/workload/batch/templates/${templateId}`);
             const templateData = response.data;
             const batchData = templateData.batch;
 

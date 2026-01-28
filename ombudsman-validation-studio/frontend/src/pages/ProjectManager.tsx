@@ -135,7 +135,7 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
                 params.append('snowflake_database', database);
             }
 
-            const response = await fetch(`http://localhost:8000/database-mapping/available-schemas?${params.toString()}`);
+            const response = await fetch(`${__API_URL__}/database-mapping/available-schemas?${params.toString()}`);
             const data = await response.json();
 
             if (response.ok) {
@@ -254,7 +254,7 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
             // Call /setup endpoint to extract metadata and infer relationships
             // This does NOT create pipelines - user must review relationships first
             // Note: Not passing schema to extract ALL tables from ALL schemas
-            const response = await fetch(`http://localhost:8000/projects/${projectId}/setup`, {
+            const response = await fetch(`${__API_URL__}/projects/${projectId}/setup`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -291,7 +291,7 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
         setError(null);
 
         try {
-            const response = await fetch(`http://localhost:8000/projects/${projectId}`);
+            const response = await fetch(`${__API_URL__}/projects/${projectId}`);
             const data = await response.json();
 
             if (response.ok) {
@@ -329,7 +329,7 @@ export default function ProjectManager({ onProjectSelected }: ProjectManagerProp
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`http://localhost:8000/projects/${projectId}`, {
+            const response = await fetch(`${__API_URL__}/projects/${projectId}`, {
                 method: 'DELETE',
                 headers
             });

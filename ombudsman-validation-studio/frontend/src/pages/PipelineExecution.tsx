@@ -97,7 +97,7 @@ export default function PipelineExecution({ currentProject }: any) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const url = `http://localhost:8000/pipelines/custom/project/${projectId}`;
+      const url = `${__API_URL__}/pipelines/custom/project/${projectId}`;
       console.log('[PipelineExecution] Fetching from:', url);
       const response = await fetch(url, { headers });
       const data = await response.json();
@@ -123,7 +123,7 @@ export default function PipelineExecution({ currentProject }: any) {
       const runsWithDetails = await Promise.all(
         (data.pipelines || []).map(async (run: any) => {
           try {
-            const detailsResponse = await fetch(`http://localhost:8000/pipelines/status/${run.run_id}`);
+            const detailsResponse = await fetch(`${__API_URL__}/pipelines/status/${run.run_id}`);
             const details = await detailsResponse.json();
             return details;
           } catch {
@@ -143,7 +143,7 @@ export default function PipelineExecution({ currentProject }: any) {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`
+        `${__API_URL__}/pipelines/custom/project/${currentProject.project_id}/${pipelineName}`
       );
       const data = await response.json();
 
@@ -268,7 +268,7 @@ export default function PipelineExecution({ currentProject }: any) {
 
       // Delete all runs
       const deletePromises = pipelineRuns.map(run =>
-        fetch(`http://localhost:8000/pipelines/${run.run_id}`, {
+        fetch(`${__API_URL__}/pipelines/${run.run_id}`, {
           method: 'DELETE',
           headers
         })
@@ -336,7 +336,7 @@ export default function PipelineExecution({ currentProject }: any) {
       }
 
       const saveResponse = await fetch(
-        `http://localhost:8000/pipelines/custom/save`,
+        `${__API_URL__}/pipelines/custom/save`,
         {
           method: 'POST',
           headers,
