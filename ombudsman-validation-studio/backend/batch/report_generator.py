@@ -15,12 +15,14 @@ from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
 
+from config.paths import paths
+
 
 class ConsolidatedReportGenerator:
     """Generate consolidated reports from batch execution results"""
 
-    def __init__(self, results_dir: str = "results"):
-        self.results_dir = Path(results_dir)
+    def __init__(self, results_dir: str = None):
+        self.results_dir = Path(results_dir) if results_dir else paths.results_dir
 
     def _extract_table_name(self, result: Dict[str, Any]) -> str:
         """
