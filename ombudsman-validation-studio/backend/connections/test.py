@@ -68,8 +68,6 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
     """Test Snowflake connection"""
     try:
         import os
-        import sys
-        sys.path.insert(0, "/core/src")
         from ombudsman.core.connections import test_snowflake_connection as test_snow_conn
 
         # Build config from environment or request

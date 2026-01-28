@@ -2,14 +2,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 from core_adapter import get_metadata
-import sys
 import os
 import yaml
 
 from config.paths import paths
-
-# Add core to Python path
-sys.path.insert(0, "/core/src")
 
 router = APIRouter()
 
@@ -214,9 +210,7 @@ def infer_relationships(request: InferRelationshipsRequest):
         project_name = request.project_name
         if not project_name:
             # Try to get active project from session/state
-            import sys
-            sys.path.insert(0, "/app/projects")
-            from context import get_active_project
+            from projects.context import get_active_project
 
             active_project = get_active_project()
             if active_project:
@@ -411,9 +405,7 @@ def save_relationships(request: SaveRelationshipsRequest):
     """
     try:
         # Get active project's config directory
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_active_project, get_project_config_dir
+        from projects.context import get_active_project, get_project_config_dir
 
         active_project = get_active_project()
         if active_project:

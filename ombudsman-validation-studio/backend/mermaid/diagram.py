@@ -3,13 +3,9 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 import os
 import json
-import sys
 import yaml
 
 from config.paths import paths
-
-# Add core to Python path
-sys.path.insert(0, "/core/src")
 
 try:
     from ombudsman.pipeline.graph import generate_mermaid, generate_mermaid_from_yaml, generate_mermaid_with_inference
@@ -71,9 +67,7 @@ def generate_from_yaml(request: GenerateFromYamlRequest):
         project_name = request.project_name
         if not project_name:
             # Try to get active project from session/state
-            import sys
-            sys.path.insert(0, "/app/projects")
-            from context import get_active_project
+            from projects.context import get_active_project
 
             active_project = get_active_project()
             if active_project:
@@ -166,9 +160,7 @@ def generate_with_inference(request: GenerateWithInferenceRequest):
 
     try:
         # Get active project's config directory
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_active_project, get_project_config_dir
+        from projects.context import get_active_project, get_project_config_dir
 
         active_project = get_active_project()
         if active_project:

@@ -73,8 +73,6 @@ async def generate_data_async(job_id: str, request: SampleDataRequest):
         os.environ["SAMPLE_SEED"] = str(request.seed)
 
         # Import the generator
-        import sys
-        sys.path.insert(0, "/core/src")
         from ombudsman.scripts.generate_sample_data import main as generate_main
 
         targets = []

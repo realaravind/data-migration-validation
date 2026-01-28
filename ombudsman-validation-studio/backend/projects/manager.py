@@ -750,10 +750,7 @@ async def setup_project(
             project_metadata = json.load(f)
 
         # Import database mapping functions
-        import sys
-        sys.path.insert(0, "/app/mapping")
-        sys.path.insert(0, "/app/projects")
-        from database_mapping import (
+        from mapping.database_mapping import (
             extract_sqlserver_tables,
             extract_snowflake_tables,
             create_table_mappings,
@@ -761,7 +758,7 @@ async def setup_project(
         )
 
         # Set active project for config directory
-        from context import set_active_project
+        from projects.context import set_active_project
         set_active_project(project_id, project_metadata)
 
         # Get schema mappings from project
@@ -1543,10 +1540,8 @@ async def test_azure_devops_connection(
 
 def auto_map_schemas(sql_schemas: List[str], snowflake_schemas: List[str]) -> Dict[str, str]:
     """Auto-generate schema mappings between SQL Server and Snowflake using intelligent fuzzy matching"""
-    # Use the intelligent schema mapper from schema_mapper.py
-    import sys
-    sys.path.insert(0, "/app/mapping")
-    from schema_mapper import auto_map_schemas as intelligent_mapper
+    # Use the intelligent schema mapper from mapping/schema_mapper.py
+    from mapping.schema_mapper import auto_map_schemas as intelligent_mapper
 
     # Get intelligent mappings with confidence scores
     intelligent_mappings = intelligent_mapper(sql_schemas, snowflake_schemas, confidence_threshold=0.7)

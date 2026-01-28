@@ -9,16 +9,12 @@ Handles automated project setup including:
 """
 
 from typing import Dict, List, Optional, Any
-import sys
 import os
 import json
 import yaml
 from pathlib import Path
 
 from config.paths import paths
-
-# Add core to Python path
-sys.path.insert(0, "/core/src")
 
 from ombudsman.core.metadata_loader import MetadataLoader
 from ombudsman.core.relationship_inferrer import RelationshipInferrer

@@ -53,9 +53,7 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
     """
     try:
         # Get project-specific config directory
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir, get_active_project
+        from projects.context import get_project_config_dir, get_active_project
         config_dir = get_project_config_dir()
         active_project = get_active_project()
 
@@ -82,8 +80,7 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
                     print(f"[EXTRACT] Project schemas - SQL: {sql_schemas}, Snowflake: {snowflake_schemas}")
 
                 # Import schema mapper
-                sys.path.insert(0, "/app/mapping")
-                from schema_mapper import auto_map_schemas
+                from mapping.schema_mapper import auto_map_schemas
 
                 # Get available schemas from databases if not in project
                 if not sql_schemas:
@@ -210,18 +207,13 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
 
         # Infer relationships from SQL Server metadata
         print(f"[EXTRACT] Inferring relationships from {len(all_sql_metadata)} SQL Server tables...")
-        from context import get_active_project
+        from projects.context import get_active_project
         active_project = get_active_project()
         print(f"[EXTRACT] Active project: {active_project}")
 
         relationships = []
         if active_project:
-            # Import from projects/automation.py (not /app/automation/)
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("project_automation", "/app/projects/automation.py")
-            automation_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(automation_module)
-            ProjectAutomation = automation_module.ProjectAutomation
+            from projects.automation import ProjectAutomation
 
             automation = ProjectAutomation(active_project["project_id"], active_project["name"])
             relationships = automation.infer_relationships(all_sql_metadata)
@@ -451,8 +443,6 @@ def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict, schema_mappin
     mappings = []
 
     # Import MappingLoader for column suggestions
-    import sys
-    sys.path.insert(0, "/core/src")
     from ombudsman.core.mapping_loader import MappingLoader
 
     mapper = MappingLoader()
@@ -589,10 +579,7 @@ def generate_yaml_files(mappings: List[Dict], request: DatabaseMappingRequest, s
 
     # Save to project-specific config directory
     try:
-        import sys
-        sys.path.insert(0, "/core/src")
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir
+        from projects.context import get_project_config_dir
 
         config_dir = get_project_config_dir()
         print(f"[YAML_GEN] Config directory from context: {config_dir}")
@@ -660,9 +647,7 @@ async def get_existing_mappings():
     """
     try:
         # Try to get active project's config directory
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_active_project, get_project_config_dir, set_active_project
+        from projects.context import get_active_project, get_project_config_dir, set_active_project
         import json as json_lib
 
         active_project = get_active_project()
@@ -854,9 +839,7 @@ async def update_mappings(update: MappingUpdate):
     Supports custom table name overrides (e.g., dim_1 -> customer).
     """
     try:
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir
+        from projects.context import get_project_config_dir
 
         config_dir = get_project_config_dir()
         os.makedirs(config_dir, exist_ok=True)
@@ -875,8 +858,6 @@ async def update_mappings(update: MappingUpdate):
                 shutil.copy2(src, dst)
 
         # Load MappingLoader for column mapping generation
-        import sys
-        sys.path.insert(0, "/core/src")
         from ombudsman.core.mapping_loader import MappingLoader
         mapper = MappingLoader()
 
@@ -1046,9 +1027,7 @@ async def get_available_schemas(sql_database: str = "SampleDW", snowflake_databa
 async def get_schema_mappings():
     """Get existing schema mappings"""
     try:
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir
+        from projects.context import get_project_config_dir
 
         config_dir = get_project_config_dir()
         schema_mappings_file = f"{config_dir}/schema_mappings.yaml"
@@ -1074,9 +1053,7 @@ async def get_schema_mappings():
 async def update_schema_mappings(update: SchemaMappingUpdate):
     """Save schema mappings"""
     try:
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir
+        from projects.context import get_project_config_dir
 
         config_dir = get_project_config_dir()
         os.makedirs(config_dir, exist_ok=True)
@@ -1110,9 +1087,7 @@ async def update_schema_mappings(update: SchemaMappingUpdate):
 async def update_column_mappings(update: ColumnMappingUpdate):
     """Save column-level mappings for a specific table"""
     try:
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir
+        from projects.context import get_project_config_dir
 
         config_dir = get_project_config_dir()
         os.makedirs(config_dir, exist_ok=True)
@@ -1158,9 +1133,7 @@ async def update_column_mappings(update: ColumnMappingUpdate):
 async def get_relationships():
     """Get existing relationships from YAML files"""
     try:
-        import sys
-        sys.path.insert(0, "/app/projects")
-        from context import get_project_config_dir
+        from projects.context import get_project_config_dir
 
         config_dir = get_project_config_dir()
         relationships_file = f"{config_dir}/relationships.yaml"
@@ -1262,9 +1235,7 @@ async def suggest_schema_mappings(request: SchemaMappingSuggestionRequest):
         sql_schemas = request.sql_schemas
         snowflake_schemas = request.snowflake_schemas
         # Import the schema mapper module
-        import sys
-        sys.path.insert(0, "/app/mapping")
-        from schema_mapper import auto_map_schemas, map_schemas_with_ollama
+        from mapping.schema_mapper import auto_map_schemas, map_schemas_with_ollama
 
         # If schemas not provided, fetch from databases
         if not sql_schemas:
