@@ -61,6 +61,9 @@ export OMBUDSMAN_CORE_DIR="${OMBUDSMAN_CORE_DIR:-$CORE_DIR/ombudsman/config}"
 export OMBUDSMAN_LOG_DIR="$LOG_DIR"
 export PYTHONPATH="$BACKEND_DIR:$CORE_DIR"
 
+# Build SQL Server connection string from individual vars
+export SQLSERVER_CONN_STR="DRIVER={ODBC Driver 18 for SQL Server};SERVER=${MSSQL_HOST},${MSSQL_PORT};DATABASE=${MSSQL_DATABASE};UID=${MSSQL_USER};PWD=${MSSQL_PASSWORD};TrustServerCertificate=yes;"
+
 # ==============================================
 # Functions
 # ==============================================
@@ -121,6 +124,7 @@ start_backend() {
         MSSQL_USER="${MSSQL_USER:-}" \
         MSSQL_PASSWORD="${MSSQL_PASSWORD:-}" \
         MSSQL_DATABASE="${MSSQL_DATABASE:-}" \
+        SQLSERVER_CONN_STR="$SQLSERVER_CONN_STR" \
         SNOWFLAKE_USER="${SNOWFLAKE_USER:-}" \
         SNOWFLAKE_PASSWORD="${SNOWFLAKE_PASSWORD:-}" \
         SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-}" \

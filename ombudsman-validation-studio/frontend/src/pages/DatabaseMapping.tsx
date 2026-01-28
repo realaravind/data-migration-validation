@@ -233,7 +233,7 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                             headers['Authorization'] = `Bearer ${token}`;
                         }
 
-                        const response = await fetch(__API_URL__ + '/diagram/generate-from-yaml', {
+                        const response = await fetch(__API_URL__ + '/mermaid/generate-from-yaml', {
                             method: 'POST',
                             headers,
                             body: JSON.stringify({
