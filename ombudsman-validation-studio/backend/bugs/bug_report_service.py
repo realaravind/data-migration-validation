@@ -16,15 +16,16 @@ from .models import (
     Bug, BugReport, BugReportSummary, BugSeverity, BugStatus,
     ValidationCategory, GenerateBugReportRequest
 )
+from config.paths import paths
 
 
 class BugReportService:
     """Service for generating bug reports from batch execution results"""
 
-    def __init__(self, results_dir: str = "results", reports_dir: str = "bug_reports"):
-        self.results_dir = Path(results_dir)
-        self.reports_dir = Path(reports_dir)
-        self.reports_dir.mkdir(exist_ok=True)
+    def __init__(self, results_dir: str = None, reports_dir: str = None):
+        self.results_dir = Path(results_dir) if results_dir else paths.results_dir
+        self.reports_dir = Path(reports_dir) if reports_dir else paths.data_dir / "bug_reports"
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
 
     def generate_bug_report(
         self,
