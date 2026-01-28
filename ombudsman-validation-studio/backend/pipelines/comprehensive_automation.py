@@ -46,6 +46,9 @@ class ComprehensivePipelineAutomation:
         self.metadata = self._load_metadata()
         self.relationships = self._load_relationships()
         self.table_mappings = self._load_table_mappings()
+        self.schema_mappings = self._load_schema_mappings()
+        # Reverse map: Snowflake schema -> SQL schema (e.g., DIM -> SAMPLE_DIM)
+        self.reverse_schema_mappings = {v: k for k, v in self.schema_mappings.items()}
 
     def _load_metadata(self) -> Dict[str, Any]:
         """Load table metadata from tables.yaml"""
@@ -87,6 +90,21 @@ class ComprehensivePipelineAutomation:
         if os.path.exists(mapping_file):
             with open(mapping_file, "r") as f:
                 return yaml.safe_load(f) or {}
+        return {}
+
+    def _load_schema_mappings(self) -> Dict[str, str]:
+        """Load schema mappings (SQL schema -> Snowflake schema) from schema_mappings.yaml or project.json"""
+        # Try schema_mappings.yaml first
+        schema_mappings_file = f"{self.config_dir}/schema_mappings.yaml"
+        if os.path.exists(schema_mappings_file):
+            with open(schema_mappings_file, "r") as f:
+                return yaml.safe_load(f) or {}
+        # Fallback to project.json
+        project_file = f"{self.project_dir}/project.json"
+        if os.path.exists(project_file):
+            with open(project_file, "r") as f:
+                project = json.load(f)
+                return project.get("schema_mappings", {})
         return {}
 
     def _is_fact_table(self, table_name: str) -> bool:
@@ -206,7 +224,8 @@ class ComprehensivePipelineAutomation:
                 fact_schema=schema,
                 database_type="snow",
                 columns=columns_list,
-                relationships=relationships
+                relationships=relationships,
+                schema_mappings=self.schema_mappings
             )
 
             result = await suggest_fact_validations(analysis_request)
@@ -222,7 +241,7 @@ class ComprehensivePipelineAutomation:
             # STEP 2: Generate custom queries using IntelligentQueryGenerator
             # (This is what "Suggest Custom Queries with Joins" button does)
             try:
-                generator = IntelligentQueryGenerator(metadata_path=self.config_dir)
+                generator = IntelligentQueryGenerator(metadata_path=self.config_dir, schema_mappings=self.schema_mappings)
                 intelligent_queries = generator.generate_intelligent_queries(database="snow")
 
                 # Filter queries for this specific table
@@ -299,7 +318,7 @@ class ComprehensivePipelineAutomation:
         # Use IntelligentQueryGenerator to create queries
         try:
             # Initialize generator with project config
-            generator = IntelligentQueryGenerator(metadata_path=self.config_dir)
+            generator = IntelligentQueryGenerator(metadata_path=self.config_dir, schema_mappings=self.schema_mappings)
 
             # Generate queries for this specific table
             # Note: IntelligentQueryGenerator expects tables to be loaded from metadata_path
@@ -333,37 +352,41 @@ class ComprehensivePipelineAutomation:
                         fact_parts = table_name.rsplit('.', 1)
                         dim_parts = dim_table.rsplit('.', 1)
 
+                        # Parse schemas for fact table
                         if len(fact_parts) == 2:
-                            fact_schema, fact_name = fact_parts
+                            fact_snow_schema, fact_name = fact_parts
                         else:
-                            fact_schema, fact_name = "FACT", fact_parts[0]
+                            fact_snow_schema, fact_name = "FACT", fact_parts[0]
+                        fact_sql_schema = self.reverse_schema_mappings.get(fact_snow_schema, fact_snow_schema)
 
+                        # Parse schemas for dim table
                         if len(dim_parts) == 2:
-                            dim_schema, dim_name = dim_parts
+                            dim_snow_schema, dim_name = dim_parts
                         else:
-                            dim_schema, dim_name = "DIM", dim_parts[0]
+                            dim_snow_schema, dim_name = "DIM", dim_parts[0]
+                        dim_sql_schema = self.reverse_schema_mappings.get(dim_snow_schema, dim_snow_schema)
 
-                        # SQL Server query
+                        # SQL Server query (use SQL schemas and original case)
                         sql_query = f"""
 SELECT
     d.{cat_col},
     SUM(f.{measure}) as total_{measure.lower()},
     COUNT(*) as record_count
-FROM {fact_schema}.{fact_name} f
-INNER JOIN {dim_schema}.{dim_name} d
+FROM {fact_sql_schema}.{fact_name} f
+INNER JOIN {dim_sql_schema}.{dim_name} d
     ON f.{fk_column} = d.{dim_column}
 GROUP BY d.{cat_col}
 ORDER BY total_{measure.lower()} DESC
                         """.strip()
 
-                        # Snowflake query
+                        # Snowflake query (use Snowflake schemas, uppercase)
                         snow_query = f"""
 SELECT
     d.{cat_col.upper()},
     SUM(f.{measure.upper()}) as TOTAL_{measure.upper()},
     COUNT(*) as RECORD_COUNT
-FROM {fact_schema.upper()}.{fact_name.upper()} f
-INNER JOIN {dim_schema.upper()}.{dim_name.upper()} d
+FROM {fact_snow_schema.upper()}.{fact_name.upper()} f
+INNER JOIN {dim_snow_schema.upper()}.{dim_name.upper()} d
     ON f.{fk_column.upper()} = d.{dim_column.upper()}
 GROUP BY d.{cat_col.upper()}
 ORDER BY TOTAL_{measure.upper()} DESC
@@ -482,29 +505,38 @@ ORDER BY TOTAL_{measure.upper()} DESC
                             relationships: List[Dict[str, Any]]) -> str:
         """Build complete pipeline YAML"""
 
-        # Parse table name for schema.table format
+        # Parse table name for schema.table format (table_name is Snowflake-side)
         table_parts = table_name.rsplit('.', 1)
         if len(table_parts) == 2:
-            schema, table = table_parts
+            snow_schema, table = table_parts
         else:
-            schema, table = "PUBLIC", table_parts[0]
+            snow_schema, table = "PUBLIC", table_parts[0]
+        sql_schema = self.reverse_schema_mappings.get(snow_schema, snow_schema)
 
-        # Build mapping
+        # Build mapping with correct SQL vs Snowflake schemas
         mapping = {
-            table_name: {
-                "sql": table_name,
-                "snow": table_name
+            table: {
+                "sql": f"{sql_schema}.{table}",
+                "snow": f"{snow_schema}.{table}"
             }
         }
 
         # Add dimension table mappings for relationships
         for rel in relationships:
-            dim_table = rel.get("dim_table") or rel.get("target_table")
-            if dim_table:
-                mapping[dim_table] = {
-                    "sql": dim_table,
-                    "snow": dim_table
-                }
+            dim_ref = rel.get("dim_table") or rel.get("target_table")
+            if dim_ref and '.' in dim_ref:
+                dim_s, dim_t = dim_ref.split('.', 1)
+                dim_snow = self.schema_mappings.get(dim_s, dim_s)  # If SQL schema, map to Snow
+                dim_sql = self.reverse_schema_mappings.get(dim_s, dim_s)  # If Snow schema, map to SQL
+                # Determine which side dim_s is from
+                if dim_s in self.reverse_schema_mappings:
+                    # dim_s is Snowflake schema
+                    mapping[dim_t] = {"sql": f"{self.reverse_schema_mappings[dim_s]}.{dim_t}", "snow": f"{dim_s}.{dim_t}"}
+                elif dim_s in self.schema_mappings:
+                    # dim_s is SQL schema
+                    mapping[dim_t] = {"sql": f"{dim_s}.{dim_t}", "snow": f"{self.schema_mappings[dim_s]}.{dim_t}"}
+                else:
+                    mapping[dim_t] = {"sql": f"{dim_s}.{dim_t}", "snow": f"{dim_s}.{dim_t}"}
 
         # Build metadata
         metadata = {
@@ -534,13 +566,13 @@ ORDER BY TOTAL_{measure.upper()} DESC
                 "source": {
                     "connection": "${SQLSERVER_CONNECTION}",
                     "database": "${SQL_DATABASE}",
-                    "schema": schema,
+                    "schema": sql_schema,
                     "table": table
                 },
                 "target": {
                     "connection": "${SNOWFLAKE_CONNECTION}",
                     "database": "${SNOWFLAKE_DATABASE}",
-                    "schema": schema,
+                    "schema": snow_schema,
                     "table": table
                 },
                 "mapping": mapping,

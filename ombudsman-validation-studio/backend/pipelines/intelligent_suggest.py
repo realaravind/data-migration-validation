@@ -93,6 +93,7 @@ class FactAnalysisRequest(BaseModel):
     database_type: str  # 'sql' or 'snow'
     columns: List[Dict[str, Any]]  # Column metadata
     relationships: List[Dict[str, Any]]  # FK relationships
+    schema_mappings: Optional[Dict[str, str]] = None  # SQL schema -> Snowflake schema
 
 
 class NaturalLanguagePipelineRequest(BaseModel):
@@ -433,7 +434,8 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
             numeric_columns,
             date_columns,
             request.relationships,
-            request.columns
+            request.columns,
+            schema_mappings=request.schema_mappings
         )
 
         return {
@@ -851,10 +853,62 @@ def calculate_confidence(matched_intents: list) -> str:
         return "high"
 
 
+def _build_table_mapping(fact_table: str, sql_schema: str, snow_schema: str,
+                         relationships: List[Dict], reverse_mappings: Dict[str, str]) -> Dict:
+    """Build the mapping section with correct SQL and Snowflake schema references.
+
+    Relationships may contain dim_table names from either SQL or Snowflake side.
+    We normalize: snow side uses Snowflake schema, sql side uses SQL schema.
+    """
+    mapping = {
+        fact_table: {
+            "sql": f"{sql_schema}.{fact_table}",
+            "snow": f"{snow_schema}.{fact_table}"
+        }
+    }
+    if not relationships:
+        return mapping
+
+    for rel in relationships:
+        dim_table_ref = rel.get("dim_table", "")
+        if not dim_table_ref or '.' not in dim_table_ref:
+            continue
+        dim_schema, dim_name = dim_table_ref.split('.', 1)
+
+        # Determine SQL and Snowflake schema for this dim table
+        if dim_schema in reverse_mappings:
+            # dim_schema is a Snowflake schema (e.g., DIM) -> look up SQL schema
+            snow_dim_schema = dim_schema
+            sql_dim_schema = reverse_mappings[dim_schema]
+        elif dim_schema in {v: k for k, v in reverse_mappings.items()}:
+            # dim_schema is a SQL schema (e.g., SAMPLE_DIM) -> look up Snowflake schema
+            sql_dim_schema = dim_schema
+            snow_dim_schema = {v: k for k, v in reverse_mappings.items()}.get(dim_schema, dim_schema)
+        else:
+            # No mapping found, use same for both
+            sql_dim_schema = dim_schema
+            snow_dim_schema = dim_schema
+
+        # Use dim_name (just the table) as the key, with proper schema for each side
+        if dim_name not in mapping:
+            mapping[dim_name] = {
+                "sql": f"{sql_dim_schema}.{dim_name}",
+                "snow": f"{snow_dim_schema}.{dim_name}"
+            }
+    return mapping
+
+
 def generate_fact_pipeline_yaml(fact_table: str, schema: str, suggested_checks: List[Dict],
                                   numeric_cols: List[str], date_cols: List[str],
-                                  relationships: List[Dict], columns: List[Dict]) -> str:
-    """Generate complete pipeline YAML for fact table"""
+                                  relationships: List[Dict], columns: List[Dict],
+                                  schema_mappings: Dict[str, str] = None) -> str:
+    """Generate complete pipeline YAML for fact table.
+
+    schema_mappings: SQL schema -> Snowflake schema (e.g., {"SAMPLE_DIM": "DIM", "SAMPLE_FACT": "FACT"})
+    """
+
+    # Build reverse mapping: Snowflake schema -> SQL schema
+    reverse_mappings = {v: k for k, v in (schema_mappings or {}).items()}
 
     # Get default alert email from environment
     default_email = os.getenv("ALERT_EMAIL", "")
@@ -868,19 +922,16 @@ def generate_fact_pipeline_yaml(fact_table: str, schema: str, suggested_checks: 
         parsed_table = parts[1]
         print(f"[PIPELINE_GEN] Parsed table name '{fact_table}' -> schema='{parsed_schema}', table='{parsed_table}'")
 
-        # Use parsed schema if provided schema is generic/default
-        if schema in ['PUBLIC', 'public', 'dbo']:
-            sql_schema = parsed_schema
-            snow_schema = parsed_schema
-            fact_table = parsed_table  # Update fact_table to just the table name
-            print(f"[PIPELINE_GEN] Using parsed schema '{parsed_schema}' instead of default '{schema}'")
-        else:
-            sql_schema = schema
-            snow_schema = schema
+        # parsed_schema is the Snowflake schema (since we iterate over snow tables)
+        snow_schema = parsed_schema
+        # Look up SQL schema from reverse mapping, fallback to same
+        sql_schema = reverse_mappings.get(parsed_schema, parsed_schema)
+        fact_table = parsed_table  # Update fact_table to just the table name
+        print(f"[PIPELINE_GEN] SQL schema='{sql_schema}', Snowflake schema='{snow_schema}'")
     else:
         # No dot in table name - use provided schema as-is
-        sql_schema = schema  # Use provided schema for SQL Server (e.g., FACT)
-        snow_schema = schema  # Use provided schema for Snowflake (e.g., FACT)
+        snow_schema = schema
+        sql_schema = reverse_mappings.get(schema, schema)
 
     pipeline = {
         "pipeline": {
@@ -900,20 +951,10 @@ def generate_fact_pipeline_yaml(fact_table: str, schema: str, suggested_checks: 
                 "schema": snow_schema,
                 "table": fact_table
             },
-            "mapping": {
-                fact_table: {
-                    "sql": f"{sql_schema}.{fact_table}",
-                    "snow": f"{snow_schema}.{fact_table}"
-                },
-                # Add dimension table mappings for fact-dimension validators
-                **({
-                    rel["dim_table"]: {
-                        "sql": rel["dim_table"],  # Already in schema.table format from relationships
-                        "snow": rel["dim_table"]  # Already in schema.table format
-                    }
-                    for rel in relationships
-                } if relationships else {})
-            },
+            "mapping": _build_table_mapping(
+                fact_table, sql_schema, snow_schema,
+                relationships, reverse_mappings
+            ),
             "metadata": {
                 fact_table: {
                     **_extract_metadata_structure(columns),

@@ -14,10 +14,14 @@ from config.paths import paths
 class IntelligentQueryGenerator:
     """Generate intelligent validation queries based on star schema patterns"""
 
-    def __init__(self, metadata_path: str = None):
+    def __init__(self, metadata_path: str = None, schema_mappings: Dict[str, str] = None):
         self.metadata_path = metadata_path or str(paths.core_config_dir)
         self.tables = {}
         self.relationships = []
+        # schema_mappings: SQL schema -> Snowflake schema (e.g., {"SAMPLE_DIM": "DIM"})
+        self.schema_mappings = schema_mappings or {}
+        # Reverse: Snowflake schema -> SQL schema (e.g., {"DIM": "SAMPLE_DIM"})
+        self.reverse_schema_mappings = {v: k for k, v in self.schema_mappings.items()}
         self._load_metadata()
 
     def _load_metadata(self):
@@ -325,31 +329,35 @@ class IntelligentQueryGenerator:
         dim_table = dim_data['table']
         dim_pk = dim_data['pk']
 
-        # Extract schema and table names
-        fact_schema, fact_name = self._split_table_name(fact_table)
-        dim_schema, dim_name = self._split_table_name(dim_table)
+        # Extract schema and table names (these are Snowflake-side names)
+        fact_snow_schema, fact_name = self._split_table_name(fact_table)
+        dim_snow_schema, dim_name = self._split_table_name(dim_table)
 
-        # SQL Server version (lowercase)
+        # Map to SQL Server schemas
+        fact_sql_schema = self.reverse_schema_mappings.get(fact_snow_schema, fact_snow_schema)
+        dim_sql_schema = self.reverse_schema_mappings.get(dim_snow_schema, dim_snow_schema)
+
+        # SQL Server version (use SQL schemas)
         sql_query = f"""
 SELECT
     d.{cat_col['name']},
     SUM(f.{measure['name']}) as total_{measure['name'].lower()},
     COUNT(*) as record_count
-FROM {fact_schema}.{fact_name} f
-INNER JOIN {dim_schema}.{dim_name} d
+FROM {fact_sql_schema}.{fact_name} f
+INNER JOIN {dim_sql_schema}.{dim_name} d
     ON f.{fk_col} = d.{dim_pk}
 GROUP BY d.{cat_col['name']}
 ORDER BY total_{measure['name'].lower()} DESC
         """.strip()
 
-        # Snowflake version (uppercase)
+        # Snowflake version (use Snowflake schemas, uppercase)
         snow_query = f"""
 SELECT
     d.{cat_col['name'].upper()},
     SUM(f.{measure['name'].upper()}) as TOTAL_{measure['name'].upper()},
     COUNT(*) as RECORD_COUNT
-FROM {fact_schema.upper()}.{fact_name.upper()} f
-INNER JOIN {dim_schema.upper()}.{dim_name.upper()} d
+FROM {fact_snow_schema.upper()}.{fact_name.upper()} f
+INNER JOIN {dim_snow_schema.upper()}.{dim_name.upper()} d
     ON f.{fk_col.upper()} = d.{dim_pk.upper()}
 GROUP BY d.{cat_col['name'].upper()}
 ORDER BY TOTAL_{measure['name'].upper()} DESC
@@ -380,7 +388,8 @@ ORDER BY TOTAL_{measure['name'].upper()} DESC
         Build a multi-dimensional aggregation query.
         Example: Total sales by product category and customer region
         """
-        fact_schema, fact_name = self._split_table_name(fact_table)
+        fact_snow_schema, fact_name = self._split_table_name(fact_table)
+        fact_sql_schema = self.reverse_schema_mappings.get(fact_snow_schema, fact_snow_schema)
 
         # Build JOINs and GROUP BY
         joins_sql = []
@@ -395,19 +404,18 @@ ORDER BY TOTAL_{measure['name'].upper()} DESC
             alias = f"d{idx+1}"
             dim_table = dim_data['table']
             dim_pk = dim_data['pk']
-            dim_schema, dim_name = self._split_table_name(dim_table)
+            dim_snow_schema, dim_name = self._split_table_name(dim_table)
+            dim_sql_schema = self.reverse_schema_mappings.get(dim_snow_schema, dim_snow_schema)
             dim_tables.append(dim_table)
 
             # Get first categorical column
             cat_cols = dim_data['categorical_cols']
             if not cat_cols:
-                # If no categorical columns, skip this dimension from GROUP BY
-                # But still add the JOIN
                 joins_sql.append(
-                    f"INNER JOIN {dim_schema}.{dim_name} {alias} ON f.{fk_col} = {alias}.{dim_pk}"
+                    f"INNER JOIN {dim_sql_schema}.{dim_name} {alias} ON f.{fk_col} = {alias}.{dim_pk}"
                 )
                 joins_snow.append(
-                    f"INNER JOIN {dim_schema.upper()}.{dim_name.upper()} {alias} ON f.{fk_col.upper()} = {alias}.{dim_pk.upper()}"
+                    f"INNER JOIN {dim_snow_schema.upper()}.{dim_name.upper()} {alias} ON f.{fk_col.upper()} = {alias}.{dim_pk.upper()}"
                 )
                 continue
 
@@ -415,14 +423,14 @@ ORDER BY TOTAL_{measure['name'].upper()} DESC
 
             # SQL Server
             joins_sql.append(
-                f"INNER JOIN {dim_schema}.{dim_name} {alias} ON f.{fk_col} = {alias}.{dim_pk}"
+                f"INNER JOIN {dim_sql_schema}.{dim_name} {alias} ON f.{fk_col} = {alias}.{dim_pk}"
             )
             group_by_sql.append(f"{alias}.{cat_col['name']}")
             select_dims_sql.append(f"{alias}.{cat_col['name']}")
 
             # Snowflake
             joins_snow.append(
-                f"INNER JOIN {dim_schema.upper()}.{dim_name.upper()} {alias} ON f.{fk_col.upper()} = {alias}.{dim_pk.upper()}"
+                f"INNER JOIN {dim_snow_schema.upper()}.{dim_name.upper()} {alias} ON f.{fk_col.upper()} = {alias}.{dim_pk.upper()}"
             )
             group_by_snow.append(f"{alias}.{cat_col['name'].upper()}")
             select_dims_snow.append(f"{alias}.{cat_col['name'].upper()}")
@@ -433,7 +441,7 @@ SELECT
     {', '.join(select_dims_sql)},
     SUM(f.{measure['name']}) as total_{measure['name'].lower()},
     COUNT(*) as record_count
-FROM {fact_schema}.{fact_name} f
+FROM {fact_sql_schema}.{fact_name} f
 {chr(10).join(joins_sql)}
 GROUP BY {', '.join(group_by_sql)}
 ORDER BY total_{measure['name'].lower()} DESC
@@ -445,7 +453,7 @@ SELECT
     {', '.join(select_dims_snow)},
     SUM(f.{measure['name'].upper()}) as TOTAL_{measure['name'].upper()},
     COUNT(*) as RECORD_COUNT
-FROM {fact_schema.upper()}.{fact_name.upper()} f
+FROM {fact_snow_schema.upper()}.{fact_name.upper()} f
 {chr(10).join(joins_snow)}
 GROUP BY {', '.join(group_by_snow)}
 ORDER BY TOTAL_{measure['name'].upper()} DESC
@@ -481,14 +489,16 @@ ORDER BY TOTAL_{measure['name'].upper()} DESC
         dim_table = dim_data['table']
         dim_pk = dim_data['pk']
 
-        fact_schema, fact_name = self._split_table_name(fact_table)
-        dim_schema, dim_name = self._split_table_name(dim_table)
+        fact_snow_schema, fact_name = self._split_table_name(fact_table)
+        dim_snow_schema, dim_name = self._split_table_name(dim_table)
+        fact_sql_schema = self.reverse_schema_mappings.get(fact_snow_schema, fact_snow_schema)
+        dim_sql_schema = self.reverse_schema_mappings.get(dim_snow_schema, dim_snow_schema)
 
         # SQL Server query
         sql_query = f"""
 SELECT COUNT(*) as orphaned_count
-FROM {fact_schema}.{fact_name} f
-LEFT JOIN {dim_schema}.{dim_name} d
+FROM {fact_sql_schema}.{fact_name} f
+LEFT JOIN {dim_sql_schema}.{dim_name} d
     ON f.{fk_col} = d.{dim_pk}
 WHERE d.{dim_pk} IS NULL
         """.strip()
@@ -496,8 +506,8 @@ WHERE d.{dim_pk} IS NULL
         # Snowflake query
         snow_query = f"""
 SELECT COUNT(*) as ORPHANED_COUNT
-FROM {fact_schema.upper()}.{fact_name.upper()} f
-LEFT JOIN {dim_schema.upper()}.{dim_name.upper()} d
+FROM {fact_snow_schema.upper()}.{fact_name.upper()} f
+LEFT JOIN {dim_snow_schema.upper()}.{dim_name.upper()} d
     ON f.{fk_col.upper()} = d.{dim_pk.upper()}
 WHERE d.{dim_pk.upper()} IS NULL
         """.strip()
