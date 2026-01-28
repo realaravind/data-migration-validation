@@ -914,7 +914,7 @@ async def setup_project_from_existing(
         print(f"[SETUP_FROM_EXISTING] Loading existing YAML files for {project_id}")
 
         # Set active project for config directory
-        from context import set_active_project
+        from projects.context import set_active_project
         set_active_project(project_id, project_metadata)
 
         # Load tables.yaml
