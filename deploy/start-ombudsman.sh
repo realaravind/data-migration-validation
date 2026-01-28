@@ -137,6 +137,7 @@ start_backend() {
         ./venv/bin/python -m uvicorn main:app \
         --host "$BACKEND_HOST" \
         --port "$BACKEND_PORT" \
+        --log-level info \
         > "$LOG_DIR/backend.log" 2>&1 &
 
     echo $! > "$LOG_DIR/backend.pid"

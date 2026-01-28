@@ -4,6 +4,7 @@ from typing import Optional, Dict, List, Any
 import os
 import json
 import yaml
+import logging
 from datetime import datetime
 import shutil
 
@@ -12,6 +13,7 @@ from auth.models import UserInDB
 from config.paths import paths
 from .automation import ProjectAutomation
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Use configurable paths - set via OMBUDSMAN_DATA_DIR environment variable
@@ -1018,9 +1020,7 @@ async def setup_project_from_existing(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[SETUP_FROM_EXISTING] Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[SETUP_FROM_EXISTING] Error for project {project_id}")
         raise HTTPException(status_code=500, detail=f"Failed to load existing configuration: {str(e)}")
 
 
