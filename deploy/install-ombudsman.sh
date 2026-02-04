@@ -873,12 +873,31 @@ setup_systemd_services() {
     echo "=========================================="
 
     REAL_USER="${SUDO_USER:-$USER}"
+    ENV_FILE="$BASE_DIR/ombudsman.env"
+
+    # Get port configuration (from wizard vars, env file, or defaults)
+    if [ -n "$CFG_BACKEND_PORT" ]; then
+        SVC_BACKEND_PORT="$CFG_BACKEND_PORT"
+    elif [ -f "$ENV_FILE" ]; then
+        SVC_BACKEND_PORT=$(grep "^BACKEND_PORT=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2)
+    fi
+    SVC_BACKEND_PORT="${SVC_BACKEND_PORT:-8000}"
+
+    if [ -n "$CFG_FRONTEND_PORT" ]; then
+        SVC_FRONTEND_PORT="$CFG_FRONTEND_PORT"
+    elif [ -f "$ENV_FILE" ]; then
+        SVC_FRONTEND_PORT=$(grep "^FRONTEND_PORT=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2)
+    fi
+    SVC_FRONTEND_PORT="${SVC_FRONTEND_PORT:-3000}"
+
+    print_status "Backend port: $SVC_BACKEND_PORT"
+    print_status "Frontend port: $SVC_FRONTEND_PORT"
 
     # Create log directory
     mkdir -p "$BASE_DIR/logs"
     chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/logs"
 
-    # Generate backend service file with dynamic paths
+    # Generate backend service file with dynamic paths and ports
     cat > /etc/systemd/system/ombudsman-backend.service << EOF
 [Unit]
 Description=Ombudsman Validation Studio - Backend
@@ -893,7 +912,7 @@ EnvironmentFile=$BASE_DIR/ombudsman.env
 Environment=OMBUDSMAN_BASE_DIR=$BASE_DIR
 Environment=PYTHONPATH=$BACKEND_DIR:$BASE_DIR/ombudsman_core/src
 
-ExecStart=$BACKEND_DIR/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info
+ExecStart=$BACKEND_DIR/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port $SVC_BACKEND_PORT --log-level info
 
 Restart=always
 RestartSec=5
@@ -905,7 +924,7 @@ StandardError=append:$BASE_DIR/logs/backend.log
 WantedBy=multi-user.target
 EOF
 
-    # Generate frontend service file with dynamic paths
+    # Generate frontend service file with dynamic paths and ports
     cat > /etc/systemd/system/ombudsman-frontend.service << EOF
 [Unit]
 Description=Ombudsman Validation Studio - Frontend
@@ -919,7 +938,7 @@ Group=$REAL_USER
 WorkingDirectory=$FRONTEND_DIR
 EnvironmentFile=$BASE_DIR/ombudsman.env
 
-ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 3000 --strictPort
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port $SVC_FRONTEND_PORT --strictPort
 
 Restart=always
 RestartSec=5
