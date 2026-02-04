@@ -2,13 +2,26 @@
 #
 # Ombudsman Validation Studio - Startup Script
 # Usage: ./start-ombudsman.sh [start|stop|status]
+#        OMBUDSMAN_BASE_DIR=/custom/path ./start-ombudsman.sh start
 #
+
+# ==============================================
+# Auto-detect base directory from script location
+# ==============================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# BASE_DIR is parent of deploy/ directory, can be overridden
+if [ -n "$OMBUDSMAN_BASE_DIR" ]; then
+    BASE_DIR="$OMBUDSMAN_BASE_DIR"
+else
+    BASE_DIR="$(dirname "$SCRIPT_DIR")"
+fi
 
 # ==============================================
 # SOPS Encryption Support
 # ==============================================
-SOPS_KEY_FILE="${SOPS_AGE_KEY_FILE:-/data/ombudsman/.sops-age-key.txt}"
-ENV_FILE_ENC="${OMBUDSMAN_ENV_FILE:-/data/ombudsman/ombudsman.env}.enc"
+SOPS_KEY_FILE="${SOPS_AGE_KEY_FILE:-$BASE_DIR/.sops-age-key.txt}"
+ENV_FILE_ENC="${OMBUDSMAN_ENV_FILE:-$BASE_DIR/ombudsman.env}.enc"
 
 # Check if SOPS is available
 has_sops() {
@@ -42,8 +55,7 @@ decrypt_sops_env() {
 # ==============================================
 # Load Environment File
 # ==============================================
-ENV_FILE="${OMBUDSMAN_ENV_FILE:-/data/ombudsman/ombudsman.env}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${OMBUDSMAN_ENV_FILE:-$BASE_DIR/ombudsman.env}"
 TEMPLATE_FILE="$SCRIPT_DIR/ombudsman.env"
 
 # Determine which env file to use
@@ -87,7 +99,6 @@ load_env_file() {
 case "${1:-start}" in
     init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help)
         # These commands handle env loading themselves
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         ;;
     *)
         load_env_file
@@ -95,9 +106,9 @@ case "${1:-start}" in
 esac
 
 # ==============================================
-# Configuration - Defaults (overridden by .env)
+# Configuration - Derived from BASE_DIR
 # ==============================================
-BASE_DIR="${BASE_DIR:-/data/ombudsman}"
+# BASE_DIR is already set at script start (auto-detected or from OMBUDSMAN_BASE_DIR)
 BACKEND_DIR="$BASE_DIR/ombudsman-validation-studio/backend"
 FRONTEND_DIR="$BASE_DIR/ombudsman-validation-studio/frontend"
 CORE_DIR="$BASE_DIR/ombudsman_core/src"
@@ -584,7 +595,7 @@ case "${1:-start}" in
         fi
 
         # Create .sops.yaml config
-        SOPS_CONFIG="/data/ombudsman/.sops.yaml"
+        SOPS_CONFIG="$BASE_DIR/.sops.yaml"
         cat > "$SOPS_CONFIG" << EOF
 creation_rules:
   - path_regex: .*\.env\.enc$
@@ -750,8 +761,11 @@ EOF
         echo "  edit-secrets       Edit encrypted config (auto decrypt/encrypt)"
         echo ""
         echo "Environment Variables:"
-        echo "  OMBUDSMAN_ENV_FILE   Path to config file (default: /data/ombudsman/ombudsman.env)"
-        echo "  SOPS_AGE_KEY_FILE    Path to age key (default: /data/ombudsman/.sops-age-key.txt)"
+        echo "  OMBUDSMAN_BASE_DIR   Base directory (default: auto-detected from script location)"
+        echo "  OMBUDSMAN_ENV_FILE   Path to config file (default: \$BASE_DIR/ombudsman.env)"
+        echo "  SOPS_AGE_KEY_FILE    Path to age key (default: \$BASE_DIR/.sops-age-key.txt)"
+        echo ""
+        echo "Current BASE_DIR: $BASE_DIR"
         echo ""
         ;;
     *)

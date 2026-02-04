@@ -4,18 +4,32 @@
 # Run this once to set up all prerequisites
 #
 # Usage: sudo ./install-ombudsman.sh
+#        OMBUDSMAN_BASE_DIR=/custom/path sudo ./install-ombudsman.sh
 #
 
 set -e
 
 # ==============================================
-# Configuration
+# Configuration - Auto-detect or use environment variable
 # ==============================================
-BASE_DIR="/data/ombudsman"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Auto-detect BASE_DIR from script location (parent of deploy/)
+# Can be overridden with OMBUDSMAN_BASE_DIR environment variable
+if [ -n "$OMBUDSMAN_BASE_DIR" ]; then
+    BASE_DIR="$OMBUDSMAN_BASE_DIR"
+else
+    BASE_DIR="$(dirname "$SCRIPT_DIR")"
+fi
+
 BACKEND_DIR="$BASE_DIR/ombudsman-validation-studio/backend"
 FRONTEND_DIR="$BASE_DIR/ombudsman-validation-studio/frontend"
 NODE_VERSION="20"
 PYTHON_CMD=""  # Will be auto-detected
+
+echo "=========================================="
+echo "Installation Directory: $BASE_DIR"
+echo "=========================================="
 
 # ==============================================
 # Colors for output
@@ -394,16 +408,64 @@ setup_systemd_services() {
     echo "Setting up systemd services..."
     echo "=========================================="
 
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REAL_USER="${SUDO_USER:-$USER}"
 
     # Create log directory
     mkdir -p "$BASE_DIR/logs"
-    REAL_USER="${SUDO_USER:-$USER}"
     chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/logs"
 
-    # Copy service files
-    cp "$SCRIPT_DIR/systemd/ombudsman-backend.service" /etc/systemd/system/
-    cp "$SCRIPT_DIR/systemd/ombudsman-frontend.service" /etc/systemd/system/
+    # Generate backend service file with dynamic paths
+    cat > /etc/systemd/system/ombudsman-backend.service << EOF
+[Unit]
+Description=Ombudsman Validation Studio - Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$REAL_USER
+Group=$REAL_USER
+WorkingDirectory=$BACKEND_DIR
+EnvironmentFile=$BASE_DIR/ombudsman.env
+Environment=OMBUDSMAN_BASE_DIR=$BASE_DIR
+Environment=PYTHONPATH=$BACKEND_DIR:$BASE_DIR/ombudsman_core/src
+
+ExecStart=$BACKEND_DIR/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info
+
+Restart=always
+RestartSec=5
+
+StandardOutput=append:$BASE_DIR/logs/backend.log
+StandardError=append:$BASE_DIR/logs/backend.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Generate frontend service file with dynamic paths
+    cat > /etc/systemd/system/ombudsman-frontend.service << EOF
+[Unit]
+Description=Ombudsman Validation Studio - Frontend
+After=network.target ombudsman-backend.service
+Wants=ombudsman-backend.service
+
+[Service]
+Type=simple
+User=$REAL_USER
+Group=$REAL_USER
+WorkingDirectory=$FRONTEND_DIR
+EnvironmentFile=$BASE_DIR/ombudsman.env
+
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 3000 --strictPort
+
+Restart=always
+RestartSec=5
+
+StandardOutput=append:$BASE_DIR/logs/frontend.log
+StandardError=append:$BASE_DIR/logs/frontend.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
     # Reload systemd
     systemctl daemon-reload
@@ -414,6 +476,7 @@ setup_systemd_services() {
 
     print_status "Systemd services installed and enabled"
     print_status "Services will auto-start on boot"
+    print_status "Base directory: $BASE_DIR"
 }
 
 # ==============================================

@@ -2,25 +2,72 @@
 
 ## Quick Start
 
-### 1. Install (one command does everything)
+### 1. Clone/Copy to your desired location
+```bash
+# Example: Install to /opt/ombudsman
+cd /opt
+git clone <repository-url> ombudsman
+cd ombudsman/deploy
+```
+
+### 2. Install (one command does everything)
 ```bash
 sudo ./install-ombudsman.sh
 ```
+The script auto-detects the installation directory from where it's run.
 
-### 2. Configure
+### 3. Configure
 ```bash
-nano /data/ombudsman/ombudsman.env
+# Edit config file in the installation directory
+nano ../ombudsman.env
 ```
 
-### 3. Start
+### 4. Start
 ```bash
 sudo systemctl start ombudsman-backend ombudsman-frontend
 ```
 
-### 4. Access
+### 5. Access
 - Frontend: http://your-server:3000
 - Backend API: http://your-server:8000
 - Default login: `admin` / `admin123`
+
+---
+
+## Custom Installation Path
+
+The installation path is **automatically detected** from where you run the scripts. No hardcoded paths.
+
+### Examples
+```bash
+# Install to /opt/ombudsman
+cd /opt/ombudsman/deploy
+sudo ./install-ombudsman.sh
+
+# Install to /home/user/apps/ombudsman
+cd /home/user/apps/ombudsman/deploy
+sudo ./install-ombudsman.sh
+
+# Install to /data/ombudsman (traditional path)
+cd /data/ombudsman/deploy
+sudo ./install-ombudsman.sh
+```
+
+### Override with Environment Variable
+```bash
+# Force a specific base directory
+OMBUDSMAN_BASE_DIR=/custom/path sudo ./install-ombudsman.sh
+OMBUDSMAN_BASE_DIR=/custom/path ./start-ombudsman.sh start
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OMBUDSMAN_BASE_DIR` | Base installation directory | Auto-detected from script location |
+| `OMBUDSMAN_ENV_FILE` | Path to config file | `$BASE_DIR/ombudsman.env` |
+| `OMBUDSMAN_DATA_DIR` | Path to data directory | `$BASE_DIR/data` |
+| `OMBUDSMAN_LOG_DIR` | Path to log directory | `$BASE_DIR/logs` |
 
 ---
 
@@ -35,12 +82,12 @@ The install script automatically handles everything in one run:
 | 3 | Install Node.js v20 |
 | 4 | Install ODBC Driver 18 for SQL Server |
 | 5 | Install SOPS and age (for secrets encryption) |
-| 6 | Create directory structure (`/data/ombudsman/data`, `logs`, etc.) |
+| 6 | Create directory structure (`$BASE_DIR/data`, `logs`, etc.) |
 | 7 | Create Python virtual environment |
 | 8 | Install Python dependencies from requirements.txt |
 | 9 | Install frontend npm dependencies |
 | 10 | Build frontend for production |
-| 11 | Copy configuration template to `/data/ombudsman/ombudsman.env` |
+| 11 | Copy configuration template to `$BASE_DIR/ombudsman.env` |
 | 12 | Setup authentication database (if SQL Server auth configured) |
 | 13 | Install systemd service files |
 | 14 | Enable auto-start on boot |
@@ -83,8 +130,8 @@ sudo journalctl -u ombudsman-backend -f
 sudo journalctl -u ombudsman-frontend -f
 
 # Or check log files directly
-tail -f /data/ombudsman/logs/backend.log
-tail -f /data/ombudsman/logs/frontend.log
+tail -f $BASE_DIR/logs/backend.log
+tail -f $BASE_DIR/logs/frontend.log
 ```
 
 ### Enable/Disable Auto-Start
@@ -100,7 +147,7 @@ sudo systemctl disable ombudsman-backend ombudsman-frontend
 
 ## Configuration
 
-All configuration is in `/data/ombudsman/ombudsman.env`:
+All configuration is in `$BASE_DIR/ombudsman.env`:
 
 ### Database Connections
 ```bash
@@ -162,24 +209,24 @@ The config file contains sensitive credentials. Use SOPS encryption to secure th
 
 ### Initial Setup (New Installations)
 ```bash
-cd /data/ombudsman/deploy
+cd $BASE_DIR/deploy
 
 # 1. Initialize encryption (generates age key)
 ./start-ombudsman.sh init-secrets
 
 # 2. Edit your config with credentials
-nano /data/ombudsman/ombudsman.env
+nano $BASE_DIR/ombudsman.env
 
 # 3. Encrypt the config file
 ./start-ombudsman.sh encrypt-secrets
 
 # 4. (Optional) Delete plaintext file
-rm /data/ombudsman/ombudsman.env
+rm $BASE_DIR/ombudsman.env
 ```
 
 ### Encrypting Existing Deployments
 ```bash
-cd /data/ombudsman/deploy
+cd $BASE_DIR/deploy
 
 # 1. Update to get SOPS support
 sudo ./start-ombudsman.sh update
@@ -203,16 +250,16 @@ sudo systemctl restart ombudsman-backend ombudsman-frontend
 sudo systemctl status ombudsman-backend
 
 # 6. Once verified, delete plaintext file
-rm /data/ombudsman/ombudsman.env
+rm $BASE_DIR/ombudsman.env
 
 # 7. IMPORTANT - Backup your key!
-cp /data/ombudsman/.sops-age-key.txt ~/sops-key-backup.txt
+cp $BASE_DIR/.sops-age-key.txt ~/sops-key-backup.txt
 ```
 
 ### How It Works
 - Uses [SOPS](https://github.com/getsops/sops) with [age](https://github.com/FiloSottile/age) encryption
-- Encrypted file: `/data/ombudsman/ombudsman.env.enc`
-- Encryption key: `/data/ombudsman/.sops-age-key.txt`
+- Encrypted file: `$BASE_DIR/ombudsman.env.enc`
+- Encryption key: `$BASE_DIR/.sops-age-key.txt`
 - Services automatically decrypt at startup
 
 ### Managing Secrets
@@ -231,10 +278,10 @@ cp /data/ombudsman/.sops-age-key.txt ~/sops-key-backup.txt
 **IMPORTANT:** Back up your encryption key securely!
 ```bash
 # The key file location
-/data/ombudsman/.sops-age-key.txt
+$BASE_DIR/.sops-age-key.txt
 
 # Copy to secure location
-cp /data/ombudsman/.sops-age-key.txt /secure/backup/location/
+cp $BASE_DIR/.sops-age-key.txt /secure/backup/location/
 ```
 
 Without this key, you cannot decrypt your secrets.
@@ -244,7 +291,7 @@ Without this key, you cannot decrypt your secrets.
 ## Directory Structure
 
 ```
-/data/ombudsman/
+$BASE_DIR/                     # e.g., /opt/ombudsman, /data/ombudsman, etc.
 ├── ombudsman.env              # Configuration file (plaintext)
 ├── ombudsman.env.enc          # Configuration file (encrypted, if using SOPS)
 ├── .sops-age-key.txt          # Encryption key (keep secure!)
@@ -286,7 +333,7 @@ sudo lsof -i :3000
 ### Database connection issues
 ```bash
 # Test SQL Server connection
-cd /data/ombudsman/ombudsman-validation-studio/backend
+cd $BASE_DIR/ombudsman-validation-studio/backend
 ./venv/bin/python -c "
 import pyodbc
 conn = pyodbc.connect('DRIVER={ODBC Driver 18 for SQL Server};SERVER=your-host,1433;DATABASE=your-db;UID=user;PWD=pass;TrustServerCertificate=yes;')
@@ -296,13 +343,13 @@ print('Connected!')
 
 ### Reset authentication database
 ```bash
-cd /data/ombudsman/deploy
+cd $BASE_DIR/deploy
 ./start-ombudsman.sh setup-auth
 ```
 
 ### Rebuild frontend (after changing VITE_API_URL)
 ```bash
-cd /data/ombudsman/deploy
+cd $BASE_DIR/deploy
 ./start-ombudsman.sh rebuild-frontend
 sudo systemctl restart ombudsman-frontend
 ```
@@ -313,7 +360,7 @@ sudo systemctl restart ombudsman-frontend
 
 If you prefer not to use systemd:
 ```bash
-cd /data/ombudsman/deploy
+cd $BASE_DIR/deploy
 ./start-ombudsman.sh start    # Start services
 ./start-ombudsman.sh stop     # Stop services
 ./start-ombudsman.sh status   # Check status
@@ -326,7 +373,7 @@ cd /data/ombudsman/deploy
 
 ### One-command update (recommended)
 ```bash
-cd /data/ombudsman/deploy
+cd $BASE_DIR/deploy
 sudo ./start-ombudsman.sh update
 ```
 
@@ -341,7 +388,7 @@ This automatically:
 
 ### Manual update
 ```bash
-cd /data/ombudsman
+cd $BASE_DIR
 git pull
 
 cd ombudsman-validation-studio/backend
