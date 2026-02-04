@@ -437,8 +437,62 @@ case "${1:-start}" in
 
         echo "Systemd services disabled. They will not auto-start on boot."
         ;;
+    update)
+        echo "=========================================="
+        echo "Updating Ombudsman Validation Studio..."
+        echo "=========================================="
+
+        # Stop services first
+        echo ""
+        echo "[1/6] Stopping services..."
+        systemctl stop ombudsman-frontend 2>/dev/null || true
+        systemctl stop ombudsman-backend 2>/dev/null || true
+
+        # Pull latest code
+        echo ""
+        echo "[2/6] Pulling latest code..."
+        cd "$BASE_DIR"
+        git pull
+
+        # Update Python dependencies
+        echo ""
+        echo "[3/6] Updating Python dependencies..."
+        cd "$BACKEND_DIR"
+        ./venv/bin/pip install --upgrade pip
+        ./venv/bin/pip install -r requirements.txt
+
+        # Update frontend dependencies
+        echo ""
+        echo "[4/6] Updating frontend dependencies..."
+        cd "$FRONTEND_DIR"
+        npm install
+
+        # Fix any vulnerabilities
+        echo ""
+        echo "[5/6] Fixing vulnerabilities..."
+        npm audit fix 2>/dev/null || true
+
+        # Rebuild frontend
+        echo ""
+        echo "[6/6] Rebuilding frontend..."
+        npm run build
+
+        # Restart services
+        echo ""
+        echo "Restarting services..."
+        systemctl start ombudsman-backend
+        sleep 2
+        systemctl start ombudsman-frontend
+
+        echo ""
+        echo "=========================================="
+        echo "Update complete!"
+        echo "=========================================="
+        echo ""
+        echo "Check status: sudo systemctl status ombudsman-backend"
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend|enable-service|disable-service}"
+        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend|enable-service|disable-service|update}"
         exit 1
         ;;
 esac

@@ -235,18 +235,33 @@ cd /data/ombudsman/deploy
 
 ## Updating
 
+### One-command update (recommended)
+```bash
+cd /data/ombudsman/deploy
+sudo ./start-ombudsman.sh update
+```
+
+This automatically:
+1. Stops services
+2. Pulls latest code from git
+3. Updates Python dependencies
+4. Updates npm dependencies
+5. Fixes any security vulnerabilities
+6. Rebuilds frontend
+7. Restarts services
+
+### Manual update
 ```bash
 cd /data/ombudsman
 git pull
 
-# Reinstall dependencies if needed
 cd ombudsman-validation-studio/backend
 ./venv/bin/pip install -r requirements.txt
 
 cd ../frontend
 npm install
+npm audit fix
 npm run build
 
-# Restart services
 sudo systemctl restart ombudsman-backend ombudsman-frontend
 ```
