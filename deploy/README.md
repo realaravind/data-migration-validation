@@ -160,7 +160,7 @@ AUTH_DB_PASSWORD=your-password
 
 The config file contains sensitive credentials. Use SOPS encryption to secure them.
 
-### Initial Setup
+### Initial Setup (New Installations)
 ```bash
 cd /data/ombudsman/deploy
 
@@ -175,6 +175,38 @@ nano /data/ombudsman/ombudsman.env
 
 # 4. (Optional) Delete plaintext file
 rm /data/ombudsman/ombudsman.env
+```
+
+### Encrypting Existing Deployments
+```bash
+cd /data/ombudsman/deploy
+
+# 1. Update to get SOPS support
+sudo ./start-ombudsman.sh update
+
+# 2. Install SOPS and age (if not installed by update)
+#    On Ubuntu 22.04+:
+sudo apt-get install -y age
+#    For SOPS, download from GitHub:
+curl -LO https://github.com/getsops/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+sudo mv sops-v3.8.1.linux.amd64 /usr/local/bin/sops
+sudo chmod +x /usr/local/bin/sops
+
+# 3. Initialize encryption key
+./start-ombudsman.sh init-secrets
+
+# 4. Encrypt your existing config
+./start-ombudsman.sh encrypt-secrets
+
+# 5. Verify services still work
+sudo systemctl restart ombudsman-backend ombudsman-frontend
+sudo systemctl status ombudsman-backend
+
+# 6. Once verified, delete plaintext file
+rm /data/ombudsman/ombudsman.env
+
+# 7. IMPORTANT - Backup your key!
+cp /data/ombudsman/.sops-age-key.txt ~/sops-key-backup.txt
 ```
 
 ### How It Works
