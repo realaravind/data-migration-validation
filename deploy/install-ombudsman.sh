@@ -478,6 +478,75 @@ interactive_setup() {
     prompt_with_default "Backend port" "8000" "CFG_BACKEND_PORT"
     prompt_with_default "Frontend port" "3000" "CFG_FRONTEND_PORT"
 
+    # -----------------------------------------
+    # Network/URL Configuration
+    # -----------------------------------------
+    echo ""
+    echo -e "${GREEN}── Server Address (for API URLs) ──${NC}"
+    echo ""
+    echo "The frontend needs to know how to reach the backend API."
+    echo "Select the address users will use to access this server:"
+    echo ""
+
+    # Detect available IPs
+    declare -a IP_OPTIONS
+    IP_OPTIONS+=("localhost")
+
+    # Get hostname
+    HOSTNAME_VAL=$(hostname 2>/dev/null)
+    if [ -n "$HOSTNAME_VAL" ] && [ "$HOSTNAME_VAL" != "localhost" ]; then
+        IP_OPTIONS+=("$HOSTNAME_VAL")
+    fi
+
+    # Get IP addresses (works on Linux and macOS)
+    if command -v ip &> /dev/null; then
+        # Linux
+        while IFS= read -r ip; do
+            [ -n "$ip" ] && IP_OPTIONS+=("$ip")
+        done < <(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.')
+    elif command -v ifconfig &> /dev/null; then
+        # macOS / BSD
+        while IFS= read -r ip; do
+            [ -n "$ip" ] && IP_OPTIONS+=("$ip")
+        done < <(ifconfig | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}')
+    fi
+
+    # Display options
+    echo "Detected addresses:"
+    for i in "${!IP_OPTIONS[@]}"; do
+        idx=$((i + 1))
+        ip="${IP_OPTIONS[$i]}"
+        if [ "$ip" = "localhost" ]; then
+            echo "  $idx) localhost (local development only)"
+        elif [ "$ip" = "$HOSTNAME_VAL" ]; then
+            echo "  $idx) $ip (hostname)"
+        else
+            echo "  $idx) $ip"
+        fi
+    done
+    echo "  C) Enter custom hostname/IP"
+    echo ""
+
+    read -p "Select address [1]: " addr_choice
+    addr_choice="${addr_choice:-1}"
+
+    if [ "$addr_choice" = "C" ] || [ "$addr_choice" = "c" ]; then
+        read -p "Enter hostname or IP: " CFG_SERVER_HOST
+    elif [[ "$addr_choice" =~ ^[0-9]+$ ]] && [ "$addr_choice" -ge 1 ] && [ "$addr_choice" -le "${#IP_OPTIONS[@]}" ]; then
+        CFG_SERVER_HOST="${IP_OPTIONS[$((addr_choice - 1))]}"
+    else
+        CFG_SERVER_HOST="localhost"
+    fi
+
+    # Build URLs
+    CFG_VITE_API_URL="http://${CFG_SERVER_HOST}:${CFG_BACKEND_PORT}"
+    CFG_CORS_ORIGINS="http://${CFG_SERVER_HOST}:${CFG_FRONTEND_PORT}"
+
+    echo ""
+    echo "URLs configured:"
+    echo "  Backend API:  $CFG_VITE_API_URL"
+    echo "  Frontend:     http://${CFG_SERVER_HOST}:${CFG_FRONTEND_PORT}"
+
     # Generate a random secret key
     CFG_SECRET_KEY=$(openssl rand -hex 32 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 64 | head -n 1)
 
@@ -507,7 +576,11 @@ interactive_setup() {
     echo ""
     echo "Authentication: $CFG_AUTH_BACKEND"
     echo "LLM Provider: $CFG_LLM_PROVIDER"
-    echo "Ports: Backend=$CFG_BACKEND_PORT, Frontend=$CFG_FRONTEND_PORT"
+    echo ""
+    echo "Server:"
+    echo "  Address: $CFG_SERVER_HOST"
+    echo "  Backend: http://${CFG_SERVER_HOST}:${CFG_BACKEND_PORT}"
+    echo "  Frontend: http://${CFG_SERVER_HOST}:${CFG_FRONTEND_PORT}"
     echo ""
 
     read -p "Save this configuration? (Y/n): " confirm
@@ -642,7 +715,11 @@ EOF
 BACKEND_PORT=$CFG_BACKEND_PORT
 FRONTEND_PORT=$CFG_FRONTEND_PORT
 SECRET_KEY=$CFG_SECRET_KEY
-CORS_ORIGINS=http://localhost:$CFG_FRONTEND_PORT
+
+# Server address (used for API URLs)
+SERVER_HOST=$CFG_SERVER_HOST
+VITE_API_URL=$CFG_VITE_API_URL
+CORS_ORIGINS=$CFG_CORS_ORIGINS
 
 # ------------------------------------------
 # Paths (auto-configured)
@@ -882,8 +959,8 @@ main() {
     install_sops
     create_directories
     setup_python_venv
-    setup_frontend
-    setup_config
+    setup_config           # Interactive wizard - collects VITE_API_URL
+    setup_frontend         # Build frontend with correct API URL
     setup_auth_db
     setup_systemd_services
 
@@ -892,22 +969,19 @@ main() {
     echo -e "${GREEN}Installation Complete!${NC}"
     echo "=========================================="
     echo ""
-    echo "Next steps:"
+    echo "Your application is configured and ready!"
     echo ""
-    echo "1. Edit your config file:"
-    echo "   nano $BASE_DIR/ombudsman.env"
-    echo ""
-    echo "2. (Optional) Encrypt your secrets:"
-    echo "   cd $BASE_DIR/deploy"
-    echo "   ./start-ombudsman.sh init-secrets"
-    echo "   ./start-ombudsman.sh encrypt-secrets"
-    echo ""
-    echo "3. Start the services:"
+    echo "Start the services:"
     echo "   sudo systemctl start ombudsman-backend ombudsman-frontend"
     echo ""
-    echo "4. Access the application:"
-    echo "   Frontend: http://your-server:3000"
-    echo "   Backend:  http://your-server:8000"
+    echo "Access the application:"
+    if [ -n "$CFG_SERVER_HOST" ]; then
+        echo "   Frontend: http://${CFG_SERVER_HOST}:${CFG_FRONTEND_PORT:-3000}"
+        echo "   Backend:  http://${CFG_SERVER_HOST}:${CFG_BACKEND_PORT:-8000}"
+    else
+        echo "   Frontend: http://your-server:3000"
+        echo "   Backend:  http://your-server:8000"
+    fi
     echo ""
     echo "Default login: admin / admin123"
     echo ""
