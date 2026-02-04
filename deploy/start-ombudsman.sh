@@ -21,6 +21,7 @@ fi
 # SOPS Encryption Support
 # ==============================================
 SOPS_KEY_FILE="${SOPS_AGE_KEY_FILE:-$BASE_DIR/.sops-age-key.txt}"
+SOPS_CONFIG="$BASE_DIR/.sops.yaml"
 ENV_FILE_ENC="${OMBUDSMAN_ENV_FILE:-$BASE_DIR/ombudsman.env}.enc"
 
 # Check if SOPS is available
@@ -49,7 +50,7 @@ decrypt_sops_env() {
         return 1
     fi
 
-    SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --decrypt "$encrypted_file"
+    SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --decrypt "$encrypted_file"
 }
 
 # ==============================================
@@ -641,7 +642,7 @@ EOF
 
         # Encrypt the env file
         echo "Encrypting $ENV_FILE..."
-        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --encrypt "$ENV_FILE" > "$ENV_FILE_ENC"
+        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --encrypt "$ENV_FILE" > "$ENV_FILE_ENC"
 
         echo ""
         echo "=========================================="
@@ -687,7 +688,7 @@ EOF
 
         # Decrypt
         echo "Decrypting $ENV_FILE_ENC..."
-        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --decrypt "$ENV_FILE_ENC" > "$ENV_FILE"
+        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --decrypt "$ENV_FILE_ENC" > "$ENV_FILE"
         chmod 600 "$ENV_FILE"
 
         echo ""
@@ -718,7 +719,7 @@ EOF
             echo "Opening encrypted file for editing..."
             echo "(File will be decrypted, edited, then re-encrypted automatically)"
             echo ""
-            SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops "$ENV_FILE_ENC"
+            SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" "$ENV_FILE_ENC"
             echo ""
             echo "Changes saved and encrypted."
         elif [ -f "$ENV_FILE" ]; then

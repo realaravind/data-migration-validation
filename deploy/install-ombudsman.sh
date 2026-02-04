@@ -784,7 +784,7 @@ creation_rules:
 EOF
                 fi
 
-                SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --encrypt "$ENV_FILE" > "$ENV_FILE.enc"
+                SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" > "$ENV_FILE.enc"
                 print_status "Configuration encrypted to $ENV_FILE.enc"
                 print_warning "IMPORTANT: Back up your key: $SOPS_KEY_FILE"
 
