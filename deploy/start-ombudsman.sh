@@ -386,8 +386,59 @@ case "${1:-start}" in
         npm run build
         echo "Frontend rebuilt. Restart frontend to apply changes."
         ;;
+    enable-service)
+        echo "Installing systemd services for auto-start on boot..."
+
+        if [ "$EUID" -ne 0 ]; then
+            echo "ERROR: This command requires root privileges. Run with sudo."
+            exit 1
+        fi
+
+        # Create log directory if not exists
+        mkdir -p "$LOG_DIR"
+
+        # Copy service files
+        cp "$SCRIPT_DIR/systemd/ombudsman-backend.service" /etc/systemd/system/
+        cp "$SCRIPT_DIR/systemd/ombudsman-frontend.service" /etc/systemd/system/
+
+        # Reload systemd
+        systemctl daemon-reload
+
+        # Enable services
+        systemctl enable ombudsman-backend
+        systemctl enable ombudsman-frontend
+
+        echo ""
+        echo "Systemd services installed and enabled!"
+        echo ""
+        echo "Commands:"
+        echo "  sudo systemctl start ombudsman-backend    # Start backend"
+        echo "  sudo systemctl start ombudsman-frontend   # Start frontend"
+        echo "  sudo systemctl stop ombudsman-backend     # Stop backend"
+        echo "  sudo systemctl stop ombudsman-frontend    # Stop frontend"
+        echo "  sudo systemctl status ombudsman-backend   # Check backend status"
+        echo "  sudo systemctl status ombudsman-frontend  # Check frontend status"
+        echo ""
+        echo "Services will auto-start on boot."
+        echo "To start now: sudo systemctl start ombudsman-backend ombudsman-frontend"
+        ;;
+    disable-service)
+        echo "Disabling systemd services..."
+
+        if [ "$EUID" -ne 0 ]; then
+            echo "ERROR: This command requires root privileges. Run with sudo."
+            exit 1
+        fi
+
+        systemctl stop ombudsman-frontend 2>/dev/null || true
+        systemctl stop ombudsman-backend 2>/dev/null || true
+        systemctl disable ombudsman-frontend 2>/dev/null || true
+        systemctl disable ombudsman-backend 2>/dev/null || true
+
+        echo "Systemd services disabled. They will not auto-start on boot."
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend}"
+        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend|enable-service|disable-service}"
         exit 1
         ;;
 esac
