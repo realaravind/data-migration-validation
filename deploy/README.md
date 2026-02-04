@@ -10,24 +10,26 @@ git clone <repository-url> ombudsman
 cd ombudsman/deploy
 ```
 
-### 2. Install (one command does everything)
+### 2. Install with Interactive Setup
 ```bash
 sudo ./install-ombudsman.sh
 ```
-The script auto-detects the installation directory from where it's run.
 
-### 3. Configure
-```bash
-# Edit config file in the installation directory
-nano ../ombudsman.env
-```
+The installer will:
+- Install all dependencies automatically
+- **Launch an interactive wizard** to configure:
+  - SQL Server connection (host, port, credentials)
+  - Snowflake connection (account, credentials, warehouse)
+  - Authentication backend (SQLite or SQL Server)
+  - LLM provider for AI features
+- Optionally encrypt your configuration with SOPS
 
-### 4. Start
+### 3. Start
 ```bash
 sudo systemctl start ombudsman-backend ombudsman-frontend
 ```
 
-### 5. Access
+### 4. Access
 - Frontend: http://your-server:3000
 - Backend API: http://your-server:8000
 - Default login: `admin` / `admin123`
@@ -87,16 +89,48 @@ The install script automatically handles everything in one run:
 | 8 | Install Python dependencies from requirements.txt |
 | 9 | Install frontend npm dependencies |
 | 10 | Build frontend for production |
-| 11 | Copy configuration template to `$BASE_DIR/ombudsman.env` |
-| 12 | Setup authentication database (if SQL Server auth configured) |
-| 13 | Install systemd service files |
-| 14 | Enable auto-start on boot |
+| 11 | **Interactive Setup Wizard** - prompts for all configuration |
+| 12 | Generate configuration file with your inputs |
+| 13 | Optionally encrypt configuration with SOPS |
+| 14 | Setup authentication database (if SQL Server auth configured) |
+| 15 | Install systemd service files |
+| 16 | Enable auto-start on boot |
 
-After installation completes, you only need to:
-1. Edit the config file with your database credentials
-2. Start the services with `systemctl`
+After installation completes, just start the services - no manual config editing needed!
 
 Services will automatically restart on system reboot.
+
+---
+
+## Interactive Setup Wizard
+
+The installer includes a guided wizard that prompts for all settings:
+
+### What It Configures
+
+| Section | Settings |
+|---------|----------|
+| **SQL Server** | Host, port, database, username, password |
+| **Snowflake** | Account, user, warehouse, database, schema, auth method |
+| **Authentication** | SQLite (local) or SQL Server (shared) |
+| **LLM Provider** | Ollama, OpenAI, Azure OpenAI, Anthropic, or None |
+| **Server** | Backend port, frontend port |
+
+### Features
+
+- **Password masking** - Passwords are hidden during input
+- **Sensible defaults** - Press Enter to accept common defaults
+- **Validation** - Confirms settings before saving
+- **Auto-encryption** - Offers to encrypt config with SOPS after setup
+- **Reconfiguration** - Run the installer again to change settings
+
+### Skip Interactive Setup
+
+To use a template file instead of the wizard:
+```bash
+# Press Ctrl+C during the wizard, then edit manually
+nano $BASE_DIR/ombudsman.env
+```
 
 ---
 
