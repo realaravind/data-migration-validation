@@ -65,17 +65,20 @@ async def test_sqlserver_connection(request: ConnectionTestRequest):
 
 @router.post("/snowflake")
 async def test_snowflake_connection(request: ConnectionTestRequest):
-    """Test Snowflake connection"""
+    """Test Snowflake connection (supports both password and PAT token auth)"""
     try:
         import os
         from ombudsman.core.connections import test_snowflake_connection as test_snow_conn
 
         # Build config from environment or request
         if request.use_env:
+            # Check for PAT token first, then fall back to password
+            token = os.getenv('SNOWFLAKE_TOKEN', '')
+            password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
             cfg = {
                 "snowflake": {
                     "user": os.getenv('SNOWFLAKE_USER', ''),
-                    "password": os.getenv('SNOWFLAKE_PASSWORD', ''),
                     "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
                     "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
                     "database": os.getenv('SNOWFLAKE_DATABASE', ''),
@@ -83,6 +86,11 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
                     "role": os.getenv('SNOWFLAKE_ROLE', '')
                 }
             }
+            # Add auth method (token takes precedence)
+            if token:
+                cfg["snowflake"]["token"] = token
+            else:
+                cfg["snowflake"]["password"] = password
         else:
             cfg = {
                 "snowflake": {
@@ -199,19 +207,29 @@ async def list_sqlserver_databases():
 
 @router.get("/databases/snowflake")
 async def list_snowflake_databases():
-    """List all databases available in Snowflake"""
+    """List all databases available in Snowflake (supports password and PAT token auth)"""
     try:
         import snowflake.connector
         import os
 
-        # Connect to Snowflake using environment variables
-        conn = snowflake.connector.connect(
-            user=os.getenv('SNOWFLAKE_USER', ''),
-            password=os.getenv('SNOWFLAKE_PASSWORD', ''),
-            account=os.getenv('SNOWFLAKE_ACCOUNT', ''),
-            warehouse=os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
-            role=os.getenv('SNOWFLAKE_ROLE', '')
-        )
+        # Build connection parameters
+        conn_params = {
+            "user": os.getenv('SNOWFLAKE_USER', ''),
+            "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+            "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+            "role": os.getenv('SNOWFLAKE_ROLE', '')
+        }
+
+        # Check for PAT token first, then fall back to password
+        token = os.getenv('SNOWFLAKE_TOKEN', '')
+        if token:
+            conn_params["token"] = token
+            conn_params["authenticator"] = "oauth"
+        else:
+            conn_params["password"] = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+        # Connect to Snowflake
+        conn = snowflake.connector.connect(**conn_params)
 
         cursor = conn.cursor()
         cursor.execute("SHOW DATABASES")

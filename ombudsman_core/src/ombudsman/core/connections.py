@@ -167,6 +167,10 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
     """
     Create a raw Snowflake connection with retry logic (used by connection pool).
 
+    Supports two authentication methods:
+    1. PAT Token: Set 'token' in config (preferred for service accounts)
+    2. Password: Set 'password' in config (traditional auth)
+
     Args:
         cfg: Configuration dictionary with snowflake credentials
         retries: Number of connection attempts (default: 3)
@@ -186,8 +190,15 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
     if not c:
         raise ValueError("No Snowflake configuration found in cfg")
 
-    # Validate required fields
-    required_fields = ["user", "password", "account", "warehouse", "database", "schema"]
+    # Check authentication method: PAT token or password
+    has_token = bool(c.get("token"))
+    has_password = bool(c.get("password"))
+
+    if not has_token and not has_password:
+        raise ValueError("Snowflake authentication required: set either 'token' (PAT) or 'password'")
+
+    # Validate required fields (token/password handled above)
+    required_fields = ["user", "account", "warehouse", "database", "schema"]
     missing_fields = [field for field in required_fields if not c.get(field)]
     if missing_fields:
         raise ValueError(f"Missing required Snowflake config fields: {', '.join(missing_fields)}")
@@ -195,7 +206,6 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
     # Build connection parameters
     connection_params = {
         "user": c["user"],
-        "password": c["password"],
         "account": c["account"],
         "warehouse": c["warehouse"],
         "database": c["database"],
@@ -204,6 +214,17 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
         "network_timeout": 60,  # Network timeout in seconds
         "login_timeout": 30,  # Login timeout in seconds
     }
+
+    # Set authentication method
+    if has_token:
+        # PAT (Programmatic Access Token) authentication
+        connection_params["token"] = c["token"]
+        connection_params["authenticator"] = "oauth"
+        logger.info("Using Snowflake PAT token authentication")
+    else:
+        # Traditional password authentication
+        connection_params["password"] = c["password"]
+        logger.info("Using Snowflake password authentication")
 
     # Add optional parameters
     if c.get("role"):

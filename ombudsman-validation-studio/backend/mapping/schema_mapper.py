@@ -133,26 +133,30 @@ def generate_mapping_suggestions(sql_schema: str, snowflake_schemas: List[str]) 
     return suggestions
 
 
-async def map_schemas_with_ollama(
+async def map_schemas_with_llm(
     sql_schemas: List[str],
     snowflake_schemas: List[str]
 ) -> Dict[str, str]:
     """
-    Use Ollama AI to intelligently map schemas.
+    Use a configurable LLM provider to intelligently map schemas.
     This is an enhanced version that can handle complex naming patterns.
 
-    Returns: Dict mapping SQL schema to Snowflake schema
+    Supports multiple providers via LLM_PROVIDER env var:
+    - ollama (default): Local models via Ollama
+    - openai: OpenAI API (requires OPENAI_API_KEY)
+    - azure_openai: Azure OpenAI Service
+    - anthropic: Anthropic Claude API
+
+    Returns: Dict mapping SQL schema to Snowflake schema, or None on failure
     """
     try:
-        import aiohttp
         import json
-        import os
+        import logging
+        from backend.llm import get_llm_provider, LLMProviderError
 
-        # Get Ollama base URL from environment (supports both Docker and native Linux)
-        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-        ollama_model = os.getenv("OLLAMA_MODEL", "llama2")
+        logger = logging.getLogger(__name__)
 
-        # Prepare the prompt for Ollama
+        # Prepare the prompt
         prompt = f"""You are a database schema mapping expert. Given these SQL Server schemas and Snowflake schemas, map each SQL Server schema to its most likely Snowflake equivalent.
 
 SQL Server Schemas: {', '.join(sql_schemas)}
@@ -169,33 +173,52 @@ Return ONLY a JSON object mapping SQL schemas to Snowflake schemas. Example:
 
 Your mapping:"""
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{ollama_base_url}/api/generate",
-                json={
-                    "model": ollama_model,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    response_text = result.get("response", "")
+        # Get the configured LLM provider
+        provider = get_llm_provider()
+        logger.info(
+            f"[SCHEMA_MAPPER] Using LLM provider: {provider.provider_name} "
+            f"(model: {provider.model_name})"
+        )
 
-                    # Extract JSON from response
-                    import json
-                    try:
-                        # Try to find JSON in the response
-                        start = response_text.find('{')
-                        end = response_text.rfind('}') + 1
-                        if start >= 0 and end > start:
-                            mappings = json.loads(response_text[start:end])
-                            return mappings
-                    except:
-                        pass
+        async with provider:
+            response_text = await provider.generate(prompt)
+
+            # Extract JSON from response
+            try:
+                # Try to find JSON in the response
+                start = response_text.find('{')
+                end = response_text.rfind('}') + 1
+                if start >= 0 and end > start:
+                    mappings = json.loads(response_text[start:end])
+                    logger.info(f"[SCHEMA_MAPPER] LLM mapping successful: {mappings}")
+                    return mappings
+            except json.JSONDecodeError as e:
+                logger.warning(f"[SCHEMA_MAPPER] Failed to parse LLM response as JSON: {e}")
+
+    except LLMProviderError as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[SCHEMA_MAPPER] LLM mapping failed ({e.provider}): {e}, "
+            "falling back to fuzzy matching"
+        )
     except Exception as e:
-        print(f"[SCHEMA_MAPPER] Ollama mapping failed: {e}, falling back to fuzzy matching")
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[SCHEMA_MAPPER] LLM mapping failed: {e}, falling back to fuzzy matching"
+        )
 
-    # Fallback to fuzzy matching if Ollama fails
+    # Fallback to fuzzy matching if LLM fails
     return None
+
+
+# Backwards compatibility alias
+async def map_schemas_with_ollama(
+    sql_schemas: List[str],
+    snowflake_schemas: List[str]
+) -> Dict[str, str]:
+    """
+    Backwards-compatible alias for map_schemas_with_llm.
+
+    Deprecated: Use map_schemas_with_llm instead.
+    """
+    return await map_schemas_with_llm(sql_schemas, snowflake_schemas)

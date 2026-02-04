@@ -73,8 +73,26 @@ conn_str_ovs = (
 )
 
 def create_database():
-    """Create authentication database if it doesn't exist"""
-    print(f"Step 1: Creating '{DB_NAME}' database...")
+    """Create authentication database if it doesn't exist.
+
+    Handles two scenarios:
+    1. Admin user: Can create database if it doesn't exist
+    2. Non-admin user: Database must already exist, script will just verify access
+    """
+    print(f"Step 1: Setting up '{DB_NAME}' database...")
+
+    # First, try to connect directly to the target database
+    # This works if database exists and user has access
+    try:
+        conn = pyodbc.connect(conn_str_ovs)
+        conn.close()
+        print(f"  ✓ Database '{DB_NAME}' exists and is accessible")
+        return True
+    except pyodbc.Error as e:
+        # Database doesn't exist or no access - try to create it
+        pass
+
+    # Try to create database (requires admin/db_creator permissions)
     try:
         conn = pyodbc.connect(conn_str_master)
         conn.autocommit = True
@@ -90,9 +108,32 @@ def create_database():
 
         conn.close()
         return True
-    except Exception as e:
-        print(f"  ✗ Error creating database: {e}")
-        return False
+    except pyodbc.Error as e:
+        error_msg = str(e)
+
+        # Check for common permission errors
+        if "permission" in error_msg.lower() or "denied" in error_msg.lower() or "15247" in error_msg:
+            print(f"  ⚠ Cannot create database (insufficient permissions)")
+            print(f"")
+            print(f"  Your SQL user doesn't have CREATE DATABASE permission.")
+            print(f"  This is common for non-admin database users.")
+            print(f"")
+            print(f"  OPTIONS:")
+            print(f"  ─────────────────────────────────────────────────────────")
+            print(f"  1. Ask your DBA to create the database:")
+            print(f"     CREATE DATABASE {DB_NAME};")
+            print(f"")
+            print(f"  2. Grant your user access to the new database:")
+            print(f"     USE {DB_NAME};")
+            print(f"     CREATE USER [{DB_USER}] FOR LOGIN [{DB_USER}];")
+            print(f"     ALTER ROLE db_owner ADD MEMBER [{DB_USER}];")
+            print(f"")
+            print(f"  3. Then re-run this setup script.")
+            print(f"  ─────────────────────────────────────────────────────────")
+            return False
+        else:
+            print(f"  ✗ Error: {e}")
+            return False
 
 def drop_existing_tables():
     """Drop existing tables to recreate with correct schema"""
