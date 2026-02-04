@@ -249,7 +249,19 @@ create_directories() {
     mkdir -p "$BASE_DIR/data/auth"
 
     # Set ownership to current user (not root)
+    # This is critical for venv creation and npm install
     REAL_USER="${SUDO_USER:-$USER}"
+
+    # Set ownership on application directories (needed for venv, npm, etc.)
+    if [ -d "$BASE_DIR/ombudsman-validation-studio" ]; then
+        chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/ombudsman-validation-studio"
+        print_status "Set ownership on application directory"
+    fi
+
+    if [ -d "$BASE_DIR/ombudsman_core" ]; then
+        chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/ombudsman_core"
+    fi
+
     chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/data"
     chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/logs"
 
