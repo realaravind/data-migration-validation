@@ -15,6 +15,7 @@ BASE_DIR="/data/ombudsman"
 BACKEND_DIR="$BASE_DIR/ombudsman-validation-studio/backend"
 FRONTEND_DIR="$BASE_DIR/ombudsman-validation-studio/frontend"
 NODE_VERSION="20"
+PYTHON_CMD=""  # Will be auto-detected
 
 # ==============================================
 # Colors for output
@@ -34,6 +35,50 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}[✗]${NC} $1"
+}
+
+# ==============================================
+# Detect Python command (python3 or python)
+# ==============================================
+detect_python() {
+    echo ""
+    echo "=========================================="
+    echo "Detecting Python installation..."
+    echo "=========================================="
+
+    # Check for python3 first (preferred)
+    if command -v python3 &> /dev/null; then
+        PYTHON_CMD="python3"
+        PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
+        print_status "Found python3: $PYTHON_VERSION"
+    # Fall back to python
+    elif command -v python &> /dev/null; then
+        # Verify it's Python 3.x, not Python 2.x
+        PYTHON_VERSION=$(python --version 2>&1 | cut -d' ' -f2)
+        PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1)
+        if [ "$PYTHON_MAJOR" -ge 3 ]; then
+            PYTHON_CMD="python"
+            print_status "Found python: $PYTHON_VERSION"
+        else
+            print_error "Python 2.x detected ($PYTHON_VERSION). Python 3.8+ is required."
+            print_error "Please install Python 3: apt-get install python3 python3-pip python3-venv"
+            exit 1
+        fi
+    else
+        print_error "Python not found. Please install Python 3.8+:"
+        print_error "  apt-get install python3 python3-pip python3-venv"
+        exit 1
+    fi
+
+    # Verify minimum version (3.8+)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f2)
+    if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 8 ]); then
+        print_error "Python $PYTHON_VERSION is too old. Python 3.8+ is required."
+        exit 1
+    fi
+
+    print_status "Using Python command: $PYTHON_CMD (version $PYTHON_VERSION)"
+    export PYTHON_CMD
 }
 
 # ==============================================
@@ -168,8 +213,8 @@ setup_python_venv() {
     REAL_USER="${SUDO_USER:-$USER}"
 
     if [ ! -d "$BACKEND_DIR/venv" ]; then
-        sudo -u "$REAL_USER" python3 -m venv "$BACKEND_DIR/venv"
-        print_status "Virtual environment created"
+        sudo -u "$REAL_USER" $PYTHON_CMD -m venv "$BACKEND_DIR/venv"
+        print_status "Virtual environment created using $PYTHON_CMD"
     else
         print_status "Virtual environment already exists"
     fi
@@ -309,6 +354,7 @@ main() {
 
     check_sudo
     install_system_deps
+    detect_python
     install_nodejs
     install_odbc_drivers
     create_directories

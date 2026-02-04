@@ -127,6 +127,7 @@ start_backend() {
         SQLSERVER_CONN_STR="$SQLSERVER_CONN_STR" \
         SNOWFLAKE_USER="${SNOWFLAKE_USER:-}" \
         SNOWFLAKE_PASSWORD="${SNOWFLAKE_PASSWORD:-}" \
+        SNOWFLAKE_TOKEN="${SNOWFLAKE_TOKEN:-}" \
         SNOWFLAKE_ACCOUNT="${SNOWFLAKE_ACCOUNT:-}" \
         SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-}" \
         SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-}" \
@@ -134,6 +135,20 @@ start_backend() {
         SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-}" \
         SECRET_KEY="${SECRET_KEY:-change-me}" \
         CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:3000}" \
+        LLM_PROVIDER="${LLM_PROVIDER:-ollama}" \
+        LLM_TEMPERATURE="${LLM_TEMPERATURE:-0.1}" \
+        LLM_MAX_TOKENS="${LLM_MAX_TOKENS:-2048}" \
+        LLM_TIMEOUT="${LLM_TIMEOUT:-30}" \
+        OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://localhost:11434}" \
+        OLLAMA_MODEL="${OLLAMA_MODEL:-llama2}" \
+        OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+        OPENAI_MODEL="${OPENAI_MODEL:-gpt-4o-mini}" \
+        AZURE_OPENAI_API_KEY="${AZURE_OPENAI_API_KEY:-}" \
+        AZURE_OPENAI_ENDPOINT="${AZURE_OPENAI_ENDPOINT:-}" \
+        AZURE_OPENAI_DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-}" \
+        AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}" \
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+        ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" \
         ./venv/bin/python -m uvicorn main:app \
         --host "$BACKEND_HOST" \
         --port "$BACKEND_PORT" \
