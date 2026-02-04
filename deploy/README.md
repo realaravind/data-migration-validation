@@ -1,294 +1,224 @@
-# Ombudsman Validation Studio - Linux Deployment Guide
-
-This guide covers deploying Ombudsman Validation Studio on Ubuntu 24.04 LTS with Nginx, SSL, and Ollama.
-
-## Architecture
-
-```
-                    ┌─────────────────────────────────────────────────────┐
-                    │                    Ubuntu 24.04                      │
-                    │                                                     │
-┌─────────┐        │  ┌─────────┐     ┌─────────────────┐               │
-│ Browser │───────▶│  │  Nginx  │────▶│ Frontend (3000) │               │
-│         │  HTTPS │  │ :80/443 │     │   React/serve   │               │
-└─────────┘        │  │         │     └─────────────────┘               │
-                    │  │         │                                       │
-                    │  │         │     ┌─────────────────┐               │
-                    │  │  /api/* │────▶│ Backend (8000)  │               │
-                    │  │         │     │ FastAPI/uvicorn │               │
-                    │  └─────────┘     │                 │               │
-                    │                  │     ▼           │               │
-                    │                  │  ┌──────────┐   │               │
-                    │                  │  │ Ollama   │   │               │
-                    │                  │  │ :11434   │   │               │
-                    │                  │  └──────────┘   │               │
-                    │                  └─────────────────┘               │
-                    └─────────────────────────────────────────────────────┘
-```
-
-## Prerequisites
-
-- Ubuntu 24.04 LTS server
-- Domain name pointing to your server's IP
-- Root or sudo access
-- Open ports: 80 (HTTP), 443 (HTTPS)
+# Ombudsman Validation Studio - Deployment Guide
 
 ## Quick Start
 
-### 1. Install Dependencies
-
+### 1. Install
 ```bash
-# Clone or copy the repository to your server
-cd /path/to/data-migration-validator
-
-# Run the dependency installation script
-sudo ./deploy/install-dependencies.sh
+sudo ./install-ombudsman.sh
 ```
 
-This installs:
-- Python 3.11
-- Node.js 20.x
-- Microsoft ODBC Driver 18 for SQL Server
-- Nginx
-- Certbot (Let's Encrypt)
-- Ollama (for AI-powered schema mapping)
-
-### 2. Deploy the Application
-
+### 2. Configure
 ```bash
-sudo ./deploy/deploy.sh your-domain.com your-email@example.com
+nano /data/ombudsman/ombudsman.env
 ```
 
-This will:
-1. Copy application code to `/opt/ombudsman/`
-2. Set up Python virtual environment
-3. Build the React frontend
-4. Create data directories
-5. Install systemd services
-6. Configure Nginx with SSL
-7. Obtain Let's Encrypt certificate
-8. Start all services
-
-### 3. Configure Environment
-
-Edit the environment file with your database credentials:
-
+### 3. Start
 ```bash
-sudo nano /opt/ombudsman/.env
+sudo systemctl start ombudsman-backend ombudsman-frontend
 ```
 
-Key settings to configure:
-- `MSSQL_HOST`, `MSSQL_USER`, `MSSQL_PASSWORD` - SQL Server connection
-- `SNOWFLAKE_*` - Snowflake connection settings
-- `SECRET_KEY` - Generate with: `openssl rand -hex 32`
+### 4. Access
+- Frontend: http://your-server:3000
+- Backend API: http://your-server:8000
+- Default login: `admin` / `admin123`
 
-After editing, restart the backend:
-
-```bash
-sudo systemctl restart ombudsman-backend
-```
-
-## File Locations
-
-| Purpose | Path |
-|---------|------|
-| Application code | `/opt/ombudsman/` |
-| Backend | `/opt/ombudsman/backend/` |
-| Frontend | `/opt/ombudsman/frontend/` |
-| Core library | `/opt/ombudsman/core/` |
-| Configuration | `/opt/ombudsman/.env` |
-| Data storage | `/var/lib/ombudsman/data/` |
-| Logs | `/var/log/ombudsman/` |
-| Nginx config | `/etc/nginx/sites-available/ombudsman` |
+---
 
 ## Service Management
 
-### View Service Status
-
+### Start/Stop/Restart
 ```bash
-# All services
-sudo systemctl status ombudsman-backend ombudsman-frontend ollama nginx
+# Start both services
+sudo systemctl start ombudsman-backend ombudsman-frontend
 
-# Individual service
+# Stop both services
+sudo systemctl stop ombudsman-backend ombudsman-frontend
+
+# Restart both services
+sudo systemctl restart ombudsman-backend ombudsman-frontend
+
+# Restart individual service
+sudo systemctl restart ombudsman-backend
+```
+
+### Check Status
+```bash
 sudo systemctl status ombudsman-backend
+sudo systemctl status ombudsman-frontend
 ```
 
 ### View Logs
-
 ```bash
-# Backend logs (journald)
+# Real-time logs
 sudo journalctl -u ombudsman-backend -f
-
-# Frontend logs
 sudo journalctl -u ombudsman-frontend -f
 
-# Application logs
-sudo tail -f /var/log/ombudsman/backend.log
-sudo tail -f /var/log/ombudsman/backend-error.log
-
-# Nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
+# Or check log files directly
+tail -f /data/ombudsman/logs/backend.log
+tail -f /data/ombudsman/logs/frontend.log
 ```
 
-### Restart Services
-
+### Enable/Disable Auto-Start
 ```bash
-# Restart backend
-sudo systemctl restart ombudsman-backend
+# Enable auto-start on boot (default after install)
+sudo systemctl enable ombudsman-backend ombudsman-frontend
 
-# Restart frontend
-sudo systemctl restart ombudsman-frontend
-
-# Restart all
-sudo systemctl restart ombudsman-backend ombudsman-frontend nginx
+# Disable auto-start on boot
+sudo systemctl disable ombudsman-backend ombudsman-frontend
 ```
 
-## Ollama Management
+---
 
+## Configuration
+
+All configuration is in `/data/ombudsman/ombudsman.env`:
+
+### Database Connections
 ```bash
-# Check Ollama status
-sudo systemctl status ollama
+# SQL Server (source)
+MSSQL_HOST=your-sql-server-host
+MSSQL_PORT=1433
+MSSQL_USER=your-username
+MSSQL_PASSWORD=your-password
+MSSQL_DATABASE=your-database
 
-# Pull a different model
-ollama pull mistral
+# Snowflake (target)
+SNOWFLAKE_USER=your-user
+SNOWFLAKE_ACCOUNT=your-account
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+SNOWFLAKE_DATABASE=your-database
 
-# List available models
-ollama list
-
-# Change model in .env
-# Edit /opt/ombudsman/.env and set OLLAMA_MODEL=mistral
+# Authentication: password OR token
+SNOWFLAKE_PASSWORD=your-password
+# SNOWFLAKE_TOKEN=your-pat-token  # Use instead of password
 ```
 
-## SSL Certificate Renewal
-
-Certificates auto-renew via cron. To manually renew:
-
+### LLM Provider (for AI schema mapping)
 ```bash
-sudo certbot renew
-sudo systemctl reload nginx
+LLM_PROVIDER=ollama  # Options: ollama, openai, azure_openai, anthropic
+
+# Ollama (default - local, no API key needed)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama2
+
+# OpenAI
+# OPENAI_API_KEY=sk-...
+# OPENAI_MODEL=gpt-4o-mini
+
+# Azure OpenAI
+# AZURE_OPENAI_API_KEY=...
+# AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+# AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+
+# Anthropic
+# ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Updating the Application
-
+### Authentication Database
 ```bash
-# Stop services
-sudo systemctl stop ombudsman-backend ombudsman-frontend
+AUTH_BACKEND=sqlserver  # Options: sqlite, sqlserver
 
-# Pull latest code
-cd /path/to/data-migration-validator
-git pull
-
-# Re-run deployment (preserves data and config)
-sudo ./deploy/deploy.sh your-domain.com
-
-# Or manually update:
-# Backend
-sudo cp -r ombudsman-validation-studio/backend/* /opt/ombudsman/backend/
-sudo -u ombudsman /opt/ombudsman/backend/venv/bin/pip install -r /opt/ombudsman/backend/requirements.txt
-
-# Frontend
-cd ombudsman-validation-studio/frontend
-npm ci && npm run build
-sudo cp -r dist/* /opt/ombudsman/frontend/dist/
-
-# Restart
-sudo systemctl start ombudsman-backend ombudsman-frontend
+# SQL Server auth database
+AUTH_DB_SERVER=your-sql-server-host
+AUTH_DB_NAME=ovs_studio
+AUTH_DB_USER=your-username
+AUTH_DB_PASSWORD=your-password
 ```
+
+---
+
+## Directory Structure
+
+```
+/data/ombudsman/
+├── ombudsman.env              # Main configuration file
+├── deploy/                    # Deployment scripts
+│   ├── install-ombudsman.sh   # Installation script
+│   ├── start-ombudsman.sh     # Manual start/stop script
+│   └── systemd/               # Systemd service files
+├── ombudsman-validation-studio/
+│   ├── backend/               # Python backend
+│   │   └── venv/              # Python virtual environment
+│   └── frontend/              # React frontend
+├── ombudsman_core/            # Core library
+├── data/                      # Application data
+│   ├── projects/
+│   ├── pipelines/
+│   ├── results/
+│   └── auth/
+└── logs/                      # Log files
+    ├── backend.log
+    └── frontend.log
+```
+
+---
 
 ## Troubleshooting
 
-### Backend won't start
-
+### Services won't start
 ```bash
-# Check logs
+# Check for errors
 sudo journalctl -u ombudsman-backend -n 50
+sudo journalctl -u ombudsman-frontend -n 50
 
-# Test manually
-sudo -u ombudsman /opt/ombudsman/backend/venv/bin/python -c "import main"
-
-# Check Python path
-sudo -u ombudsman bash -c 'source /opt/ombudsman/backend/venv/bin/activate && python -c "import sys; print(sys.path)"'
+# Check if ports are in use
+sudo lsof -i :8000
+sudo lsof -i :3000
 ```
 
 ### Database connection issues
-
 ```bash
 # Test SQL Server connection
-/opt/mssql-tools18/bin/sqlcmd -S your-host -U your-user -P your-password -Q "SELECT 1"
-
-# Check ODBC drivers
-odbcinst -q -d
+cd /data/ombudsman/ombudsman-validation-studio/backend
+./venv/bin/python -c "
+import pyodbc
+conn = pyodbc.connect('DRIVER={ODBC Driver 18 for SQL Server};SERVER=your-host,1433;DATABASE=your-db;UID=user;PWD=pass;TrustServerCertificate=yes;')
+print('Connected!')
+"
 ```
 
-### Nginx 502 Bad Gateway
-
+### Reset authentication database
 ```bash
-# Check if backend is running
-sudo systemctl status ombudsman-backend
-
-# Check if backend is listening
-sudo ss -tlnp | grep 8000
-
-# Test backend directly
-curl http://127.0.0.1:8000/health
+cd /data/ombudsman/deploy
+./start-ombudsman.sh setup-auth
 ```
 
-### SSL Certificate Issues
-
+### Rebuild frontend (after changing VITE_API_URL)
 ```bash
-# Check certificate status
-sudo certbot certificates
-
-# Force renewal
-sudo certbot renew --force-renewal
-
-# Check Nginx SSL config
-sudo nginx -t
+cd /data/ombudsman/deploy
+./start-ombudsman.sh rebuild-frontend
+sudo systemctl restart ombudsman-frontend
 ```
 
-## Security Recommendations
+---
 
-1. **Firewall**: Only allow ports 80, 443, and SSH
-   ```bash
-   sudo ufw allow 22/tcp
-   sudo ufw allow 80/tcp
-   sudo ufw allow 443/tcp
-   sudo ufw enable
-   ```
+## Manual Start (without systemd)
 
-2. **Database**: Use strong passwords and restrict network access
-
-3. **Secrets**: Generate strong SECRET_KEY
-   ```bash
-   openssl rand -hex 32
-   ```
-
-4. **Updates**: Keep system updated
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-
-## Backup
-
-### Backup Data
-
+If you prefer not to use systemd:
 ```bash
-# Create backup
-sudo tar -czvf ombudsman-backup-$(date +%Y%m%d).tar.gz \
-    /var/lib/ombudsman/data \
-    /opt/ombudsman/.env
+cd /data/ombudsman/deploy
+./start-ombudsman.sh start    # Start services
+./start-ombudsman.sh stop     # Stop services
+./start-ombudsman.sh status   # Check status
+./start-ombudsman.sh logs     # View logs
 ```
 
-### Restore Data
+---
+
+## Updating
 
 ```bash
-# Stop services
-sudo systemctl stop ombudsman-backend ombudsman-frontend
+cd /data/ombudsman
+git pull
 
-# Restore
-sudo tar -xzvf ombudsman-backup-YYYYMMDD.tar.gz -C /
+# Reinstall dependencies if needed
+cd ombudsman-validation-studio/backend
+./venv/bin/pip install -r requirements.txt
 
-# Start services
-sudo systemctl start ombudsman-backend ombudsman-frontend
+cd ../frontend
+npm install
+npm run build
+
+# Restart services
+sudo systemctl restart ombudsman-backend ombudsman-frontend
 ```

@@ -345,6 +345,37 @@ except Exception as e:
 }
 
 # ==============================================
+# Setup systemd services for auto-start on boot
+# ==============================================
+setup_systemd_services() {
+    echo ""
+    echo "=========================================="
+    echo "Setting up systemd services..."
+    echo "=========================================="
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Create log directory
+    mkdir -p "$BASE_DIR/logs"
+    REAL_USER="${SUDO_USER:-$USER}"
+    chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR/logs"
+
+    # Copy service files
+    cp "$SCRIPT_DIR/systemd/ombudsman-backend.service" /etc/systemd/system/
+    cp "$SCRIPT_DIR/systemd/ombudsman-frontend.service" /etc/systemd/system/
+
+    # Reload systemd
+    systemctl daemon-reload
+
+    # Enable services (auto-start on boot)
+    systemctl enable ombudsman-backend
+    systemctl enable ombudsman-frontend
+
+    print_status "Systemd services installed and enabled"
+    print_status "Services will auto-start on boot"
+}
+
+# ==============================================
 # Main
 # ==============================================
 main() {
@@ -362,6 +393,7 @@ main() {
     setup_frontend
     setup_config
     setup_auth_db
+    setup_systemd_services
 
     echo ""
     echo "=========================================="
@@ -369,18 +401,11 @@ main() {
     echo "=========================================="
     echo ""
     echo "Next steps:"
-    echo "1. Edit your config file (if not already done):"
+    echo ""
+    echo "1. Edit your config file:"
     echo "   nano $BASE_DIR/ombudsman.env"
     echo ""
-    echo "2. Start the services (choose one option):"
-    echo ""
-    echo "   Option A - Manual start:"
-    echo "   cd $BASE_DIR/deploy"
-    echo "   ./start-ombudsman.sh start"
-    echo ""
-    echo "   Option B - Auto-start on boot (recommended for production):"
-    echo "   cd $BASE_DIR/deploy"
-    echo "   sudo ./start-ombudsman.sh enable-service"
+    echo "2. Start the services:"
     echo "   sudo systemctl start ombudsman-backend ombudsman-frontend"
     echo ""
     echo "3. Access the application:"
@@ -388,6 +413,18 @@ main() {
     echo "   Backend:  http://your-server:8000"
     echo ""
     echo "Default login: admin / admin123"
+    echo ""
+    echo "=========================================="
+    echo "Useful commands:"
+    echo "=========================================="
+    echo "  Start services:   sudo systemctl start ombudsman-backend ombudsman-frontend"
+    echo "  Stop services:    sudo systemctl stop ombudsman-backend ombudsman-frontend"
+    echo "  Restart services: sudo systemctl restart ombudsman-backend ombudsman-frontend"
+    echo "  Check status:     sudo systemctl status ombudsman-backend"
+    echo "  View logs:        sudo journalctl -u ombudsman-backend -f"
+    echo ""
+    echo "Services will auto-start on reboot."
+    echo "For more help: cat $BASE_DIR/deploy/README.md"
     echo ""
 }
 
