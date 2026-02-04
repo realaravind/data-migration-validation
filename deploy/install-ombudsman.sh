@@ -176,6 +176,47 @@ install_odbc_drivers() {
 }
 
 # ==============================================
+# Install SOPS and age for secrets encryption
+# ==============================================
+install_sops() {
+    echo ""
+    echo "=========================================="
+    echo "Installing SOPS and age for secrets..."
+    echo "=========================================="
+
+    # Install age
+    if command -v age &> /dev/null; then
+        print_status "age already installed: $(age --version)"
+    else
+        echo "Installing age..."
+        # Try apt first (Ubuntu 22.04+)
+        if apt-cache show age &> /dev/null 2>&1; then
+            apt-get install -y age
+        else
+            # Download from GitHub releases
+            AGE_VERSION="1.1.1"
+            curl -LO "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz"
+            tar -xzf "age-v${AGE_VERSION}-linux-amd64.tar.gz"
+            mv age/age age/age-keygen /usr/local/bin/
+            rm -rf age "age-v${AGE_VERSION}-linux-amd64.tar.gz"
+        fi
+        print_status "age installed"
+    fi
+
+    # Install SOPS
+    if command -v sops &> /dev/null; then
+        print_status "SOPS already installed: $(sops --version)"
+    else
+        echo "Installing SOPS..."
+        SOPS_VERSION="3.8.1"
+        curl -LO "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+        mv "sops-v${SOPS_VERSION}.linux.amd64" /usr/local/bin/sops
+        chmod +x /usr/local/bin/sops
+        print_status "SOPS installed"
+    fi
+}
+
+# ==============================================
 # Create directory structure
 # ==============================================
 create_directories() {
@@ -388,6 +429,7 @@ main() {
     detect_python
     install_nodejs
     install_odbc_drivers
+    install_sops
     create_directories
     setup_python_venv
     setup_frontend
@@ -405,10 +447,15 @@ main() {
     echo "1. Edit your config file:"
     echo "   nano $BASE_DIR/ombudsman.env"
     echo ""
-    echo "2. Start the services:"
+    echo "2. (Optional) Encrypt your secrets:"
+    echo "   cd $BASE_DIR/deploy"
+    echo "   ./start-ombudsman.sh init-secrets"
+    echo "   ./start-ombudsman.sh encrypt-secrets"
+    echo ""
+    echo "3. Start the services:"
     echo "   sudo systemctl start ombudsman-backend ombudsman-frontend"
     echo ""
-    echo "3. Access the application:"
+    echo "4. Access the application:"
     echo "   Frontend: http://your-server:3000"
     echo "   Backend:  http://your-server:8000"
     echo ""
@@ -422,6 +469,8 @@ main() {
     echo "  Restart services: sudo systemctl restart ombudsman-backend ombudsman-frontend"
     echo "  Check status:     sudo systemctl status ombudsman-backend"
     echo "  View logs:        sudo journalctl -u ombudsman-backend -f"
+    echo "  Encrypt secrets:  ./start-ombudsman.sh encrypt-secrets"
+    echo "  Edit secrets:     ./start-ombudsman.sh edit-secrets"
     echo ""
     echo "Services will auto-start on reboot."
     echo "For more help: cat $BASE_DIR/deploy/README.md"

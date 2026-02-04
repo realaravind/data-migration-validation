@@ -5,15 +5,64 @@
 #
 
 # ==============================================
+# SOPS Encryption Support
+# ==============================================
+SOPS_KEY_FILE="${SOPS_AGE_KEY_FILE:-/data/ombudsman/.sops-age-key.txt}"
+ENV_FILE_ENC="${OMBUDSMAN_ENV_FILE:-/data/ombudsman/ombudsman.env}.enc"
+
+# Check if SOPS is available
+has_sops() {
+    command -v sops &> /dev/null
+}
+
+# Check if age is available
+has_age() {
+    command -v age &> /dev/null
+}
+
+# Check if file is SOPS-encrypted
+is_sops_encrypted() {
+    local file="$1"
+    [ -f "$file" ] && head -1 "$file" 2>/dev/null | grep -q "^sops_"
+}
+
+# Decrypt SOPS file to stdout
+decrypt_sops_env() {
+    local encrypted_file="$1"
+
+    if [ ! -f "$SOPS_KEY_FILE" ]; then
+        echo "ERROR: SOPS key file not found at $SOPS_KEY_FILE" >&2
+        echo "Run './start-ombudsman.sh init-secrets' to generate a key." >&2
+        return 1
+    fi
+
+    SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --decrypt "$encrypted_file"
+}
+
+# ==============================================
 # Load Environment File
 # ==============================================
 ENV_FILE="${OMBUDSMAN_ENV_FILE:-/data/ombudsman/ombudsman.env}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/ombudsman.env"
 
-if [ ! -f "$ENV_FILE" ]; then
-    echo "Config file not found at $ENV_FILE"
-    if [ -f "$TEMPLATE_FILE" ]; then
+# Determine which env file to use
+load_env_file() {
+    # Priority: encrypted file > plaintext file > template
+    if [ -f "$ENV_FILE_ENC" ] && has_sops; then
+        echo "Loading encrypted config from: $ENV_FILE_ENC"
+        local decrypted
+        decrypted=$(decrypt_sops_env "$ENV_FILE_ENC") || exit 1
+        set -a
+        eval "$decrypted"
+        set +a
+    elif [ -f "$ENV_FILE" ]; then
+        echo "Loading config from: $ENV_FILE"
+        set -a
+        source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
+        set +a
+    elif [ -f "$TEMPLATE_FILE" ]; then
+        echo "Config file not found at $ENV_FILE"
         echo "Copying template from $TEMPLATE_FILE..."
         cp "$TEMPLATE_FILE" "$ENV_FILE"
         echo ""
@@ -22,6 +71,9 @@ if [ ! -f "$ENV_FILE" ]; then
         echo "=========================================="
         echo "Run: nano $ENV_FILE"
         echo "Update your database credentials, then run this script again."
+        echo ""
+        echo "To encrypt secrets after editing:"
+        echo "  ./start-ombudsman.sh encrypt-secrets"
         echo "=========================================="
         echo ""
         exit 1
@@ -29,13 +81,18 @@ if [ ! -f "$ENV_FILE" ]; then
         echo "Error: Template file not found at $TEMPLATE_FILE"
         exit 1
     fi
-fi
+}
 
-echo "Loading config from: $ENV_FILE"
-# Export all variables from .env file (skip comments and empty lines)
-set -a
-source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
-set +a
+# Load environment (skip for certain commands that don't need it)
+case "${1:-start}" in
+    init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help)
+        # These commands handle env loading themselves
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        ;;
+    *)
+        load_env_file
+        ;;
+esac
 
 # ==============================================
 # Configuration - Defaults (overridden by .env)
@@ -491,8 +548,214 @@ case "${1:-start}" in
         echo ""
         echo "Check status: sudo systemctl status ombudsman-backend"
         ;;
+    init-secrets)
+        echo "=========================================="
+        echo "Initializing SOPS encryption..."
+        echo "=========================================="
+
+        # Check dependencies
+        if ! has_sops; then
+            echo "ERROR: SOPS is not installed."
+            echo "Install with: sudo apt-get install -y sops"
+            echo "Or download from: https://github.com/getsops/sops/releases"
+            exit 1
+        fi
+
+        if ! has_age; then
+            echo "ERROR: age is not installed."
+            echo "Install with: sudo apt-get install -y age"
+            echo "Or download from: https://github.com/FiloSottile/age/releases"
+            exit 1
+        fi
+
+        # Generate age key if not exists
+        if [ -f "$SOPS_KEY_FILE" ]; then
+            echo "Age key already exists at: $SOPS_KEY_FILE"
+            AGE_PUBLIC_KEY=$(grep "public key:" "$SOPS_KEY_FILE" | cut -d: -f2 | tr -d ' ')
+        else
+            echo "Generating new age encryption key..."
+            mkdir -p "$(dirname "$SOPS_KEY_FILE")"
+            age-keygen -o "$SOPS_KEY_FILE" 2>&1 | tee /tmp/age-keygen-output.txt
+            chmod 600 "$SOPS_KEY_FILE"
+            AGE_PUBLIC_KEY=$(grep "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
+            rm -f /tmp/age-keygen-output.txt
+            echo ""
+            echo "Age key generated at: $SOPS_KEY_FILE"
+        fi
+
+        # Create .sops.yaml config
+        SOPS_CONFIG="/data/ombudsman/.sops.yaml"
+        cat > "$SOPS_CONFIG" << EOF
+creation_rules:
+  - path_regex: .*\.env\.enc$
+    age: $AGE_PUBLIC_KEY
+EOF
+        echo "SOPS config created at: $SOPS_CONFIG"
+
+        echo ""
+        echo "=========================================="
+        echo "SOPS initialization complete!"
+        echo "=========================================="
+        echo ""
+        echo "Your encryption key is stored at:"
+        echo "  $SOPS_KEY_FILE"
+        echo ""
+        echo "IMPORTANT: Back up this key securely!"
+        echo "Without it, you cannot decrypt your secrets."
+        echo ""
+        echo "Next steps:"
+        echo "  1. Edit your config: nano $ENV_FILE"
+        echo "  2. Encrypt it:       ./start-ombudsman.sh encrypt-secrets"
+        echo ""
+        ;;
+    encrypt-secrets)
+        echo "=========================================="
+        echo "Encrypting secrets..."
+        echo "=========================================="
+
+        if ! has_sops; then
+            echo "ERROR: SOPS is not installed. Run './start-ombudsman.sh init-secrets' first."
+            exit 1
+        fi
+
+        if [ ! -f "$SOPS_KEY_FILE" ]; then
+            echo "ERROR: No encryption key found. Run './start-ombudsman.sh init-secrets' first."
+            exit 1
+        fi
+
+        if [ ! -f "$ENV_FILE" ]; then
+            echo "ERROR: Config file not found at $ENV_FILE"
+            exit 1
+        fi
+
+        # Encrypt the env file
+        echo "Encrypting $ENV_FILE..."
+        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --encrypt "$ENV_FILE" > "$ENV_FILE_ENC"
+
+        echo ""
+        echo "=========================================="
+        echo "Encryption complete!"
+        echo "=========================================="
+        echo ""
+        echo "Encrypted file: $ENV_FILE_ENC"
+        echo ""
+        echo "You can now safely delete the plaintext file:"
+        echo "  rm $ENV_FILE"
+        echo ""
+        echo "The services will automatically use the encrypted file."
+        echo ""
+        ;;
+    decrypt-secrets)
+        echo "=========================================="
+        echo "Decrypting secrets..."
+        echo "=========================================="
+
+        if ! has_sops; then
+            echo "ERROR: SOPS is not installed."
+            exit 1
+        fi
+
+        if [ ! -f "$SOPS_KEY_FILE" ]; then
+            echo "ERROR: No decryption key found at $SOPS_KEY_FILE"
+            exit 1
+        fi
+
+        if [ ! -f "$ENV_FILE_ENC" ]; then
+            echo "ERROR: Encrypted file not found at $ENV_FILE_ENC"
+            exit 1
+        fi
+
+        if [ -f "$ENV_FILE" ]; then
+            echo "WARNING: Plaintext file already exists at $ENV_FILE"
+            read -p "Overwrite? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "Aborted."
+                exit 0
+            fi
+        fi
+
+        # Decrypt
+        echo "Decrypting $ENV_FILE_ENC..."
+        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --decrypt "$ENV_FILE_ENC" > "$ENV_FILE"
+        chmod 600 "$ENV_FILE"
+
+        echo ""
+        echo "Decrypted to: $ENV_FILE"
+        echo ""
+        echo "SECURITY WARNING: The plaintext file contains secrets!"
+        echo "Remember to re-encrypt after editing:"
+        echo "  ./start-ombudsman.sh encrypt-secrets"
+        echo ""
+        ;;
+    edit-secrets)
+        echo "=========================================="
+        echo "Editing encrypted secrets..."
+        echo "=========================================="
+
+        if ! has_sops; then
+            echo "ERROR: SOPS is not installed."
+            exit 1
+        fi
+
+        if [ ! -f "$SOPS_KEY_FILE" ]; then
+            echo "ERROR: No decryption key found at $SOPS_KEY_FILE"
+            exit 1
+        fi
+
+        # Determine which file to edit
+        if [ -f "$ENV_FILE_ENC" ]; then
+            echo "Opening encrypted file for editing..."
+            echo "(File will be decrypted, edited, then re-encrypted automatically)"
+            echo ""
+            SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops "$ENV_FILE_ENC"
+            echo ""
+            echo "Changes saved and encrypted."
+        elif [ -f "$ENV_FILE" ]; then
+            echo "No encrypted file found. Opening plaintext file..."
+            ${EDITOR:-nano} "$ENV_FILE"
+            echo ""
+            echo "To encrypt your secrets, run:"
+            echo "  ./start-ombudsman.sh encrypt-secrets"
+        else
+            echo "ERROR: No config file found."
+            echo "Run the start script first to create a config from template."
+            exit 1
+        fi
+        ;;
+    help)
+        echo "Ombudsman Validation Studio - Command Reference"
+        echo ""
+        echo "Usage: $0 <command>"
+        echo ""
+        echo "Service Commands:"
+        echo "  start              Start backend and frontend services"
+        echo "  stop               Stop all services"
+        echo "  restart            Restart all services"
+        echo "  status             Show service status"
+        echo "  logs               Show recent logs"
+        echo "  backend            Start only the backend"
+        echo "  frontend           Start only the frontend"
+        echo ""
+        echo "Setup Commands:"
+        echo "  setup-auth         Initialize authentication database"
+        echo "  rebuild-frontend   Rebuild frontend (after config changes)"
+        echo "  enable-service     Install systemd services (auto-start on boot)"
+        echo "  disable-service    Remove systemd services"
+        echo "  update             Update to latest version (git pull + rebuild)"
+        echo ""
+        echo "Secrets Management (SOPS):"
+        echo "  init-secrets       Initialize SOPS encryption (generates age key)"
+        echo "  encrypt-secrets    Encrypt the config file"
+        echo "  decrypt-secrets    Decrypt to plaintext (for backup/migration)"
+        echo "  edit-secrets       Edit encrypted config (auto decrypt/encrypt)"
+        echo ""
+        echo "Environment Variables:"
+        echo "  OMBUDSMAN_ENV_FILE   Path to config file (default: /data/ombudsman/ombudsman.env)"
+        echo "  SOPS_AGE_KEY_FILE    Path to age key (default: /data/ombudsman/.sops-age-key.txt)"
+        echo ""
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend|enable-service|disable-service|update}"
+        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend|enable-service|disable-service|update|init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help}"
         exit 1
         ;;
 esac

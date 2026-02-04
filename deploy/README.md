@@ -34,15 +34,16 @@ The install script automatically handles everything in one run:
 | 2 | Auto-detect Python command (python3 or python, verifies 3.8+) |
 | 3 | Install Node.js v20 |
 | 4 | Install ODBC Driver 18 for SQL Server |
-| 5 | Create directory structure (`/data/ombudsman/data`, `logs`, etc.) |
-| 6 | Create Python virtual environment |
-| 7 | Install Python dependencies from requirements.txt |
-| 8 | Install frontend npm dependencies |
-| 9 | Build frontend for production |
-| 10 | Copy configuration template to `/data/ombudsman/ombudsman.env` |
-| 11 | Setup authentication database (if SQL Server auth configured) |
-| 12 | Install systemd service files |
-| 13 | Enable auto-start on boot |
+| 5 | Install SOPS and age (for secrets encryption) |
+| 6 | Create directory structure (`/data/ombudsman/data`, `logs`, etc.) |
+| 7 | Create Python virtual environment |
+| 8 | Install Python dependencies from requirements.txt |
+| 9 | Install frontend npm dependencies |
+| 10 | Build frontend for production |
+| 11 | Copy configuration template to `/data/ombudsman/ombudsman.env` |
+| 12 | Setup authentication database (if SQL Server auth configured) |
+| 13 | Install systemd service files |
+| 14 | Enable auto-start on boot |
 
 After installation completes, you only need to:
 1. Edit the config file with your database credentials
@@ -155,11 +156,67 @@ AUTH_DB_PASSWORD=your-password
 
 ---
 
+## Secrets Encryption (SOPS)
+
+The config file contains sensitive credentials. Use SOPS encryption to secure them.
+
+### Initial Setup
+```bash
+cd /data/ombudsman/deploy
+
+# 1. Initialize encryption (generates age key)
+./start-ombudsman.sh init-secrets
+
+# 2. Edit your config with credentials
+nano /data/ombudsman/ombudsman.env
+
+# 3. Encrypt the config file
+./start-ombudsman.sh encrypt-secrets
+
+# 4. (Optional) Delete plaintext file
+rm /data/ombudsman/ombudsman.env
+```
+
+### How It Works
+- Uses [SOPS](https://github.com/getsops/sops) with [age](https://github.com/FiloSottile/age) encryption
+- Encrypted file: `/data/ombudsman/ombudsman.env.enc`
+- Encryption key: `/data/ombudsman/.sops-age-key.txt`
+- Services automatically decrypt at startup
+
+### Managing Secrets
+```bash
+# Edit encrypted config (auto decrypt/re-encrypt)
+./start-ombudsman.sh edit-secrets
+
+# Decrypt to plaintext (for backup/migration)
+./start-ombudsman.sh decrypt-secrets
+
+# Re-encrypt after changes
+./start-ombudsman.sh encrypt-secrets
+```
+
+### Key Backup
+**IMPORTANT:** Back up your encryption key securely!
+```bash
+# The key file location
+/data/ombudsman/.sops-age-key.txt
+
+# Copy to secure location
+cp /data/ombudsman/.sops-age-key.txt /secure/backup/location/
+```
+
+Without this key, you cannot decrypt your secrets.
+
+---
+
 ## Directory Structure
 
 ```
 /data/ombudsman/
-├── ombudsman.env              # Main configuration file
+├── ombudsman.env              # Configuration file (plaintext)
+├── ombudsman.env.enc          # Configuration file (encrypted, if using SOPS)
+├── .sops-age-key.txt          # Encryption key (keep secure!)
+├── .sops.yaml                 # SOPS configuration
 ├── deploy/                    # Deployment scripts
 │   ├── install-ombudsman.sh   # Installation script
 │   ├── start-ombudsman.sh     # Manual start/stop script
