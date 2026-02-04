@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-### 1. Install
+### 1. Install (one command does everything)
 ```bash
 sudo ./install-ombudsman.sh
 ```
@@ -21,6 +21,34 @@ sudo systemctl start ombudsman-backend ombudsman-frontend
 - Frontend: http://your-server:3000
 - Backend API: http://your-server:8000
 - Default login: `admin` / `admin123`
+
+---
+
+## What the Install Script Does
+
+The install script automatically handles everything in one run:
+
+| Step | Action |
+|------|--------|
+| 1 | Install system dependencies (python3, pip, venv, curl, git, build-essential) |
+| 2 | Auto-detect Python command (python3 or python, verifies 3.8+) |
+| 3 | Install Node.js v20 |
+| 4 | Install ODBC Driver 18 for SQL Server |
+| 5 | Create directory structure (`/data/ombudsman/data`, `logs`, etc.) |
+| 6 | Create Python virtual environment |
+| 7 | Install Python dependencies from requirements.txt |
+| 8 | Install frontend npm dependencies |
+| 9 | Build frontend for production |
+| 10 | Copy configuration template to `/data/ombudsman/ombudsman.env` |
+| 11 | Setup authentication database (if SQL Server auth configured) |
+| 12 | Install systemd service files |
+| 13 | Enable auto-start on boot |
+
+After installation completes, you only need to:
+1. Edit the config file with your database credentials
+2. Start the services with `systemctl`
+
+Services will automatically restart on system reboot.
 
 ---
 
