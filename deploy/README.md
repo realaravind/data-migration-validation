@@ -435,3 +435,34 @@ npm run build
 
 sudo systemctl restart ombudsman-backend ombudsman-frontend
 ```
+
+---
+
+## Uninstalling
+
+### Interactive Uninstall (Recommended)
+```bash
+cd $BASE_DIR/deploy
+sudo ./uninstall-ombudsman.sh
+```
+
+The uninstaller will prompt before removing each component:
+- Stop and disable systemd services
+- Remove Python virtual environment
+- Remove node_modules and build artifacts
+- Remove log files
+- Remove data (projects, pipelines, results)
+- Remove configuration and encryption keys
+- Remove entire installation directory
+
+### Quick Uninstall (Complete Removal)
+```bash
+# Stop and remove services
+sudo systemctl stop ombudsman-backend ombudsman-frontend
+sudo systemctl disable ombudsman-backend ombudsman-frontend
+sudo rm -f /etc/systemd/system/ombudsman-*.service
+sudo systemctl daemon-reload
+
+# Remove installation
+sudo rm -rf $BASE_DIR
+```
