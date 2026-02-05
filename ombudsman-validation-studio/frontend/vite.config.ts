@@ -26,12 +26,27 @@ export default defineConfig(({ mode }) => {
             }
         },
         build: {
+            // Mermaid's flowchart-elk uses the large ELK layout engine (~1.4MB)
+            // It's already lazy-loaded by mermaid, only when elk layout is needed
+            chunkSizeWarningLimit: 1500,
             // Generate unique filenames with timestamps for cache busting
             rollupOptions: {
                 output: {
                     entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
                     chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-                    assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`
+                    assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`,
+                    manualChunks: {
+                        // Core React vendor chunk
+                        'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+                        // MUI components (large library)
+                        'vendor-mui': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+                        // Data grid (separate from core MUI)
+                        'vendor-datagrid': ['@mui/x-data-grid'],
+                        // Charting library
+                        'vendor-recharts': ['recharts'],
+                        // Mermaid diagrams (only loaded on diagram pages)
+                        'vendor-mermaid': ['mermaid'],
+                    }
                 }
             }
         }
