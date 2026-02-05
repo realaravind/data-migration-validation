@@ -628,13 +628,13 @@ case "${1:-start}" in
         # Generate age key if not exists
         if [ -f "$SOPS_KEY_FILE" ]; then
             echo "Age key already exists at: $SOPS_KEY_FILE"
-            AGE_PUBLIC_KEY=$(grep "public key:" "$SOPS_KEY_FILE" | cut -d: -f2 | tr -d ' ')
+            AGE_PUBLIC_KEY=$(grep -i "public key:" "$SOPS_KEY_FILE" | cut -d: -f2 | tr -d ' ')
         else
             echo "Generating new age encryption key..."
             mkdir -p "$(dirname "$SOPS_KEY_FILE")"
             age-keygen -o "$SOPS_KEY_FILE" 2>&1 | tee /tmp/age-keygen-output.txt
             chmod 600 "$SOPS_KEY_FILE"
-            AGE_PUBLIC_KEY=$(grep "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
+            AGE_PUBLIC_KEY=$(grep -i "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
             rm -f /tmp/age-keygen-output.txt
             echo ""
             echo "Age key generated at: $SOPS_KEY_FILE"

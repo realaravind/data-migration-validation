@@ -778,7 +778,7 @@ setup_config() {
                         return
                     fi
                     chmod 600 "$SOPS_KEY_FILE"
-                    AGE_PUBLIC_KEY=$(grep "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
+                    AGE_PUBLIC_KEY=$(grep -i "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
                     rm -f /tmp/age-keygen-output.txt
 
                     if [ -z "$AGE_PUBLIC_KEY" ]; then
