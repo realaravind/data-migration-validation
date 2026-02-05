@@ -771,10 +771,21 @@ setup_config() {
                 SOPS_KEY_FILE="$BASE_DIR/.sops-age-key.txt"
                 if [ ! -f "$SOPS_KEY_FILE" ]; then
                     echo "Generating encryption key..."
-                    age-keygen -o "$SOPS_KEY_FILE" 2>&1 | tee /tmp/age-keygen-output.txt
+                    if ! age-keygen -o "$SOPS_KEY_FILE" 2>&1 | tee /tmp/age-keygen-output.txt; then
+                        print_error "Failed to generate age key"
+                        rm -f /tmp/age-keygen-output.txt
+                        print_warning "Skipping encryption. Config saved as plaintext."
+                        return
+                    fi
                     chmod 600 "$SOPS_KEY_FILE"
                     AGE_PUBLIC_KEY=$(grep "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
                     rm -f /tmp/age-keygen-output.txt
+
+                    if [ -z "$AGE_PUBLIC_KEY" ]; then
+                        print_error "Failed to extract public key from age-keygen output"
+                        print_warning "Skipping encryption. Config saved as plaintext."
+                        return
+                    fi
 
                     # Create .sops.yaml config
                     cat > "$BASE_DIR/.sops.yaml" << EOF
@@ -786,17 +797,41 @@ creation_rules:
   - path_regex: .*\.env\.enc$
     age: $AGE_PUBLIC_KEY
 EOF
+                    print_status "Created SOPS config with age key"
+                else
+                    # Key exists, make sure .sops.yaml also exists
+                    if [ ! -f "$BASE_DIR/.sops.yaml" ]; then
+                        print_error "Key exists but .sops.yaml is missing"
+                        print_warning "Run './start-ombudsman.sh init-secrets' to fix, then './start-ombudsman.sh encrypt-secrets'"
+                        return
+                    fi
                 fi
 
-                SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" > "$ENV_FILE.enc"
-                print_status "Configuration encrypted to $ENV_FILE.enc"
-                print_warning "IMPORTANT: Back up your key: $SOPS_KEY_FILE"
+                # Encrypt and verify it worked
+                if SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" > "$ENV_FILE.enc.tmp" 2>&1; then
+                    # Verify the output is actually encrypted (starts with "sops" marker)
+                    if head -1 "$ENV_FILE.enc.tmp" 2>/dev/null | grep -q "^sops"; then
+                        mv "$ENV_FILE.enc.tmp" "$ENV_FILE.enc"
+                        print_status "Configuration encrypted to $ENV_FILE.enc"
+                        print_warning "IMPORTANT: Back up your key: $SOPS_KEY_FILE"
 
-                read -p "Delete plaintext config file? (Y/n): " delete_plain
-                delete_plain="${delete_plain:-Y}"
-                if [ "$delete_plain" = "Y" ] || [ "$delete_plain" = "y" ]; then
-                    rm "$ENV_FILE"
-                    print_status "Plaintext config deleted"
+                        read -p "Delete plaintext config file? (Y/n): " delete_plain
+                        delete_plain="${delete_plain:-Y}"
+                        if [ "$delete_plain" = "Y" ] || [ "$delete_plain" = "y" ]; then
+                            rm "$ENV_FILE"
+                            print_status "Plaintext config deleted"
+                        fi
+                    else
+                        print_error "Encryption produced invalid output"
+                        cat "$ENV_FILE.enc.tmp"
+                        rm -f "$ENV_FILE.enc.tmp"
+                        print_warning "Keeping plaintext config at $ENV_FILE"
+                    fi
+                else
+                    print_error "SOPS encryption failed:"
+                    cat "$ENV_FILE.enc.tmp" 2>/dev/null
+                    rm -f "$ENV_FILE.enc.tmp"
+                    print_warning "Keeping plaintext config at $ENV_FILE"
                 fi
             fi
         fi
