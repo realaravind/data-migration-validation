@@ -34,10 +34,10 @@ has_age() {
     command -v age &> /dev/null
 }
 
-# Check if file is SOPS-encrypted
+# Check if file is SOPS-encrypted (has ENC[ markers or sops_ metadata)
 is_sops_encrypted() {
     local file="$1"
-    [ -f "$file" ] && head -1 "$file" 2>/dev/null | grep -q "^sops_"
+    [ -f "$file" ] && (grep -q "ENC\[" "$file" 2>/dev/null || grep -q "^sops_" "$file" 2>/dev/null)
 }
 
 # Decrypt SOPS file to stdout

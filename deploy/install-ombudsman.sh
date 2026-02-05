@@ -825,8 +825,8 @@ EOF
 
                 # Encrypt and verify it worked
                 if SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" > "$ENV_FILE.enc.tmp" 2>&1; then
-                    # Verify the output is actually encrypted (starts with "sops" marker)
-                    if head -1 "$ENV_FILE.enc.tmp" 2>/dev/null | grep -q "^sops"; then
+                    # Verify the output is actually encrypted (contains ENC[ markers or sops_ metadata)
+                    if grep -q "ENC\[" "$ENV_FILE.enc.tmp" 2>/dev/null || grep -q "^sops_" "$ENV_FILE.enc.tmp" 2>/dev/null; then
                         mv "$ENV_FILE.enc.tmp" "$ENV_FILE.enc"
                         print_status "Configuration encrypted to $ENV_FILE.enc"
                         print_warning "IMPORTANT: Back up your key: $SOPS_KEY_FILE"
