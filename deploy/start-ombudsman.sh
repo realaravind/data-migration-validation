@@ -599,6 +599,10 @@ case "${1:-start}" in
         SOPS_CONFIG="$BASE_DIR/.sops.yaml"
         cat > "$SOPS_CONFIG" << EOF
 creation_rules:
+  # Match .env files for encryption
+  - path_regex: .*\.env$
+    age: $AGE_PUBLIC_KEY
+  # Match .env.enc files for decryption
   - path_regex: .*\.env\.enc$
     age: $AGE_PUBLIC_KEY
 EOF
