@@ -416,10 +416,26 @@ interactive_setup() {
         CFG_AUTH_BACKEND="sqlserver"
         echo ""
         echo "SQL Server authentication database settings:"
-        prompt_with_default "Auth DB server" "$CFG_MSSQL_HOST" "CFG_AUTH_DB_SERVER"
-        prompt_with_default "Auth DB name" "ovs_studio" "CFG_AUTH_DB_NAME"
-        prompt_with_default "Auth DB username" "$CFG_MSSQL_USER" "CFG_AUTH_DB_USER"
-        prompt_with_default "Auth DB password" "" "CFG_AUTH_DB_PASSWORD" "true"
+        echo ""
+        echo "Use same SQL Server credentials as source database?"
+        echo "  Server: $CFG_MSSQL_HOST"
+        echo "  User:   $CFG_MSSQL_USER"
+        read -p "Reuse these credentials? (Y/n): " reuse_creds
+        reuse_creds="${reuse_creds:-Y}"
+
+        if [ "$reuse_creds" = "Y" ] || [ "$reuse_creds" = "y" ]; then
+            CFG_AUTH_DB_SERVER="$CFG_MSSQL_HOST"
+            CFG_AUTH_DB_USER="$CFG_MSSQL_USER"
+            CFG_AUTH_DB_PASSWORD="$CFG_MSSQL_PASSWORD"
+            echo ""
+            prompt_with_default "Auth DB name" "ovs_studio" "CFG_AUTH_DB_NAME"
+        else
+            echo ""
+            prompt_with_default "Auth DB server" "$CFG_MSSQL_HOST" "CFG_AUTH_DB_SERVER"
+            prompt_with_default "Auth DB name" "ovs_studio" "CFG_AUTH_DB_NAME"
+            prompt_with_default "Auth DB username" "$CFG_MSSQL_USER" "CFG_AUTH_DB_USER"
+            prompt_with_default "Auth DB password" "" "CFG_AUTH_DB_PASSWORD" "true"
+        fi
     else
         CFG_AUTH_BACKEND="sqlite"
         CFG_AUTH_DB_SERVER=""
