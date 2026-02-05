@@ -822,15 +822,18 @@ setup_auth_db() {
     ENV_FILE="$BASE_DIR/ombudsman.env"
     REAL_USER="${SUDO_USER:-$USER}"
 
-    # Load env file
+    # Load env file to get AUTH_BACKEND and credentials
     if [ -f "$ENV_FILE" ]; then
         set -a
         source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
         set +a
     fi
 
+    # Use CFG_AUTH_BACKEND from wizard if AUTH_BACKEND wasn't loaded from env file
+    AUTH_BACKEND="${AUTH_BACKEND:-${CFG_AUTH_BACKEND:-sqlite}}"
+
     # Check if using SQL Server auth
-    if [ "${AUTH_BACKEND:-sqlite}" = "sqlserver" ]; then
+    if [ "$AUTH_BACKEND" = "sqlserver" ]; then
         if [ -n "$AUTH_DB_SERVER" ] && [ -n "$AUTH_DB_USER" ] && [ -n "$AUTH_DB_PASSWORD" ]; then
             echo "Creating auth tables in SQL Server..."
             cd "$BACKEND_DIR"
@@ -879,7 +882,7 @@ except Exception as e:
             ./venv/bin/python -c "
 import sys
 sys.path.insert(0, '.')
-from auth.sqlite_auth_repository import SQLiteAuthRepository
+from auth.sqlite_repository import SQLiteAuthRepository
 from auth.models import UserCreate, UserRole
 repo = SQLiteAuthRepository()
 try:
