@@ -1072,6 +1072,7 @@ main() {
     if [ "$SETUP_ONLY" = true ]; then
         # Just run config wizard, skip dependency installation
         setup_config
+        setup_frontend      # Rebuild frontend with correct API URL
         setup_auth_db
         echo ""
         echo "=========================================="
