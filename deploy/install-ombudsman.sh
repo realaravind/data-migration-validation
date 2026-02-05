@@ -823,8 +823,21 @@ EOF
                     fi
                 fi
 
-                # Encrypt and verify it worked
-                if SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" > "$ENV_FILE.enc.tmp" 2>&1; then
+                # Debug: show what we're using
+                echo "Using key file: $SOPS_KEY_FILE"
+                echo "Using config: $BASE_DIR/.sops.yaml"
+                echo "Encrypting: $ENV_FILE"
+
+                # Show the age public key being used
+                echo "Age public key from config:"
+                grep "age:" "$BASE_DIR/.sops.yaml" 2>/dev/null || echo "  (not found)"
+
+                # Encrypt - keep stderr separate so we can see errors
+                local sops_error
+                sops_error=$(SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" 2>&1 > "$ENV_FILE.enc.tmp")
+                local sops_exit=$?
+
+                if [ $sops_exit -eq 0 ]; then
                     # Verify the output is actually encrypted (contains ENC[ markers or sops_ metadata)
                     if grep -q "ENC\[" "$ENV_FILE.enc.tmp" 2>/dev/null || grep -q "^sops_" "$ENV_FILE.enc.tmp" 2>/dev/null; then
                         mv "$ENV_FILE.enc.tmp" "$ENV_FILE.enc"
@@ -838,14 +851,15 @@ EOF
                             print_status "Plaintext config deleted"
                         fi
                     else
-                        print_error "Encryption produced invalid output"
-                        cat "$ENV_FILE.enc.tmp"
+                        print_error "Encryption produced invalid output (no ENC[ or sops_ markers)"
+                        echo "Output file contents:"
+                        head -20 "$ENV_FILE.enc.tmp"
                         rm -f "$ENV_FILE.enc.tmp"
                         print_warning "Keeping plaintext config at $ENV_FILE"
                     fi
                 else
-                    print_error "SOPS encryption failed:"
-                    cat "$ENV_FILE.enc.tmp" 2>/dev/null
+                    print_error "SOPS encryption failed (exit code: $sops_exit)"
+                    echo "SOPS error: $sops_error"
                     rm -f "$ENV_FILE.enc.tmp"
                     print_warning "Keeping plaintext config at $ENV_FILE"
                 fi
