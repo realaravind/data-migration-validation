@@ -91,26 +91,31 @@ load_env_file() {
         else
             echo "No plaintext config found either."
             echo ""
-            echo "Options to recover:"
-            echo "  1. Re-run installer:  sudo ./install-ombudsman.sh"
-            echo "  2. Copy template and edit manually:"
-            echo "     cp $TEMPLATE_FILE $ENV_FILE"
-            echo "     nano $ENV_FILE"
-            echo "     rm $ENV_FILE_ENC"
+
+            # Remove invalid .enc file
+            rm -f "$ENV_FILE_ENC"
+            echo "Removed invalid encrypted file."
             echo ""
 
-            # Offer to copy template now
-            if [ -f "$TEMPLATE_FILE" ]; then
-                read -p "Copy template now and edit? (Y/n): " copy_choice
-                copy_choice="${copy_choice:-Y}"
-                if [ "$copy_choice" = "Y" ] || [ "$copy_choice" = "y" ]; then
-                    cp "$TEMPLATE_FILE" "$ENV_FILE"
+            # Offer to run installer for interactive setup
+            read -p "Run interactive setup wizard? (Y/n): " setup_choice
+            setup_choice="${setup_choice:-Y}"
+            if [ "$setup_choice" = "Y" ] || [ "$setup_choice" = "y" ]; then
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                if [ -f "$SCRIPT_DIR/install-ombudsman.sh" ]; then
                     echo ""
-                    echo "Template copied to $ENV_FILE"
-                    echo "Edit with: nano $ENV_FILE"
-                    echo "Then remove invalid .enc: rm $ENV_FILE_ENC"
-                    echo "Then restart: ./start-ombudsman.sh start"
+                    echo "Launching setup wizard..."
+                    exec sudo "$SCRIPT_DIR/install-ombudsman.sh" --setup-only
+                else
+                    echo "ERROR: install-ombudsman.sh not found"
+                    exit 1
                 fi
+            else
+                echo ""
+                echo "To configure manually:"
+                echo "  1. Copy template: cp $TEMPLATE_FILE $ENV_FILE"
+                echo "  2. Edit config:   nano $ENV_FILE"
+                echo "  3. Start:         ./start-ombudsman.sh start"
             fi
             exit 1
         fi
@@ -120,20 +125,35 @@ load_env_file() {
         source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
         set +a
     elif [ -f "$TEMPLATE_FILE" ]; then
-        echo "Config file not found at $ENV_FILE"
-        echo "Copying template from $TEMPLATE_FILE..."
-        cp "$TEMPLATE_FILE" "$ENV_FILE"
         echo ""
         echo "=========================================="
-        echo "IMPORTANT: Edit your config file!"
-        echo "=========================================="
-        echo "Run: nano $ENV_FILE"
-        echo "Update your database credentials, then run this script again."
-        echo ""
-        echo "To encrypt secrets after editing:"
-        echo "  ./start-ombudsman.sh encrypt-secrets"
+        echo "No configuration found"
         echo "=========================================="
         echo ""
+
+        # Offer to run installer for interactive setup
+        read -p "Run interactive setup wizard? (Y/n): " setup_choice
+        setup_choice="${setup_choice:-Y}"
+        if [ "$setup_choice" = "Y" ] || [ "$setup_choice" = "y" ]; then
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            if [ -f "$SCRIPT_DIR/install-ombudsman.sh" ]; then
+                echo ""
+                echo "Launching setup wizard..."
+                exec sudo "$SCRIPT_DIR/install-ombudsman.sh" --setup-only
+            else
+                echo "ERROR: install-ombudsman.sh not found"
+                exit 1
+            fi
+        else
+            echo ""
+            echo "To configure manually:"
+            echo "  1. Copy template: cp $TEMPLATE_FILE $ENV_FILE"
+            echo "  2. Edit config:   nano $ENV_FILE"
+            echo "  3. Start:         ./start-ombudsman.sh start"
+            echo ""
+            echo "To encrypt secrets after editing:"
+            echo "  ./start-ombudsman.sh encrypt-secrets"
+        fi
         exit 1
     else
         echo "Error: Template file not found at $TEMPLATE_FILE"

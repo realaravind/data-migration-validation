@@ -1053,11 +1053,38 @@ EOF
 # Main
 # ==============================================
 main() {
+    # Check for --setup-only flag (reconfigure without reinstalling)
+    SETUP_ONLY=false
+    if [ "$1" = "--setup-only" ]; then
+        SETUP_ONLY=true
+    fi
+
     echo "=========================================="
-    echo "Ombudsman Validation Studio Installer"
+    if [ "$SETUP_ONLY" = true ]; then
+        echo "Ombudsman Validation Studio - Setup Wizard"
+    else
+        echo "Ombudsman Validation Studio Installer"
+    fi
     echo "=========================================="
 
     check_sudo
+
+    if [ "$SETUP_ONLY" = true ]; then
+        # Just run config wizard, skip dependency installation
+        setup_config
+        setup_auth_db
+        echo ""
+        echo "=========================================="
+        echo -e "${GREEN}Configuration Complete!${NC}"
+        echo "=========================================="
+        echo ""
+        echo "Start the services:"
+        echo "   sudo systemctl start ombudsman-backend ombudsman-frontend"
+        echo "   # or: ./start-ombudsman.sh start"
+        echo ""
+        return
+    fi
+
     install_system_deps
     detect_python
     install_nodejs
