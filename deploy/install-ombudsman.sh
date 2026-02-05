@@ -882,6 +882,7 @@ setup_auth_db() {
             # Create default admin user
             echo "Creating default admin user..."
             sudo -u "$REAL_USER" \
+                AUTH_BACKEND="sqlserver" \
                 AUTH_DB_SERVER="$AUTH_DB_SERVER" \
                 AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
                 AUTH_DB_USER="$AUTH_DB_USER" \
@@ -899,7 +900,7 @@ except ValueError as e:
 except Exception as e:
     print(f'  Could not create admin user: {e}')
 "
-            print_status "SQL Server auth database configured"
+            print_status "Auth database configured (SQL Server)"
         else
             print_warning "AUTH_BACKEND=sqlserver but credentials not set. Skipping auth DB setup."
             print_warning "Edit $ENV_FILE and run: ./start-ombudsman.sh setup-auth"
@@ -929,7 +930,7 @@ except ValueError as e:
 except Exception as e:
     print(f'  Could not create admin user: {e}')
 "
-        print_status "SQLite auth database configured"
+        print_status "Auth database configured (SQLite)"
     fi
 }
 
