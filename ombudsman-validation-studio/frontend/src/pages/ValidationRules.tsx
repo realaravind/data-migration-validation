@@ -60,7 +60,7 @@ export default function ValidationRules(_props: ValidationRulesProps) {
       });
       const data = await res.json();
       setRules(data.rules || []);
-    } catch (_) {}
+    } catch (_) { /* ignore fetch errors */ }
   };
 
   return (

@@ -48,7 +48,7 @@ export default function PipelineSuggestions(_props: PipelineSuggestionsProps) {
       const res = await fetch("/pipeline/load", { method: "POST" });
       const data = await res.json();
       setSteps(data.steps || []);
-    } catch (_) { }
+    } catch (_) { /* ignore fetch errors */ }
   };
 
   const updateStep = (idx: number, value: string) => {

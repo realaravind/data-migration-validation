@@ -567,7 +567,7 @@ export default function WorkloadAnalysis({ currentProject }: WorkloadAnalysisPro
         if (!currentWorkload?.analysis) return null;
 
         const { tables } = currentWorkload.analysis;
-        let allValidations: Array<{ key: string; suggestion: ValidationSuggestion; tableName: string }> = [];
+        const allValidations: Array<{ key: string; suggestion: ValidationSuggestion; tableName: string }> = [];
 
         Object.entries(tables).forEach(([tableName, tableData]) => {
             tableData.suggestions.forEach((suggestion, idx) => {

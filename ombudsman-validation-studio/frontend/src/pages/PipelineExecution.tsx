@@ -388,7 +388,7 @@ export default function PipelineExecution({ currentProject }: any) {
     // Handle errors/exceptions specially
     if (details.exception) {
       // Clean up Python error messages
-      let error = String(details.exception);
+      const error = String(details.exception);
 
       // Handle datetime representation errors
       if (error.includes('datetime.date(')) {

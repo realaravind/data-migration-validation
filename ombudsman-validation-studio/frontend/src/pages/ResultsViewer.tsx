@@ -206,7 +206,7 @@ export default function ResultsViewer() {
   const getSummaryMessage = (validatorName: string, details: any): string | null => {
     // Handle errors/exceptions specially
     if (details.exception) {
-      let error = String(details.exception);
+      const error = String(details.exception);
       if (error.includes('datetime.date(')) {
         return 'Date formatting error - validator needs to convert dates to strings';
       }
