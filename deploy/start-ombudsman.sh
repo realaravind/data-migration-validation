@@ -684,6 +684,25 @@ EOF
             exit 1
         fi
 
+        # Auto-create .sops.yaml if key exists but config doesn't
+        if [ ! -f "$SOPS_CONFIG" ]; then
+            echo "Creating SOPS config..."
+            AGE_PUBLIC_KEY=$(grep -i "public key:" "$SOPS_KEY_FILE" | cut -d: -f2 | tr -d ' ')
+            if [ -z "$AGE_PUBLIC_KEY" ]; then
+                echo "ERROR: Could not extract public key from $SOPS_KEY_FILE"
+                echo "Run './start-ombudsman.sh init-secrets' to regenerate."
+                exit 1
+            fi
+            cat > "$SOPS_CONFIG" << EOF
+creation_rules:
+  - path_regex: .*\.env$
+    age: $AGE_PUBLIC_KEY
+  - path_regex: .*\.env\.enc$
+    age: $AGE_PUBLIC_KEY
+EOF
+            echo "Created $SOPS_CONFIG"
+        fi
+
         if [ ! -f "$ENV_FILE" ]; then
             echo "ERROR: Config file not found at $ENV_FILE"
             exit 1
