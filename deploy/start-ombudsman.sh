@@ -70,17 +70,48 @@ load_env_file() {
         eval "$decrypted"
         set +a
     elif [ -f "$ENV_FILE_ENC" ] && ! is_sops_encrypted "$ENV_FILE_ENC"; then
-        echo "WARNING: $ENV_FILE_ENC exists but is not properly encrypted."
-        echo "         It may contain plaintext. Run './start-ombudsman.sh encrypt-secrets' to encrypt it."
         echo ""
-        # Fall through to check for plaintext file
+        echo "=========================================="
+        echo "WARNING: Invalid encrypted config file"
+        echo "=========================================="
+        echo ""
+        echo "$ENV_FILE_ENC exists but is not properly encrypted."
+        echo "(It may contain plaintext from a failed encryption attempt)"
+        echo ""
+
+        # Check if plaintext file exists as fallback
         if [ -f "$ENV_FILE" ]; then
+            echo "Found plaintext config at $ENV_FILE"
             echo "Loading config from: $ENV_FILE"
             set -a
             source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
             set +a
+            echo ""
+            echo "To fix: rm $ENV_FILE_ENC && ./start-ombudsman.sh encrypt-secrets"
         else
-            echo "ERROR: No valid config file found."
+            echo "No plaintext config found either."
+            echo ""
+            echo "Options to recover:"
+            echo "  1. Re-run installer:  sudo ./install-ombudsman.sh"
+            echo "  2. Copy template and edit manually:"
+            echo "     cp $TEMPLATE_FILE $ENV_FILE"
+            echo "     nano $ENV_FILE"
+            echo "     rm $ENV_FILE_ENC"
+            echo ""
+
+            # Offer to copy template now
+            if [ -f "$TEMPLATE_FILE" ]; then
+                read -p "Copy template now and edit? (Y/n): " copy_choice
+                copy_choice="${copy_choice:-Y}"
+                if [ "$copy_choice" = "Y" ] || [ "$copy_choice" = "y" ]; then
+                    cp "$TEMPLATE_FILE" "$ENV_FILE"
+                    echo ""
+                    echo "Template copied to $ENV_FILE"
+                    echo "Edit with: nano $ENV_FILE"
+                    echo "Then remove invalid .enc: rm $ENV_FILE_ENC"
+                    echo "Then restart: ./start-ombudsman.sh start"
+                fi
+            fi
             exit 1
         fi
     elif [ -f "$ENV_FILE" ]; then
