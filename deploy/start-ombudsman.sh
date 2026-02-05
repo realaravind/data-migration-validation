@@ -61,14 +61,28 @@ TEMPLATE_FILE="$SCRIPT_DIR/ombudsman.env"
 
 # Determine which env file to use
 load_env_file() {
-    # Priority: encrypted file > plaintext file > template
-    if [ -f "$ENV_FILE_ENC" ] && has_sops; then
+    # Priority: encrypted file (if valid) > plaintext file > template
+    if [ -f "$ENV_FILE_ENC" ] && has_sops && is_sops_encrypted "$ENV_FILE_ENC"; then
         echo "Loading encrypted config from: $ENV_FILE_ENC"
         local decrypted
         decrypted=$(decrypt_sops_env "$ENV_FILE_ENC") || exit 1
         set -a
         eval "$decrypted"
         set +a
+    elif [ -f "$ENV_FILE_ENC" ] && ! is_sops_encrypted "$ENV_FILE_ENC"; then
+        echo "WARNING: $ENV_FILE_ENC exists but is not properly encrypted."
+        echo "         It may contain plaintext. Run './start-ombudsman.sh encrypt-secrets' to encrypt it."
+        echo ""
+        # Fall through to check for plaintext file
+        if [ -f "$ENV_FILE" ]; then
+            echo "Loading config from: $ENV_FILE"
+            set -a
+            source <(grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$')
+            set +a
+        else
+            echo "ERROR: No valid config file found."
+            exit 1
+        fi
     elif [ -f "$ENV_FILE" ]; then
         echo "Loading config from: $ENV_FILE"
         set -a
