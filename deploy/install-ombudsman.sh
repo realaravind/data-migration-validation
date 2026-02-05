@@ -867,7 +867,31 @@ except Exception as e:
             print_warning "Edit $ENV_FILE and run: ./start-ombudsman.sh setup-auth"
         fi
     else
-        print_status "Using SQLite for authentication (default)"
+        # SQLite authentication - create default admin user
+        echo "Setting up SQLite authentication..."
+        cd "$BACKEND_DIR"
+
+        # Create default admin user for SQLite
+        echo "Creating default admin user..."
+        sudo -u "$REAL_USER" \
+            AUTH_BACKEND="sqlite" \
+            OMBUDSMAN_DATA_DIR="$BASE_DIR/data" \
+            ./venv/bin/python -c "
+import sys
+sys.path.insert(0, '.')
+from auth.sqlite_auth_repository import SQLiteAuthRepository
+from auth.models import UserCreate, UserRole
+repo = SQLiteAuthRepository()
+try:
+    user = UserCreate(username='admin', email='admin@localhost', password='admin123', role=UserRole.ADMIN)
+    repo.create_user(user)
+    print('  Default admin user created (admin/admin123)')
+except ValueError as e:
+    print(f'  Admin user already exists')
+except Exception as e:
+    print(f'  Could not create admin user: {e}')
+"
+        print_status "SQLite auth database configured"
     fi
 }
 
