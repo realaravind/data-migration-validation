@@ -852,7 +852,7 @@ EOF
 
                 # Encrypt - capture stderr to file so we can see errors
                 echo "Running SOPS encryption..."
-                SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --encrypt "$ENV_FILE" > "$ENV_FILE.enc.tmp" 2> /tmp/sops-error.txt
+                SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$BASE_DIR/.sops.yaml" --input-type dotenv --output-type dotenv --encrypt "$ENV_FILE" > "$ENV_FILE.enc.tmp" 2> /tmp/sops-error.txt
                 local sops_exit=$?
                 local sops_error=$(cat /tmp/sops-error.txt 2>/dev/null)
                 rm -f /tmp/sops-error.txt

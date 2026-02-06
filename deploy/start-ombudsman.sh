@@ -66,7 +66,7 @@ decrypt_sops_env() {
         return 1
     fi
 
-    SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --decrypt "$encrypted_file"
+    SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv --decrypt "$encrypted_file"
 }
 
 # ==============================================
@@ -792,7 +792,7 @@ EOF
 
         # Decrypt
         echo "Decrypting $ENV_FILE_ENC..."
-        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --decrypt "$ENV_FILE_ENC" > "$ENV_FILE"
+        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv --decrypt "$ENV_FILE_ENC" > "$ENV_FILE"
         chmod 600 "$ENV_FILE"
 
         echo ""
