@@ -926,9 +926,14 @@ try:
     repo.create_user(user)
     print('  Default admin user created (admin/admin123)')
 except ValueError as e:
-    print(f'  Admin user already exists')
+    if 'already exists' in str(e).lower():
+        print(f'  Admin user already exists')
+    else:
+        print(f'  ValueError creating admin user: {e}')
 except Exception as e:
     print(f'  Could not create admin user: {e}')
+    import traceback
+    traceback.print_exc()
 "
             print_status "Auth database configured (SQL Server)"
         else
@@ -956,9 +961,14 @@ try:
     repo.create_user(user)
     print('  Default admin user created (admin/admin123)')
 except ValueError as e:
-    print(f'  Admin user already exists')
+    if 'already exists' in str(e).lower():
+        print(f'  Admin user already exists')
+    else:
+        print(f'  ValueError creating admin user: {e}')
 except Exception as e:
     print(f'  Could not create admin user: {e}')
+    import traceback
+    traceback.print_exc()
 "
         print_status "Auth database configured (SQLite)"
     fi
