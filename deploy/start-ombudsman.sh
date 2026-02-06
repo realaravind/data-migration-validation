@@ -863,7 +863,7 @@ EOF
             echo "Opening encrypted file for editing..."
             echo "(File will be decrypted, edited, then re-encrypted automatically)"
             echo ""
-            SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" "$ENV_FILE_ENC"
+            SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv "$ENV_FILE_ENC"
             echo ""
             echo "Changes saved and encrypted."
         elif [ -f "$ENV_FILE" ]; then
