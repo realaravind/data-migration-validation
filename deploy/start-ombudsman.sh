@@ -715,18 +715,35 @@ EOF
             exit 1
         fi
 
-        if [ ! -f "$SOPS_KEY_FILE" ]; then
-            echo "ERROR: No encryption key found. Run './start-ombudsman.sh init-secrets' first."
+        if ! has_age; then
+            echo "ERROR: age is not installed. Run './start-ombudsman.sh init-secrets' first."
             exit 1
         fi
 
-        # Auto-create .sops.yaml if key exists but config doesn't
+        # Auto-create age key if it doesn't exist
+        if [ ! -f "$SOPS_KEY_FILE" ]; then
+            echo "No encryption key found. Generating new age key..."
+            mkdir -p "$(dirname "$SOPS_KEY_FILE")"
+            if ! age-keygen -o "$SOPS_KEY_FILE" 2>&1 | tee /tmp/age-keygen-output.txt; then
+                echo "ERROR: Failed to generate age key"
+                rm -f /tmp/age-keygen-output.txt
+                exit 1
+            fi
+            chmod 600 "$SOPS_KEY_FILE"
+            AGE_PUBLIC_KEY=$(grep -i "public key:" /tmp/age-keygen-output.txt | cut -d: -f2 | tr -d ' ')
+            rm -f /tmp/age-keygen-output.txt
+            echo "Age key generated at: $SOPS_KEY_FILE"
+            echo ""
+            echo "IMPORTANT: Back up this key file! Without it, you cannot decrypt your secrets."
+            echo ""
+        fi
+
+        # Auto-create .sops.yaml if it doesn't exist
         if [ ! -f "$SOPS_CONFIG" ]; then
             echo "Creating SOPS config..."
             AGE_PUBLIC_KEY=$(grep -i "public key:" "$SOPS_KEY_FILE" | cut -d: -f2 | tr -d ' ')
             if [ -z "$AGE_PUBLIC_KEY" ]; then
                 echo "ERROR: Could not extract public key from $SOPS_KEY_FILE"
-                echo "Run './start-ombudsman.sh init-secrets' to regenerate."
                 exit 1
             fi
             cat > "$SOPS_CONFIG" << EOF
@@ -746,7 +763,30 @@ EOF
 
         # Encrypt the env file
         echo "Encrypting $ENV_FILE..."
-        SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --encrypt "$ENV_FILE" > "$ENV_FILE_ENC"
+        if ! SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv --encrypt "$ENV_FILE" > "$ENV_FILE_ENC.tmp" 2>/tmp/sops-error.txt; then
+            echo "ERROR: Encryption failed"
+            cat /tmp/sops-error.txt 2>/dev/null
+            rm -f "$ENV_FILE_ENC.tmp" /tmp/sops-error.txt
+            exit 1
+        fi
+        rm -f /tmp/sops-error.txt
+
+        # Verify the encrypted file has content
+        if [ ! -s "$ENV_FILE_ENC.tmp" ]; then
+            echo "ERROR: Encrypted file is empty"
+            rm -f "$ENV_FILE_ENC.tmp"
+            exit 1
+        fi
+
+        # Verify encryption markers are present
+        if ! grep -q "ENC\[" "$ENV_FILE_ENC.tmp" 2>/dev/null; then
+            echo "ERROR: Encryption produced invalid output (no ENC markers)"
+            rm -f "$ENV_FILE_ENC.tmp"
+            exit 1
+        fi
+
+        # Move temp file to final location
+        mv "$ENV_FILE_ENC.tmp" "$ENV_FILE_ENC"
 
         echo ""
         echo "=========================================="
