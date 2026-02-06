@@ -35,18 +35,25 @@ has_age() {
 }
 
 # Check if file is SOPS-encrypted (has ENC[ markers or sops_ metadata)
-# Returns false if file looks like plaintext (has # comments typical of .env files)
 is_sops_encrypted() {
     local file="$1"
     [ -f "$file" ] || return 1
 
-    # If file has comment lines starting with #, it's plaintext
-    if grep -q "^#" "$file" 2>/dev/null; then
-        return 1
+    # Check for SOPS encryption markers (ENC[ for values, sops_ for metadata)
+    # Note: SOPS encrypts comments too, so #ENC[ is valid encrypted content
+    if grep -q "ENC\[" "$file" 2>/dev/null; then
+        return 0  # Has encrypted values
+    fi
+    if grep -q "^sops_" "$file" 2>/dev/null; then
+        return 0  # Has SOPS metadata
     fi
 
-    # Check for SOPS encryption markers
-    grep -q "ENC\[" "$file" 2>/dev/null || grep -q "^sops_" "$file" 2>/dev/null
+    # Check for plaintext indicators (# followed by non-ENC content = unencrypted comment)
+    if grep -q "^#[^E]" "$file" 2>/dev/null || grep -q "^# " "$file" 2>/dev/null; then
+        return 1  # Has plaintext comments
+    fi
+
+    return 1  # Default to not encrypted
 }
 
 # Decrypt SOPS file to stdout
