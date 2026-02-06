@@ -571,6 +571,20 @@ interactive_setup() {
     CFG_SECRET_KEY=$(openssl rand -hex 32 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 64 | head -n 1)
 
     # -----------------------------------------
+    # Admin User
+    # -----------------------------------------
+    echo ""
+    echo -e "${GREEN}── Admin User ──${NC}"
+    echo ""
+    echo "Configure the initial admin account."
+    echo ""
+    prompt_with_default "Admin username" "admin" "CFG_ADMIN_USERNAME"
+    prompt_with_default "Admin email" "admin@example.com" "CFG_ADMIN_EMAIL"
+    echo ""
+    echo "Password requirements: min 8 chars, 1 uppercase, 1 lowercase, 1 digit"
+    prompt_with_default "Admin password" "Admin123" "CFG_ADMIN_PASSWORD" "true"
+
+    # -----------------------------------------
     # Summary
     # -----------------------------------------
     echo ""
@@ -596,6 +610,10 @@ interactive_setup() {
     echo ""
     echo "Authentication: $CFG_AUTH_BACKEND"
     echo "LLM Provider: $CFG_LLM_PROVIDER"
+    echo ""
+    echo "Admin User:"
+    echo "  Username: $CFG_ADMIN_USERNAME"
+    echo "  Email: $CFG_ADMIN_EMAIL"
     echo ""
     echo "Server:"
     echo "  Address: $CFG_SERVER_HOST"
@@ -909,22 +927,34 @@ setup_auth_db() {
                 AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
                 ./venv/bin/python auth/setup_sql_server_auth.py
 
-            # Create default admin user
-            echo "Creating default admin user..."
+            # Create admin user with configured credentials
+            echo "Creating admin user..."
+            ADMIN_USER="${CFG_ADMIN_USERNAME:-admin}"
+            ADMIN_EMAIL="${CFG_ADMIN_EMAIL:-admin@example.com}"
+            ADMIN_PASS="${CFG_ADMIN_PASSWORD:-Admin123}"
             sudo -u "$REAL_USER" \
                 AUTH_BACKEND="sqlserver" \
                 AUTH_DB_SERVER="$AUTH_DB_SERVER" \
                 AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
                 AUTH_DB_USER="$AUTH_DB_USER" \
                 AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
+                ADMIN_USER="$ADMIN_USER" \
+                ADMIN_EMAIL="$ADMIN_EMAIL" \
+                ADMIN_PASS="$ADMIN_PASS" \
                 ./venv/bin/python -c "
+import os
 from auth.sqlserver_auth_repository import SQLServerAuthRepository
 from auth.models import UserCreate, UserRole
 repo = SQLServerAuthRepository()
 try:
-    user = UserCreate(username='admin', email='admin@localhost', password='admin123', role=UserRole.ADMIN)
+    user = UserCreate(
+        username=os.environ['ADMIN_USER'],
+        email=os.environ['ADMIN_EMAIL'],
+        password=os.environ['ADMIN_PASS'],
+        role=UserRole.ADMIN
+    )
     repo.create_user(user)
-    print('  Default admin user created (admin/admin123)')
+    print(f'  Admin user created: {os.environ[\"ADMIN_USER\"]}')
 except ValueError as e:
     if 'already exists' in str(e).lower():
         print(f'  Admin user already exists')
@@ -945,21 +975,33 @@ except Exception as e:
         echo "Setting up SQLite authentication..."
         cd "$BACKEND_DIR"
 
-        # Create default admin user for SQLite
-        echo "Creating default admin user..."
+        # Create admin user with configured credentials
+        echo "Creating admin user..."
+        ADMIN_USER="${CFG_ADMIN_USERNAME:-admin}"
+        ADMIN_EMAIL="${CFG_ADMIN_EMAIL:-admin@example.com}"
+        ADMIN_PASS="${CFG_ADMIN_PASSWORD:-Admin123}"
         sudo -u "$REAL_USER" \
             AUTH_BACKEND="sqlite" \
             OMBUDSMAN_DATA_DIR="$BASE_DIR/data" \
+            ADMIN_USER="$ADMIN_USER" \
+            ADMIN_EMAIL="$ADMIN_EMAIL" \
+            ADMIN_PASS="$ADMIN_PASS" \
             ./venv/bin/python -c "
+import os
 import sys
 sys.path.insert(0, '.')
 from auth.sqlite_repository import SQLiteAuthRepository
 from auth.models import UserCreate, UserRole
 repo = SQLiteAuthRepository()
 try:
-    user = UserCreate(username='admin', email='admin@localhost', password='admin123', role=UserRole.ADMIN)
+    user = UserCreate(
+        username=os.environ['ADMIN_USER'],
+        email=os.environ['ADMIN_EMAIL'],
+        password=os.environ['ADMIN_PASS'],
+        role=UserRole.ADMIN
+    )
     repo.create_user(user)
-    print('  Default admin user created (admin/admin123)')
+    print(f'  Admin user created: {os.environ[\"ADMIN_USER\"]}')
 except ValueError as e:
     if 'already exists' in str(e).lower():
         print(f'  Admin user already exists')
