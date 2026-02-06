@@ -878,6 +878,49 @@ EOF
             exit 1
         fi
         ;;
+    reconfigure)
+        echo "=========================================="
+        echo "Reconfigure Ombudsman"
+        echo "=========================================="
+        echo ""
+        echo "This will run the setup wizard to update configuration."
+        echo "Services will be restarted after configuration."
+        echo ""
+        read -p "Continue? (Y/n): " confirm
+        if [[ "$confirm" =~ ^[Nn] ]]; then
+            echo "Aborted."
+            exit 0
+        fi
+
+        # Stop services first
+        echo ""
+        echo "Stopping services..."
+        sudo systemctl stop ombudsman-backend ombudsman-frontend 2>/dev/null || true
+
+        # Run the install script with --setup-only flag
+        echo ""
+        INSTALL_SCRIPT="$SCRIPT_DIR/install-ombudsman.sh"
+        if [ ! -f "$INSTALL_SCRIPT" ]; then
+            echo "ERROR: Install script not found at $INSTALL_SCRIPT"
+            exit 1
+        fi
+
+        # Run setup wizard
+        bash "$INSTALL_SCRIPT" --setup-only
+
+        # Restart services
+        echo ""
+        echo "Starting services..."
+        sudo systemctl start ombudsman-backend ombudsman-frontend
+
+        echo ""
+        echo "=========================================="
+        echo "Reconfiguration complete!"
+        echo "=========================================="
+        echo ""
+        echo "Check status: ./start-ombudsman.sh status"
+        echo ""
+        ;;
     help)
         echo "Ombudsman Validation Studio - Command Reference"
         echo ""
@@ -893,6 +936,7 @@ EOF
         echo "  frontend           Start only the frontend"
         echo ""
         echo "Setup Commands:"
+        echo "  reconfigure        Run setup wizard to update config and restart services"
         echo "  setup-auth         Initialize authentication database"
         echo "  rebuild-frontend   Rebuild frontend (after config changes)"
         echo "  enable-service     Install systemd services (auto-start on boot)"
@@ -914,7 +958,7 @@ EOF
         echo ""
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|setup-auth|rebuild-frontend|enable-service|disable-service|update|init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help}"
+        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|reconfigure|setup-auth|rebuild-frontend|enable-service|disable-service|update|init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help}"
         exit 1
         ;;
 esac
