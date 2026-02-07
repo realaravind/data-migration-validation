@@ -16,6 +16,8 @@ from snowflake.connector import DictCursor
 import os
 import time
 import logging
+import requests
+import base64
 from decimal import Decimal
 from typing import Optional, Dict, Any
 from contextlib import contextmanager
@@ -163,13 +165,96 @@ def get_sql_conn(cfg, use_pool=True):
         finally:
             raw_conn.close()
 
+def _get_snowflake_oauth_token(c: Dict[str, Any]) -> str:
+    """
+    Get OAuth access token from Snowflake using refresh token.
+
+    Snowflake Custom OAuth flow:
+    1. Security Integration created in Snowflake provides client_id/secret
+    2. Refresh token is used to get access token
+    3. Access token is used with authenticator="oauth"
+
+    See: https://docs.snowflake.com/en/user-guide/oauth-custom
+
+    Args:
+        c: Snowflake config dictionary with oauth credentials
+
+    Returns:
+        str: OAuth access token
+
+    Raises:
+        ValueError: If OAuth credentials are missing or token exchange fails
+    """
+    # Required OAuth fields
+    client_id = c.get("oauth_client_id")
+    client_secret = c.get("oauth_client_secret")
+    refresh_token = c.get("oauth_refresh_token")
+    account = c.get("account")
+
+    if not all([client_id, client_secret, refresh_token, account]):
+        missing = []
+        if not client_id: missing.append("oauth_client_id")
+        if not client_secret: missing.append("oauth_client_secret")
+        if not refresh_token: missing.append("oauth_refresh_token")
+        if not account: missing.append("account")
+        raise ValueError(f"Missing OAuth credentials: {', '.join(missing)}")
+
+    # Build token endpoint URL
+    # Format: https://<account>.snowflakecomputing.com/oauth/token-request
+    token_endpoint = c.get("oauth_token_endpoint")
+    if not token_endpoint:
+        # Auto-construct from account
+        token_endpoint = f"https://{account}.snowflakecomputing.com/oauth/token-request"
+
+    logger.info(f"Requesting OAuth token from: {token_endpoint}")
+
+    # Prepare request
+    # Basic auth with client_id:client_secret
+    auth_string = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+    headers = {
+        "Authorization": f"Basic {auth_string}",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    data = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+
+    # Add redirect_uri if provided
+    redirect_uri = c.get("oauth_redirect_uri")
+    if redirect_uri:
+        data["redirect_uri"] = redirect_uri
+
+    try:
+        response = requests.post(token_endpoint, headers=headers, data=data, timeout=30)
+        response.raise_for_status()
+
+        token_data = response.json()
+        access_token = token_data.get("access_token")
+
+        if not access_token:
+            raise ValueError(f"No access_token in response: {token_data}")
+
+        logger.info("Successfully obtained OAuth access token")
+        return access_token
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"OAuth token request failed: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response: {e.response.text}")
+        raise ValueError(f"Failed to get OAuth token: {e}")
+
+
 def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
     """
     Create a raw Snowflake connection with retry logic (used by connection pool).
 
-    Supports two authentication methods:
-    1. PAT Token: Set 'token' in config (preferred for service accounts)
-    2. Password: Set 'password' in config (traditional auth)
+    Supports three authentication methods:
+    1. OAuth: Set oauth_client_id, oauth_client_secret, oauth_refresh_token
+    2. Token (PAT): Set 'token' in config (uses OAuth authenticator)
+    3. Password: Set 'password' in config (traditional auth)
 
     Args:
         cfg: Configuration dictionary with snowflake credentials
@@ -190,14 +275,15 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
     if not c:
         raise ValueError("No Snowflake configuration found in cfg")
 
-    # Check authentication method: PAT token or password
+    # Check authentication method: OAuth > Token > Password
+    has_oauth = bool(c.get("oauth_client_id") and c.get("oauth_refresh_token"))
     has_token = bool(c.get("token"))
     has_password = bool(c.get("password"))
 
-    if not has_token and not has_password:
-        raise ValueError("Snowflake authentication required: set either 'token' (PAT) or 'password'")
+    if not has_oauth and not has_token and not has_password:
+        raise ValueError("Snowflake authentication required: set OAuth credentials, 'token', or 'password'")
 
-    # Validate required fields (token/password handled above)
+    # Validate required fields
     required_fields = ["user", "account", "warehouse", "database", "schema"]
     missing_fields = [field for field in required_fields if not c.get(field)]
     if missing_fields:
@@ -215,13 +301,18 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
         "login_timeout": 30,  # Login timeout in seconds
     }
 
-    # Set authentication method
-    if has_token:
-        # PAT (Programmatic Access Token) authentication
-        # PATs are used as password replacement, not as OAuth tokens
-        # See: https://docs.snowflake.com/en/user-guide/programmatic-access-tokens
-        connection_params["password"] = c["token"]
-        logger.info("Using Snowflake PAT token authentication (as password)")
+    # Set authentication method (priority: OAuth > Token > Password)
+    if has_oauth:
+        # Full OAuth flow with refresh token
+        logger.info("Using Snowflake OAuth authentication")
+        access_token = _get_snowflake_oauth_token(c)
+        connection_params["token"] = access_token
+        connection_params["authenticator"] = "oauth"
+    elif has_token:
+        # Direct token (pre-obtained OAuth access token)
+        logger.info("Using Snowflake token authentication (OAuth)")
+        connection_params["token"] = c["token"]
+        connection_params["authenticator"] = "oauth"
     else:
         # Traditional password authentication
         connection_params["password"] = c["password"]

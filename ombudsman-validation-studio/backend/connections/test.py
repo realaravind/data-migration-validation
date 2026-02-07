@@ -65,14 +65,17 @@ async def test_sqlserver_connection(request: ConnectionTestRequest):
 
 @router.post("/snowflake")
 async def test_snowflake_connection(request: ConnectionTestRequest):
-    """Test Snowflake connection (supports both password and PAT token auth)"""
+    """Test Snowflake connection (supports OAuth, token, and password auth)"""
     try:
         import os
         from ombudsman.core.connections import test_snowflake_connection as test_snow_conn
 
         # Build config from environment or request
         if request.use_env:
-            # Check for PAT token first, then fall back to password
+            # Check for OAuth, then token, then password
+            oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+            oauth_client_secret = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+            oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
             token = os.getenv('SNOWFLAKE_TOKEN', '')
             password = os.getenv('SNOWFLAKE_PASSWORD', '')
 
@@ -86,8 +89,19 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
                     "role": os.getenv('SNOWFLAKE_ROLE', '')
                 }
             }
-            # Add auth method (token takes precedence)
-            if token:
+            # Add auth method (OAuth > token > password)
+            if oauth_client_id and oauth_refresh_token:
+                cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+                cfg["snowflake"]["oauth_client_secret"] = oauth_client_secret
+                cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+                # Optional OAuth settings
+                oauth_redirect_uri = os.getenv('SNOWFLAKE_OAUTH_REDIRECT_URI', '')
+                oauth_token_endpoint = os.getenv('SNOWFLAKE_OAUTH_TOKEN_ENDPOINT', '')
+                if oauth_redirect_uri:
+                    cfg["snowflake"]["oauth_redirect_uri"] = oauth_redirect_uri
+                if oauth_token_endpoint:
+                    cfg["snowflake"]["oauth_token_endpoint"] = oauth_token_endpoint
+            elif token:
                 cfg["snowflake"]["token"] = token
             else:
                 cfg["snowflake"]["password"] = password
