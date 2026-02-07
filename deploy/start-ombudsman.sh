@@ -858,9 +858,11 @@ EOF
             exit 1
         fi
 
-        # Determine which file to edit
+        # Determine which file to edit (use nano as default editor)
+        export EDITOR="${EDITOR:-nano}"
+
         if [ -f "$ENV_FILE_ENC" ]; then
-            echo "Opening encrypted file for editing..."
+            echo "Opening encrypted file for editing with $EDITOR..."
             echo "(File will be decrypted, edited, then re-encrypted automatically)"
             echo ""
             SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv "$ENV_FILE_ENC"
