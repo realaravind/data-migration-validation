@@ -218,9 +218,10 @@ def _create_snowflake_connection(cfg, retries=3, retry_delay=2):
     # Set authentication method
     if has_token:
         # PAT (Programmatic Access Token) authentication
-        connection_params["token"] = c["token"]
-        connection_params["authenticator"] = "oauth"
-        logger.info("Using Snowflake PAT token authentication")
+        # PATs are used as password replacement, not as OAuth tokens
+        # See: https://docs.snowflake.com/en/user-guide/programmatic-access-tokens
+        connection_params["password"] = c["token"]
+        logger.info("Using Snowflake PAT token authentication (as password)")
     else:
         # Traditional password authentication
         connection_params["password"] = c["password"]
