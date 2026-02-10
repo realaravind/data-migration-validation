@@ -48,6 +48,8 @@ ombudsman-validation-studio/backend/results/*.json
 # Logs
 *.log
 logs/
+# But keep the backend logs module (Python code, not log files)
+!ombudsman-validation-studio/backend/logs/
 
 # Build outputs
 dist/
