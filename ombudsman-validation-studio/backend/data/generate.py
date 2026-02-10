@@ -5,11 +5,19 @@ from typing import Optional
 from pathlib import Path
 import os
 import json
+import logging
 
 from .workload_generator import WorkloadGenerator
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 workload_gen = WorkloadGenerator()
+
+
+def is_sample_data_enabled() -> bool:
+    """Check if sample data generation is enabled via env var."""
+    enabled = os.getenv("SAMPLE_DATA_ENABLED", "true").lower()
+    return enabled in ("true", "1", "yes", "on")
 
 class SampleDataRequest(BaseModel):
     num_dimensions: int = 3
@@ -27,6 +35,14 @@ generation_status = {}
 @router.post("/generate")
 async def generate_sample_data(request: SampleDataRequest, background_tasks: BackgroundTasks):
     """Generate sample data in SQL Server or Snowflake"""
+    # Check if sample data generation is enabled
+    if not is_sample_data_enabled():
+        logger.warning("Sample data generation attempted but SAMPLE_DATA_ENABLED=false")
+        raise HTTPException(
+            status_code=403,
+            detail="Sample data generation is disabled. Set SAMPLE_DATA_ENABLED=true to enable."
+        )
+
     try:
         # Start generation in background
         job_id = f"datagen_{request.target}_{request.seed}"
@@ -154,9 +170,24 @@ async def list_available_schemas():
     }
 
 
+@router.get("/enabled")
+async def check_sample_data_enabled():
+    """Check if sample data generation is enabled."""
+    return {
+        "enabled": is_sample_data_enabled(),
+        "message": "Sample data generation is " + ("enabled" if is_sample_data_enabled() else "disabled")
+    }
+
+
 @router.delete("/clear")
 async def clear_sample_data():
     """Clear all generated sample data"""
+    if not is_sample_data_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Sample data operations are disabled. Set SAMPLE_DATA_ENABLED=true to enable."
+        )
+
     try:
         import pyodbc
         import os

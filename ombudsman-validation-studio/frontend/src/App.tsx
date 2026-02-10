@@ -53,6 +53,7 @@ import BatchReportViewer from './pages/BatchReportViewerSimple';
 import BatchBuilder from './pages/BatchBuilder';
 import BugReportPreview from './pages/BugReportPreview';
 import ProjectSettings from './pages/ProjectSettings';
+import LogViewer from './pages/LogViewer';
 
 const theme = createTheme({
     palette: {
@@ -464,6 +465,11 @@ function AppContent() {
                     <Route path="/projects/:projectId/settings" element={
                         <ProtectedRoute>
                             <ProjectSettings />
+                        </ProtectedRoute>
+                    } />
+                    <Route path="/logs" element={
+                        <ProtectedRoute>
+                            <LogViewer />
                         </ProtectedRoute>
                     } />
                 </Routes>

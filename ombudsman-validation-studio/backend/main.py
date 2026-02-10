@@ -2,6 +2,10 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Initialize logging first
+from logs.config import setup_logging
+setup_logging()
+
 # Original routers
 from metadata.extract import router as metadata_router
 from mapping.suggest import router as mapping_router
@@ -34,6 +38,7 @@ from batch.router import router as batch_router
 from docs.serve import router as docs_router
 from automation.auto_setup import router as automation_router
 from bugs.router import router as bugs_router
+from logs.router import router as logs_router
 
 # Error handling
 from errors import register_error_handlers
@@ -101,6 +106,7 @@ app.include_router(batch_router, prefix="/batch", tags=["Batch Operations"])
 app.include_router(bugs_router, tags=["Bug Reports"])
 app.include_router(docs_router, prefix="/docs", tags=["Documentation"])
 app.include_router(automation_router, tags=["Automation"])
+app.include_router(logs_router, prefix="/logs", tags=["Application Logs"])
 
 
 @app.get("/")

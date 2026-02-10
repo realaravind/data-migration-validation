@@ -23,6 +23,7 @@ import {
     Architecture as DiagramIcon,
     Cable as ConnectionIcon,
     DataObject as SampleDataIcon,
+    Article as LogsIcon,
 } from '@mui/icons-material';
 
 interface Feature {
@@ -160,6 +161,14 @@ export default function LandingPage() {
                     path: '/sample-data',
                     icon: <SampleDataIcon />,
                     color: '#0288d1'
+                },
+                {
+                    title: 'Application Logs',
+                    description: 'View and search application logs with filtering and export',
+                    path: '/logs',
+                    icon: <LogsIcon />,
+                    color: '#546e7a',
+                    badge: 'ADMIN'
                 }
             ]
         }
