@@ -221,37 +221,45 @@ async def list_sqlserver_databases():
 
 @router.get("/databases/snowflake")
 async def list_snowflake_databases():
-    """List all databases available in Snowflake (supports password and PAT token auth)"""
+    """List all databases available in Snowflake (supports OAuth, token, and password auth)"""
     try:
-        import snowflake.connector
         import os
+        from ombudsman.core.connections import get_snow_conn
 
-        # Build connection parameters
-        conn_params = {
-            "user": os.getenv('SNOWFLAKE_USER', ''),
-            "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
-            "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
-            "role": os.getenv('SNOWFLAKE_ROLE', '')
+        # Build config using same pattern as test connection
+        oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+        oauth_client_secret = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+        oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+        token = os.getenv('SNOWFLAKE_TOKEN', '')
+        password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+        cfg = {
+            "snowflake": {
+                "user": os.getenv('SNOWFLAKE_USER', ''),
+                "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                "database": os.getenv('SNOWFLAKE_DATABASE', ''),
+                "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                "role": os.getenv('SNOWFLAKE_ROLE', '')
+            }
         }
 
-        # Check for PAT token first, then fall back to password
-        token = os.getenv('SNOWFLAKE_TOKEN', '')
-        if token:
-            conn_params["token"] = token
-            conn_params["authenticator"] = "oauth"
+        # Add auth method (OAuth > token > password)
+        if oauth_client_id and oauth_refresh_token:
+            cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+            cfg["snowflake"]["oauth_client_secret"] = oauth_client_secret
+            cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+        elif token:
+            cfg["snowflake"]["token"] = token
         else:
-            conn_params["password"] = os.getenv('SNOWFLAKE_PASSWORD', '')
+            cfg["snowflake"]["password"] = password
 
-        # Connect to Snowflake
-        conn = snowflake.connector.connect(**conn_params)
-
-        cursor = conn.cursor()
-        cursor.execute("SHOW DATABASES")
-
-        # Fetch all databases
-        databases = [row[1] for row in cursor.fetchall()]  # row[1] contains the database name
-        cursor.close()
-        conn.close()
+        # Connect and list databases
+        with get_snow_conn(cfg) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SHOW DATABASES")
+            databases = [row[1] for row in cursor.fetchall()]
+            cursor.close()
 
         return {
             "status": "success",
