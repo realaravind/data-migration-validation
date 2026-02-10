@@ -15,7 +15,7 @@ Environment="OMBUDSMAN_DATA_DIR=/data/ombudsman/data"
 Environment="OMBUDSMAN_CORE_DIR=/data/ombudsman/ombudsman_core/src/ombudsman/config"
 Environment="OMBUDSMAN_LOG_DIR=/data/ombudsman/logs"
 
-ExecStart=/data/ombudsman/ombudsman-validation-studio/backend/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info
+ExecStart=/data/ombudsman/ombudsman-validation-studio/backend/venv/bin/python -m uvicorn main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-8000} --log-level info
 
 Restart=always
 RestartSec=5
