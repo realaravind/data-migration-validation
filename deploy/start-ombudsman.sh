@@ -220,12 +220,48 @@ export SQLSERVER_CONN_STR="DRIVER={ODBC Driver 18 for SQL Server};SERVER=${MSSQL
 
 kill_process_on_port() {
     local port=$1
-    local pids=$(lsof -t -i:$port 2>/dev/null)
-    if [ -n "$pids" ]; then
-        echo "Killing processes on port $port: $pids"
-        echo "$pids" | xargs kill -9 2>/dev/null
-        sleep 1
+    local max_attempts=5
+    local attempt=0
+
+    while [ $attempt -lt $max_attempts ]; do
+        # Try multiple methods to find processes on port
+        local pids=""
+
+        # Method 1: lsof
+        if command -v lsof &>/dev/null; then
+            pids=$(lsof -t -i:$port 2>/dev/null | tr '\n' ' ')
+        fi
+
+        # Method 2: fuser (if lsof didn't find anything)
+        if [ -z "$pids" ] && command -v fuser &>/dev/null; then
+            pids=$(fuser $port/tcp 2>/dev/null | tr -s ' ')
+        fi
+
+        # Method 3: ss + awk
+        if [ -z "$pids" ] && command -v ss &>/dev/null; then
+            pids=$(ss -tlnp "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | tr '\n' ' ')
+        fi
+
+        if [ -z "$pids" ]; then
+            # No processes found, port is free
+            return 0
+        fi
+
+        echo "Killing processes on port $port: $pids (attempt $((attempt+1))/$max_attempts)"
+        for pid in $pids; do
+            kill -9 $pid 2>/dev/null
+        done
+
+        sleep 2
+        attempt=$((attempt+1))
+    done
+
+    # Final check
+    if lsof -t -i:$port &>/dev/null || fuser $port/tcp &>/dev/null 2>&1; then
+        echo "WARNING: Could not free port $port after $max_attempts attempts"
+        return 1
     fi
+    return 0
 }
 
 create_directories() {
