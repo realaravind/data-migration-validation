@@ -387,17 +387,31 @@ interactive_setup() {
 
     echo ""
     echo "Authentication method:"
-    echo "  1) Password"
+    echo "  1) Password (won't work with MFA)"
     echo "  2) PAT Token (Programmatic Access Token)"
+    echo "  3) OAuth (recommended for MFA-enabled accounts)"
     read -p "Select [1]: " sf_auth_choice
     sf_auth_choice="${sf_auth_choice:-1}"
 
+    # Initialize all auth variables
+    CFG_SNOWFLAKE_PASSWORD=""
+    CFG_SNOWFLAKE_TOKEN=""
+    CFG_SNOWFLAKE_OAUTH_CLIENT_ID=""
+    CFG_SNOWFLAKE_OAUTH_CLIENT_SECRET=""
+    CFG_SNOWFLAKE_OAUTH_REFRESH_TOKEN=""
+
     if [ "$sf_auth_choice" = "2" ]; then
         prompt_with_default "Snowflake PAT token" "" "CFG_SNOWFLAKE_TOKEN" "true"
-        CFG_SNOWFLAKE_PASSWORD=""
+    elif [ "$sf_auth_choice" = "3" ]; then
+        echo ""
+        echo "OAuth requires a Security Integration in Snowflake."
+        echo "See: https://docs.snowflake.com/en/user-guide/oauth-custom"
+        echo ""
+        prompt_with_default "OAuth Client ID" "" "CFG_SNOWFLAKE_OAUTH_CLIENT_ID"
+        prompt_with_default "OAuth Client Secret" "" "CFG_SNOWFLAKE_OAUTH_CLIENT_SECRET" "true"
+        prompt_with_default "OAuth Refresh Token" "" "CFG_SNOWFLAKE_OAUTH_REFRESH_TOKEN" "true"
     else
         prompt_with_default "Snowflake password" "" "CFG_SNOWFLAKE_PASSWORD" "true"
-        CFG_SNOWFLAKE_TOKEN=""
     fi
 
     # -----------------------------------------
@@ -602,7 +616,9 @@ interactive_setup() {
     echo "  User: $CFG_SNOWFLAKE_USER"
     echo "  Warehouse: $CFG_SNOWFLAKE_WAREHOUSE"
     echo "  Database: $CFG_SNOWFLAKE_DATABASE"
-    if [ -n "$CFG_SNOWFLAKE_TOKEN" ]; then
+    if [ -n "$CFG_SNOWFLAKE_OAUTH_CLIENT_ID" ]; then
+        echo "  Auth: OAuth"
+    elif [ -n "$CFG_SNOWFLAKE_TOKEN" ]; then
         echo "  Auth: PAT Token"
     else
         echo "  Auth: Password"
@@ -662,17 +678,33 @@ SNOWFLAKE_SCHEMA=$CFG_SNOWFLAKE_SCHEMA
 SNOWFLAKE_ROLE=$CFG_SNOWFLAKE_ROLE
 EOF
 
-    # Add either password or token
-    if [ -n "$CFG_SNOWFLAKE_TOKEN" ]; then
+    # Add authentication credentials (OAuth > Token > Password)
+    if [ -n "$CFG_SNOWFLAKE_OAUTH_CLIENT_ID" ]; then
+        cat >> "$ENV_FILE" << EOF
+# Using OAuth authentication (recommended for MFA)
+SNOWFLAKE_OAUTH_CLIENT_ID=$CFG_SNOWFLAKE_OAUTH_CLIENT_ID
+SNOWFLAKE_OAUTH_CLIENT_SECRET=$CFG_SNOWFLAKE_OAUTH_CLIENT_SECRET
+SNOWFLAKE_OAUTH_REFRESH_TOKEN=$CFG_SNOWFLAKE_OAUTH_REFRESH_TOKEN
+# SNOWFLAKE_TOKEN=
+# SNOWFLAKE_PASSWORD=
+EOF
+    elif [ -n "$CFG_SNOWFLAKE_TOKEN" ]; then
         cat >> "$ENV_FILE" << EOF
 # Using PAT Token authentication
 SNOWFLAKE_TOKEN=$CFG_SNOWFLAKE_TOKEN
+# SNOWFLAKE_OAUTH_CLIENT_ID=
+# SNOWFLAKE_OAUTH_CLIENT_SECRET=
+# SNOWFLAKE_OAUTH_REFRESH_TOKEN=
 # SNOWFLAKE_PASSWORD=
 EOF
     else
         cat >> "$ENV_FILE" << EOF
+# Using Password authentication
 SNOWFLAKE_PASSWORD=$CFG_SNOWFLAKE_PASSWORD
-# SNOWFLAKE_TOKEN=  # Use instead of password for PAT auth
+# SNOWFLAKE_OAUTH_CLIENT_ID=
+# SNOWFLAKE_OAUTH_CLIENT_SECRET=
+# SNOWFLAKE_OAUTH_REFRESH_TOKEN=
+# SNOWFLAKE_TOKEN=
 EOF
     fi
 
