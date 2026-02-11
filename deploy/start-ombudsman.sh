@@ -797,15 +797,27 @@ EOF
             exit 1
         fi
 
-        # Encrypt the env file
-        echo "Encrypting $ENV_FILE..."
-        if ! SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv --encrypt "$ENV_FILE" > "$ENV_FILE_ENC.tmp" 2>/tmp/sops-error.txt; then
-            echo "ERROR: Encryption failed"
-            cat /tmp/sops-error.txt 2>/dev/null
-            rm -f "$ENV_FILE_ENC.tmp" /tmp/sops-error.txt
+        # SOPS dotenv format doesn't handle comments well
+        # Strip comments and empty lines before encryption
+        echo "Preparing $ENV_FILE for encryption..."
+        CLEAN_ENV_FILE="/tmp/ombudsman-clean.env"
+        grep -v '^\s*#' "$ENV_FILE" | grep -v '^\s*$' > "$CLEAN_ENV_FILE"
+
+        if [ ! -s "$CLEAN_ENV_FILE" ]; then
+            echo "ERROR: No valid environment variables found after stripping comments"
+            rm -f "$CLEAN_ENV_FILE"
             exit 1
         fi
-        rm -f /tmp/sops-error.txt
+
+        # Encrypt the cleaned env file
+        echo "Encrypting..."
+        if ! SOPS_AGE_KEY_FILE="$SOPS_KEY_FILE" sops --config "$SOPS_CONFIG" --input-type dotenv --output-type dotenv --encrypt "$CLEAN_ENV_FILE" > "$ENV_FILE_ENC.tmp" 2>/tmp/sops-error.txt; then
+            echo "ERROR: Encryption failed"
+            cat /tmp/sops-error.txt 2>/dev/null
+            rm -f "$ENV_FILE_ENC.tmp" /tmp/sops-error.txt "$CLEAN_ENV_FILE"
+            exit 1
+        fi
+        rm -f /tmp/sops-error.txt "$CLEAN_ENV_FILE"
 
         # Verify the encrypted file has content
         if [ ! -s "$ENV_FILE_ENC.tmp" ]; then
@@ -831,7 +843,10 @@ EOF
         echo ""
         echo "Encrypted file: $ENV_FILE_ENC"
         echo ""
-        echo "You can now safely delete the plaintext file:"
+        echo "NOTE: Comments are stripped during encryption."
+        echo "      Keep your plaintext file as reference if needed."
+        echo ""
+        echo "You can safely delete the plaintext file if desired:"
         echo "  rm $ENV_FILE"
         echo ""
         echo "The services will automatically use the encrypted file."
