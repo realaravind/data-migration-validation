@@ -135,20 +135,29 @@ const BatchOperations: React.FC = () => {
         });
     }, []);
 
-    // Load initial data
+    // Load initial data - fetch active project first, then jobs
     useEffect(() => {
-        fetchJobs();
-        fetchAvailablePipelines();
-        fetchActiveProject();
+        const loadData = async () => {
+            await fetchActiveProject();
+            fetchAvailablePipelines();
+        };
+        loadData();
     }, []);
+
+    // Fetch jobs when active project changes
+    useEffect(() => {
+        if (activeProjectId) {
+            fetchJobs();
+        }
+    }, [activeProjectId]);
 
     // Auto-refresh for active jobs and detect status changes
     useEffect(() => {
         const interval = setInterval(async () => {
             const hasActiveJobs = jobs.some(j => j.status === 'running' || j.status === 'queued');
-            if (hasActiveJobs) {
+            if (hasActiveJobs && activeProjectId) {
                 try {
-                    const response = await fetch(__API_URL__ + '/batch/jobs?limit=100');
+                    const response = await fetch(__API_URL__ + `/batch/jobs?limit=100&project_id=${activeProjectId}`);
                     const data = await response.json();
                     const newJobs = data.jobs || [];
 
@@ -195,11 +204,17 @@ const BatchOperations: React.FC = () => {
         }, 2000); // Refresh every 2 seconds
 
         return () => clearInterval(interval);
-    }, [jobs]);
+    }, [jobs, activeProjectId]);
 
     const fetchJobs = async () => {
         try {
-            const response = await fetch(__API_URL__ + '/batch/jobs?limit=100');
+            // Build URL with optional project filter
+            let url = __API_URL__ + '/batch/jobs?limit=100';
+            if (activeProjectId) {
+                url += `&project_id=${activeProjectId}`;
+            }
+
+            const response = await fetch(url);
             const data = await response.json();
             const fetchedJobs = data.jobs || [];
 
