@@ -39,6 +39,7 @@ from docs.serve import router as docs_router
 from automation.auto_setup import router as automation_router
 from bugs.router import router as bugs_router
 from logs.router import router as logs_router
+from alerts.router import router as alerts_router
 
 # Error handling
 from errors import register_error_handlers
@@ -107,6 +108,7 @@ app.include_router(bugs_router, tags=["Bug Reports"])
 app.include_router(docs_router, prefix="/docs", tags=["Documentation"])
 app.include_router(automation_router, tags=["Automation"])
 app.include_router(logs_router, prefix="/logs", tags=["Application Logs"])
+app.include_router(alerts_router, prefix="/alerts", tags=["System Alerts"])
 
 
 @app.get("/")

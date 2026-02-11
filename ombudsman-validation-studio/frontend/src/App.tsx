@@ -54,6 +54,7 @@ import BatchBuilder from './pages/BatchBuilder';
 import BugReportPreview from './pages/BugReportPreview';
 import ProjectSettings from './pages/ProjectSettings';
 import LogViewer from './pages/LogViewer';
+import AlertsDrawer from './components/AlertsDrawer';
 
 const theme = createTheme({
     palette: {
@@ -322,6 +323,9 @@ function AppContent() {
                             onManageAll={() => navigate('/projects')}
                         />
                     )}
+
+                    {/* Alerts Drawer - Shows system notifications */}
+                    {isAuthenticated && <AlertsDrawer />}
 
                     {/* User Menu */}
                     <UserMenu />

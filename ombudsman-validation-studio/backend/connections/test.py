@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict
+import logging
 
+from alerts.service import alert_service
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class ConnectionTestRequest(BaseModel):
@@ -57,9 +61,16 @@ async def test_sqlserver_connection(request: ConnectionTestRequest):
         }
 
     except Exception as e:
+        error_msg = f"SQL Server connection failed: {str(e)}"
+        logger.error(error_msg)
+        alert_service.add_alert(
+            message=error_msg,
+            source="connections/sqlserver",
+            details={"error_type": type(e).__name__}
+        )
         return {
             "status": "error",
-            "message": f"SQL Server connection failed: {str(e)}"
+            "message": error_msg
         }
 
 
@@ -123,9 +134,16 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
         return result
 
     except Exception as e:
+        error_msg = f"Snowflake connection failed: {str(e)}"
+        logger.error(error_msg)
+        alert_service.add_alert(
+            message=error_msg,
+            source="connections/snowflake",
+            details={"error_type": type(e).__name__}
+        )
         return {
             "status": "error",
-            "message": f"Snowflake connection failed: {str(e)}",
+            "message": error_msg,
             "details": {
                 "error_type": type(e).__name__,
                 "error_message": str(e)
@@ -212,9 +230,16 @@ async def list_sqlserver_databases():
         }
 
     except Exception as e:
+        error_msg = f"Failed to list SQL Server databases: {str(e)}"
+        logger.error(error_msg)
+        alert_service.add_alert(
+            message=error_msg,
+            source="connections/databases/sqlserver",
+            details={"error_type": type(e).__name__}
+        )
         return {
             "status": "error",
-            "message": f"Failed to list SQL Server databases: {str(e)}",
+            "message": error_msg,
             "databases": []
         }
 
@@ -268,8 +293,15 @@ async def list_snowflake_databases():
         }
 
     except Exception as e:
+        error_msg = f"Failed to list Snowflake databases: {str(e)}"
+        logger.error(error_msg)
+        alert_service.add_alert(
+            message=error_msg,
+            source="connections/databases/snowflake",
+            details={"error_type": type(e).__name__}
+        )
         return {
             "status": "error",
-            "message": f"Failed to list Snowflake databases: {str(e)}",
+            "message": error_msg,
             "databases": []
         }
