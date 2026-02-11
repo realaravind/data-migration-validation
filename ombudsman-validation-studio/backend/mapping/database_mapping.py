@@ -536,10 +536,13 @@ def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict, schema_mappin
                 "relationships": sql_metadata[sql_table]["relationships"],
                 "match_status": "found_in_both",
                 "schema": sql_metadata[sql_table].get("schema", "dbo"),
+                "snowflake_schema": snow_metadata[snow_table_actual].get("schema", "PUBLIC"),
                 "sql_object_type": sql_metadata[sql_table].get("object_type", "TABLE"),
                 "snow_object_type": snow_metadata[snow_table_actual].get("object_type", "TABLE")
             })
         else:
+            # Get expected Snowflake schema from mapping (if available)
+            expected_snow_schema = schema_mappings.get(sql_schema) if schema_mappings else None
             mappings.append({
                 "sql_server_table": sql_table,
                 "snowflake_table": None,
@@ -549,12 +552,14 @@ def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict, schema_mappin
                 "relationships": sql_metadata[sql_table]["relationships"],
                 "match_status": "only_in_sql_server",
                 "schema": sql_metadata[sql_table].get("schema", "dbo"),
+                "snowflake_schema": expected_snow_schema,
                 "sql_object_type": sql_metadata[sql_table].get("object_type", "TABLE")
             })
 
     # Find Snowflake-only tables
     for snow_table in snow_metadata:
         if snow_table not in matched_snow_tables:
+            snow_schema = snow_metadata[snow_table].get("schema", "PUBLIC")
             mappings.append({
                 "sql_server_table": None,
                 "snowflake_table": snow_table,
@@ -563,7 +568,8 @@ def create_table_mappings(sql_metadata: Dict, snow_metadata: Dict, schema_mappin
                 "column_mappings": {"mappings": [], "unmatched_source": [], "unmatched_target": [], "stats": {}},
                 "relationships": {},
                 "match_status": "only_in_snowflake",
-                "schema": snow_metadata[snow_table].get("schema", "PUBLIC"),
+                "schema": None,  # No SQL Server schema for Snowflake-only tables
+                "snowflake_schema": snow_schema,
                 "snow_object_type": snow_metadata[snow_table].get("object_type", "TABLE")
             })
 

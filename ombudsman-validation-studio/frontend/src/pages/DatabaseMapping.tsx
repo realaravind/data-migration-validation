@@ -1639,9 +1639,9 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                                                         <Grid item xs={3}>
                                                             <Box>
                                                                 {mapping.schema && (
-                                                                    <Chip label={mapping.schema} size="small" sx={{ mr: 0.5 }} />
+                                                                    <Chip label={mapping.schema} size="small" sx={{ mr: 0.5, backgroundColor: '#fff3e0' }} />
                                                                 )}
-                                                                <strong>{mapping.sql_server_table || '-'}</strong>
+                                                                <strong>{mapping.sql_server_table ? mapping.sql_server_table.split('.').pop() : '-'}</strong>
                                                             </Box>
                                                         </Grid>
                                                         <Grid item xs={3}>
@@ -1665,10 +1665,10 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                                                                 </FormControl>
                                                             ) : (
                                                                 <Box>
-                                                                    {mapping.schema && (
-                                                                        <Chip label={mapping.schema} size="small" sx={{ mr: 0.5 }} />
+                                                                    {mapping.snowflake_schema && (
+                                                                        <Chip label={mapping.snowflake_schema} size="small" sx={{ mr: 0.5, backgroundColor: '#e3f2fd' }} />
                                                                     )}
-                                                                    <strong>{mapping.snowflake_table || '-'}</strong>
+                                                                    <strong>{mapping.snowflake_table ? mapping.snowflake_table.split('.').pop() : '-'}</strong>
                                                                 </Box>
                                                             )}
                                                         </Grid>
