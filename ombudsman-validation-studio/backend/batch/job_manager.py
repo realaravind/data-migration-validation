@@ -162,6 +162,16 @@ class BatchJobManager:
 
             if status == BatchJobStatus.RUNNING and not job.started_at:
                 job.started_at = datetime.utcnow()
+                # Initialize progress when job starts
+                if not job.progress:
+                    job.progress = BatchProgress(
+                        total_operations=len(job.operations),
+                        completed_operations=0,
+                        failed_operations=0,
+                        skipped_operations=0,
+                        current_operation=None,
+                        percent_complete=0.0
+                    )
             elif status in [BatchJobStatus.COMPLETED, BatchJobStatus.FAILED, BatchJobStatus.CANCELLED]:
                 job.completed_at = datetime.utcnow()
                 if job.started_at:
@@ -223,6 +233,8 @@ class BatchJobManager:
         # Calculate percent complete
         finished = completed + failed + skipped
         percent = (finished / total * 100) if total > 0 else 0
+
+        print(f"[JOB MANAGER] Progress update for {job.job_id}: {finished}/{total} = {percent:.1f}% (completed={completed}, failed={failed})")
 
         # Estimate time remaining
         estimated_remaining = None
