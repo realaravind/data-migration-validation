@@ -277,19 +277,41 @@ create_directories() {
 }
 
 start_backend() {
-    echo "Starting backend..."
+    echo "Starting backend on port $BACKEND_PORT..."
 
-    # Kill any existing process on the backend port
-    kill_process_on_port "$BACKEND_PORT"
-
+    # Stop any existing backend by PID first
     if [ -f "$LOG_DIR/backend.pid" ]; then
         PID=$(cat "$LOG_DIR/backend.pid")
         if ps -p $PID > /dev/null 2>&1; then
             echo "Stopping existing backend (PID: $PID)"
-            kill $PID 2>/dev/null
-            sleep 2
+            kill -9 $PID 2>/dev/null
+            sleep 1
         fi
         rm -f "$LOG_DIR/backend.pid"
+    fi
+
+    # Kill any process on the backend port
+    echo "Ensuring port $BACKEND_PORT is free..."
+    kill_process_on_port "$BACKEND_PORT"
+
+    # Verify port is actually free
+    local port_check_attempts=0
+    while [ $port_check_attempts -lt 10 ]; do
+        if ! lsof -i:$BACKEND_PORT -t &>/dev/null && ! fuser $BACKEND_PORT/tcp &>/dev/null 2>&1; then
+            echo "Port $BACKEND_PORT is free"
+            break
+        fi
+        echo "Port $BACKEND_PORT still in use, waiting... (attempt $((port_check_attempts+1))/10)"
+        sleep 1
+        kill_process_on_port "$BACKEND_PORT"
+        port_check_attempts=$((port_check_attempts+1))
+    done
+
+    if lsof -i:$BACKEND_PORT -t &>/dev/null 2>&1; then
+        echo "ERROR: Could not free port $BACKEND_PORT after 10 attempts"
+        echo "Processes still on port:"
+        lsof -i:$BACKEND_PORT 2>/dev/null
+        return 1
     fi
 
     cd "$BACKEND_DIR"
@@ -347,19 +369,41 @@ start_backend() {
 }
 
 start_frontend() {
-    echo "Starting frontend..."
+    echo "Starting frontend on port $FRONTEND_PORT..."
 
-    # Kill any existing process on the frontend port
-    kill_process_on_port "$FRONTEND_PORT"
-
+    # Stop any existing frontend by PID first
     if [ -f "$LOG_DIR/frontend.pid" ]; then
         PID=$(cat "$LOG_DIR/frontend.pid")
         if ps -p $PID > /dev/null 2>&1; then
             echo "Stopping existing frontend (PID: $PID)"
-            kill $PID 2>/dev/null
-            sleep 2
+            kill -9 $PID 2>/dev/null
+            sleep 1
         fi
         rm -f "$LOG_DIR/frontend.pid"
+    fi
+
+    # Kill any process on the frontend port
+    echo "Ensuring port $FRONTEND_PORT is free..."
+    kill_process_on_port "$FRONTEND_PORT"
+
+    # Verify port is actually free
+    local port_check_attempts=0
+    while [ $port_check_attempts -lt 10 ]; do
+        if ! lsof -i:$FRONTEND_PORT -t &>/dev/null && ! fuser $FRONTEND_PORT/tcp &>/dev/null 2>&1; then
+            echo "Port $FRONTEND_PORT is free"
+            break
+        fi
+        echo "Port $FRONTEND_PORT still in use, waiting... (attempt $((port_check_attempts+1))/10)"
+        sleep 1
+        kill_process_on_port "$FRONTEND_PORT"
+        port_check_attempts=$((port_check_attempts+1))
+    done
+
+    if lsof -i:$FRONTEND_PORT -t &>/dev/null 2>&1; then
+        echo "ERROR: Could not free port $FRONTEND_PORT after 10 attempts"
+        echo "Processes still on port:"
+        lsof -i:$FRONTEND_PORT 2>/dev/null
+        return 1
     fi
 
     cd "$FRONTEND_DIR"
