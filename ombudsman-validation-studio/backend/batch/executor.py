@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Build backend URL from SERVER_HOST and BACKEND_PORT (standard env vars)
 SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
-BACKEND_PORT = os.getenv("BACKEND_PORT", "8001")
+BACKEND_PORT = os.getenv("BACKEND_PORT", "8000")
 BACKEND_URL = f"http://{SERVER_HOST}:{BACKEND_PORT}"
 from .models import (
     BatchJob,
