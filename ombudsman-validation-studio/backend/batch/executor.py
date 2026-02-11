@@ -435,14 +435,31 @@ class BatchExecutor:
                             # Collect error details
                             error_messages = []
                             if status_data.get("error"):
-                                error_messages.append(status_data.get("error"))
-                            for step in failed_steps:
-                                step_error = step.get("details", {}).get("error") or step.get("details", {}).get("message")
-                                if step_error:
-                                    error_messages.append(f"{step.get('name')}: {step_error}")
+                                error_messages.append(f"Pipeline error: {status_data.get('error')}")
 
-                            error_summary = "; ".join(error_messages) if error_messages else "Pipeline execution had failures"
-                            logger.error(f"[BATCH EXECUTOR] Pipeline failed: {error_summary}")
+                            # Log each failed step with full details
+                            for step in failed_steps:
+                                step_name = step.get("name", "unknown")
+                                step_details = step.get("details", {})
+
+                                # Try multiple possible error field locations
+                                step_error = (
+                                    step_details.get("error") or
+                                    step_details.get("message") or
+                                    step.get("error") or
+                                    step.get("message") or
+                                    step_details.get("errors") or
+                                    str(step_details) if step_details else None
+                                )
+
+                                logger.error(f"[BATCH EXECUTOR] FAILED STEP '{step_name}': {step_error}")
+                                logger.error(f"[BATCH EXECUTOR] FAILED STEP '{step_name}' full data: {step}")
+
+                                if step_error:
+                                    error_messages.append(f"{step_name}: {step_error}")
+
+                            error_summary = "; ".join(error_messages) if error_messages else "Pipeline execution had failures (no error details available)"
+                            logger.error(f"[BATCH EXECUTOR] Pipeline failed summary: {error_summary}")
                             raise Exception(f"Pipeline failed: {error_summary}")
 
                         # Success
