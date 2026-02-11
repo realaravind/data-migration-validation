@@ -10,12 +10,15 @@ Executes batch operations with support for:
 
 import asyncio
 import uuid
+import logging
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Thread
 
 from config.paths import paths
+
+logger = logging.getLogger(__name__)
 from .models import (
     BatchJob,
     BatchJobStatus,
@@ -371,21 +374,30 @@ class BatchExecutor:
             }
 
         # Regular pipeline file - execute normally
-        print(f"[BATCH EXECUTOR] Executing regular pipeline: {pipeline_id}.yaml")
-        response = requests.post(
-            "http://localhost:8000/pipelines/execute",
-            json={
-                "pipeline_yaml": pipeline_yaml,
-                "pipeline_name": pipeline_name
-            },
-            timeout=300
-        )
+        logger.info(f"[BATCH EXECUTOR] Executing regular pipeline: {pipeline_id}.yaml")
+        logger.info(f"[BATCH EXECUTOR] Calling POST http://localhost:8000/pipelines/execute")
+
+        try:
+            response = requests.post(
+                "http://localhost:8000/pipelines/execute",
+                json={
+                    "pipeline_yaml": pipeline_yaml,
+                    "pipeline_name": pipeline_name
+                },
+                timeout=300
+            )
+            logger.info(f"[BATCH EXECUTOR] Pipeline execute response: status={response.status_code}")
+        except Exception as req_error:
+            logger.error(f"[BATCH EXECUTOR] Failed to call pipeline execute endpoint: {req_error}")
+            raise Exception(f"Failed to call pipeline execute: {req_error}")
 
         if response.status_code != 200:
+            logger.error(f"[BATCH EXECUTOR] Pipeline execute failed: {response.text}")
             raise Exception(f"Pipeline execution failed: {response.text}")
 
         result = response.json()
         run_id = result.get("run_id")
+        logger.info(f"[BATCH EXECUTOR] Pipeline started with run_id: {run_id}")
 
         # Poll for completion (pipeline runs async)
         import time
@@ -405,11 +417,13 @@ class BatchExecutor:
                 if status_response.status_code == 200:
                     status_data = status_response.json()
                     current_status = status_data.get("status")
+                    logger.info(f"[BATCH EXECUTOR] Pipeline {run_id} status: {current_status} (elapsed: {elapsed}s)")
 
                     if current_status in ["completed", "failed"]:
                         # Check for step failures
                         results = status_data.get("results", [])
                         failed_steps = [r for r in results if r.get("status") == "FAIL"]
+                        logger.info(f"[BATCH EXECUTOR] Pipeline {run_id} finished: {len(results)} steps, {len(failed_steps)} failed")
 
                         if current_status == "failed" or failed_steps:
                             # Collect error details
@@ -422,9 +436,11 @@ class BatchExecutor:
                                     error_messages.append(f"{step.get('name')}: {step_error}")
 
                             error_summary = "; ".join(error_messages) if error_messages else "Pipeline execution had failures"
+                            logger.error(f"[BATCH EXECUTOR] Pipeline failed: {error_summary}")
                             raise Exception(f"Pipeline failed: {error_summary}")
 
                         # Success
+                        logger.info(f"[BATCH EXECUTOR] Pipeline {run_id} completed successfully")
                         return {
                             "run_id": run_id,
                             "status": "completed",
@@ -436,7 +452,7 @@ class BatchExecutor:
                             }
                         }
             except requests.RequestException as e:
-                print(f"[BATCH EXECUTOR] Status poll failed: {e}")
+                logger.warning(f"[BATCH EXECUTOR] Status poll failed: {e}")
 
         # Timeout - return pending status
         return {
