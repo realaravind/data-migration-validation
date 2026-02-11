@@ -113,19 +113,40 @@ async def extract_and_map_metadata(request: DatabaseMappingRequest):
                     print(f"[EXTRACT] Fetched SQL Server schemas: {sql_schemas}")
 
                 if not snowflake_schemas:
-                    conn = snowflake.connector.connect(
-                        user=os.getenv("SNOWFLAKE_USER"),
-                        password=os.getenv("SNOWFLAKE_PASSWORD"),
-                        account=os.getenv("SNOWFLAKE_ACCOUNT"),
-                        warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-                        role=os.getenv("SNOWFLAKE_ROLE"),
-                        database=request.snowflake_database
-                    )
-                    cursor = conn.cursor()
-                    cursor.execute("SHOW SCHEMAS")
-                    snowflake_schemas = [row[1] for row in cursor.fetchall() if row[1] not in ['INFORMATION_SCHEMA']]
-                    cursor.close()
-                    conn.close()
+                    from ombudsman.core.connections import get_snow_conn
+
+                    # Build config with OAuth/token/password support
+                    oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+                    oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+                    token = os.getenv('SNOWFLAKE_TOKEN', '')
+                    password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+                    cfg = {
+                        "snowflake": {
+                            "user": os.getenv('SNOWFLAKE_USER', ''),
+                            "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                            "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                            "database": request.snowflake_database,
+                            "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                            "role": os.getenv('SNOWFLAKE_ROLE', '')
+                        }
+                    }
+
+                    # Add auth method (OAuth > token > password)
+                    if oauth_client_id and oauth_refresh_token:
+                        cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+                        cfg["snowflake"]["oauth_client_secret"] = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+                        cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+                    elif token:
+                        cfg["snowflake"]["token"] = token
+                    else:
+                        cfg["snowflake"]["password"] = password
+
+                    with get_snow_conn(cfg) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SHOW SCHEMAS")
+                        snowflake_schemas = [row[1] for row in cursor.fetchall() if row[1] not in ['INFORMATION_SCHEMA']]
+                        cursor.close()
                     print(f"[EXTRACT] Fetched Snowflake schemas: {snowflake_schemas}")
 
                 # Use intelligent schema mapper
@@ -378,60 +399,80 @@ def extract_sqlserver_tables(database: str, schema: str, patterns: List[str], sp
 def extract_snowflake_tables(database: str, schema: str, patterns: List[str], specific_tables: Optional[List[str]]) -> Dict:
     """Extract table metadata from Snowflake"""
     try:
-        conn = snowflake.connector.connect(
-            user=os.getenv("SNOWFLAKE_USER"),
-            password=os.getenv("SNOWFLAKE_PASSWORD"),
-            account=os.getenv("SNOWFLAKE_ACCOUNT"),
-            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-            role=os.getenv("SNOWFLAKE_ROLE"),
-            database=database.upper(),  # Snowflake uses uppercase
-            schema=schema.upper()  # Snowflake uses uppercase
-        )
-        cursor = conn.cursor()
+        from ombudsman.core.connections import get_snow_conn
+
+        # Build config with OAuth/token/password support
+        oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+        oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+        token = os.getenv('SNOWFLAKE_TOKEN', '')
+        password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+        cfg = {
+            "snowflake": {
+                "user": os.getenv('SNOWFLAKE_USER', ''),
+                "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                "database": database.upper(),  # Snowflake uses uppercase
+                "schema": schema.upper(),  # Snowflake uses uppercase
+                "role": os.getenv('SNOWFLAKE_ROLE', '')
+            }
+        }
+
+        # Add auth method (OAuth > token > password)
+        if oauth_client_id and oauth_refresh_token:
+            cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+            cfg["snowflake"]["oauth_client_secret"] = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+            cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+        elif token:
+            cfg["snowflake"]["token"] = token
+        else:
+            cfg["snowflake"]["password"] = password
 
         tables = {}
 
-        # Get tables and views based on patterns or specific list
-        if specific_tables:
-            table_list = [(t, 'TABLE') for t in specific_tables]  # Assume tables if specific list provided
-        else:
-            # Build query with LIKE patterns (case-insensitive using UPPER) - include both BASE TABLE and VIEW
-            pattern_conditions = " OR ".join([f"UPPER(TABLE_NAME) LIKE UPPER('{p}')" for p in patterns])
-            query = f"""
-                SELECT TABLE_NAME, TABLE_TYPE
-                FROM {database.upper()}.INFORMATION_SCHEMA.TABLES
-                WHERE UPPER(TABLE_SCHEMA) = UPPER('{schema}')
-                AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
-                AND ({pattern_conditions})
-                ORDER BY TABLE_NAME
-            """
-            print(f"[DEBUG] Snowflake query: {query}")
-            cursor.execute(query)
-            table_list = [(row[0], row[1]) for row in cursor.fetchall()]
-            print(f"[DEBUG] Snowflake found {len(table_list)} objects in {schema}: {table_list[:5]}")
+        with get_snow_conn(cfg) as conn:
+            cursor = conn.cursor()
 
-        # Get columns for each table/view
-        for table_name, table_type in table_list:
-            cursor.execute(f"DESCRIBE TABLE {database.upper()}.{schema.upper()}.{table_name}")
+            # Get tables and views based on patterns or specific list
+            if specific_tables:
+                table_list = [(t, 'TABLE') for t in specific_tables]  # Assume tables if specific list provided
+            else:
+                # Build query with LIKE patterns (case-insensitive using UPPER) - include both BASE TABLE and VIEW
+                pattern_conditions = " OR ".join([f"UPPER(TABLE_NAME) LIKE UPPER('{p}')" for p in patterns])
+                query = f"""
+                    SELECT TABLE_NAME, TABLE_TYPE
+                    FROM {database.upper()}.INFORMATION_SCHEMA.TABLES
+                    WHERE UPPER(TABLE_SCHEMA) = UPPER('{schema}')
+                    AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+                    AND ({pattern_conditions})
+                    ORDER BY TABLE_NAME
+                """
+                print(f"[DEBUG] Snowflake query: {query}")
+                cursor.execute(query)
+                table_list = [(row[0], row[1]) for row in cursor.fetchall()]
+                print(f"[DEBUG] Snowflake found {len(table_list)} objects in {schema}: {table_list[:5]}")
 
-            columns = {}
-            for row in cursor.fetchall():
-                col_name = row[0]
-                data_type = row[1].split("(")[0].upper()  # Remove size info for now
-                columns[col_name] = data_type
+            # Get columns for each table/view
+            for table_name, table_type in table_list:
+                cursor.execute(f"DESCRIBE TABLE {database.upper()}.{schema.upper()}.{table_name}")
 
-            # Get foreign keys (if any) - only for tables, not views
-            # Note: Snowflake FK constraints might not be enforced
-            relationships = {}
+                columns = {}
+                for row in cursor.fetchall():
+                    col_name = row[0]
+                    data_type = row[1].split("(")[0].upper()  # Remove size info for now
+                    columns[col_name] = data_type
 
-            tables[table_name] = {
-                "columns": columns,
-                "relationships": relationships,
-                "object_type": "VIEW" if table_type == 'VIEW' else "TABLE"
-            }
+                # Get foreign keys (if any) - only for tables, not views
+                # Note: Snowflake FK constraints might not be enforced
+                relationships = {}
 
-        cursor.close()
-        conn.close()
+                tables[table_name] = {
+                    "columns": columns,
+                    "relationships": relationships,
+                    "object_type": "VIEW" if table_type == 'VIEW' else "TABLE"
+                }
+
+            cursor.close()
 
         print(f"[DEBUG] Snowflake extraction complete: {len(tables)} tables extracted from {schema}")
         return tables
@@ -1217,18 +1258,40 @@ async def get_available_databases():
 
         # Get Snowflake databases
         try:
-            conn = snowflake.connector.connect(
-                user=os.getenv("SNOWFLAKE_USER"),
-                password=os.getenv("SNOWFLAKE_PASSWORD"),
-                account=os.getenv("SNOWFLAKE_ACCOUNT"),
-                warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-                role=os.getenv("SNOWFLAKE_ROLE")
-            )
-            cursor = conn.cursor()
-            cursor.execute("SHOW DATABASES")
-            result["snowflake"] = [row[1] for row in cursor.fetchall()]
-            cursor.close()
-            conn.close()
+            from ombudsman.core.connections import get_snow_conn
+
+            # Build config with OAuth/token/password support
+            oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+            oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+            token = os.getenv('SNOWFLAKE_TOKEN', '')
+            password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+            cfg = {
+                "snowflake": {
+                    "user": os.getenv('SNOWFLAKE_USER', ''),
+                    "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                    "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                    "database": os.getenv('SNOWFLAKE_DATABASE', 'DEMO_DB'),
+                    "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                    "role": os.getenv('SNOWFLAKE_ROLE', '')
+                }
+            }
+
+            # Add auth method (OAuth > token > password)
+            if oauth_client_id and oauth_refresh_token:
+                cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+                cfg["snowflake"]["oauth_client_secret"] = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+                cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+            elif token:
+                cfg["snowflake"]["token"] = token
+            else:
+                cfg["snowflake"]["password"] = password
+
+            with get_snow_conn(cfg) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SHOW DATABASES")
+                result["snowflake"] = [row[1] for row in cursor.fetchall()]
+                cursor.close()
         except Exception as e:
             result["snowflake_error"] = str(e)
 
@@ -1296,20 +1359,41 @@ async def suggest_schema_mappings(request: SchemaMappingSuggestionRequest):
             conn.close()
 
         if not snowflake_schemas:
-            # Get Snowflake schemas
-            conn = snowflake.connector.connect(
-                user=os.getenv("SNOWFLAKE_USER"),
-                password=os.getenv("SNOWFLAKE_PASSWORD"),
-                account=os.getenv("SNOWFLAKE_ACCOUNT"),
-                warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-                role=os.getenv("SNOWFLAKE_ROLE"),
-                database=request.snowflake_database
-            )
-            cursor = conn.cursor()
-            cursor.execute("SHOW SCHEMAS")
-            snowflake_schemas = [row[1] for row in cursor.fetchall() if row[1] not in ['INFORMATION_SCHEMA']]
-            cursor.close()
-            conn.close()
+            # Get Snowflake schemas with OAuth support
+            from ombudsman.core.connections import get_snow_conn
+
+            # Build config with OAuth/token/password support
+            oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+            oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+            token = os.getenv('SNOWFLAKE_TOKEN', '')
+            password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+            cfg = {
+                "snowflake": {
+                    "user": os.getenv('SNOWFLAKE_USER', ''),
+                    "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                    "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                    "database": request.snowflake_database,
+                    "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                    "role": os.getenv('SNOWFLAKE_ROLE', '')
+                }
+            }
+
+            # Add auth method (OAuth > token > password)
+            if oauth_client_id and oauth_refresh_token:
+                cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+                cfg["snowflake"]["oauth_client_secret"] = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+                cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+            elif token:
+                cfg["snowflake"]["token"] = token
+            else:
+                cfg["snowflake"]["password"] = password
+
+            with get_snow_conn(cfg) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SHOW SCHEMAS")
+                snowflake_schemas = [row[1] for row in cursor.fetchall() if row[1] not in ['INFORMATION_SCHEMA']]
+                cursor.close()
 
         # Try AI mapping first if requested
         ai_mappings = None

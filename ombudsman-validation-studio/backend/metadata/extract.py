@@ -134,16 +134,36 @@ def list_all_tables():
         except Exception as e:
             results["sqlserver"]["error"] = str(e)
 
-        # Get Snowflake tables from multiple databases
+        # Get Snowflake tables from multiple databases (supports OAuth)
         try:
-            conn = snowflake.connector.connect(
-                user=os.getenv("SNOWFLAKE_USER"),
-                password=os.getenv("SNOWFLAKE_PASSWORD"),
-                account=os.getenv("SNOWFLAKE_ACCOUNT"),
-                warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-                role=os.getenv("SNOWFLAKE_ROLE"),
-            )
-            cursor = conn.cursor()
+            from ombudsman.core.connections import get_snow_conn
+
+            # Build config with OAuth/token/password support
+            oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+            oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+            token = os.getenv('SNOWFLAKE_TOKEN', '')
+            password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+            cfg = {
+                "snowflake": {
+                    "user": os.getenv('SNOWFLAKE_USER', ''),
+                    "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                    "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                    "database": os.getenv('SNOWFLAKE_DATABASE', 'DEMO_DB'),
+                    "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                    "role": os.getenv('SNOWFLAKE_ROLE', '')
+                }
+            }
+
+            # Add auth method (OAuth > token > password)
+            if oauth_client_id and oauth_refresh_token:
+                cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+                cfg["snowflake"]["oauth_client_secret"] = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+                cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+            elif token:
+                cfg["snowflake"]["token"] = token
+            else:
+                cfg["snowflake"]["password"] = password
 
             # Query both DEMO_DB and SAMPLEDW databases
             databases_to_check = [
@@ -152,33 +172,33 @@ def list_all_tables():
             ]
             schema = os.getenv("SNOWFLAKE_SCHEMA", "PUBLIC")
 
-            for db in databases_to_check:
-                try:
-                    query = f"""
-                        SELECT TABLE_NAME
-                        FROM {db}.INFORMATION_SCHEMA.TABLES
-                        WHERE TABLE_SCHEMA = '{schema}'
-                        AND TABLE_TYPE = 'BASE TABLE'
-                        ORDER BY TABLE_NAME
-                    """
-                    cursor.execute(query)
-                    tables = [row[0] for row in cursor.fetchall()]
+            with get_snow_conn(cfg) as conn:
+                cursor = conn.cursor()
+                for db in databases_to_check:
+                    try:
+                        query = f"""
+                            SELECT TABLE_NAME
+                            FROM {db}.INFORMATION_SCHEMA.TABLES
+                            WHERE TABLE_SCHEMA = '{schema}'
+                            AND TABLE_TYPE = 'BASE TABLE'
+                            ORDER BY TABLE_NAME
+                        """
+                        cursor.execute(query)
+                        tables = [row[0] for row in cursor.fetchall()]
 
-                    results["snowflake"]["databases"][db] = {
-                        "tables": tables,
-                        "schema": schema,
-                        "count": len(tables)
-                    }
-                except Exception as e:
-                    results["snowflake"]["databases"][db] = {
-                        "tables": [],
-                        "schema": schema,
-                        "count": 0,
-                        "error": str(e)
-                    }
-
-            cursor.close()
-            conn.close()
+                        results["snowflake"]["databases"][db] = {
+                            "tables": tables,
+                            "schema": schema,
+                            "count": len(tables)
+                        }
+                    except Exception as e:
+                        results["snowflake"]["databases"][db] = {
+                            "tables": [],
+                            "schema": schema,
+                            "count": 0,
+                            "error": str(e)
+                        }
+                cursor.close()
             results["snowflake"]["status"] = "success"
 
         except Exception as e:
@@ -337,19 +357,42 @@ def validate_relationship(request: ValidateRelationshipRequest):
     try:
         from ombudsman.core.relationship_inferrer import RelationshipInferrer
         import pyodbc
-        import snowflake.connector
 
         # Create database connection
         conn = None
+        snow_conn_context = None
         if request.use_snowflake:
-            conn = snowflake.connector.connect(
-                user=os.getenv("SNOWFLAKE_USER"),
-                password=os.getenv("SNOWFLAKE_PASSWORD"),
-                account=os.getenv("SNOWFLAKE_ACCOUNT"),
-                warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-                role=os.getenv("SNOWFLAKE_ROLE"),
-                database=os.getenv("SNOWFLAKE_DATABASE", "SAMPLEDW")
-            )
+            from ombudsman.core.connections import get_snow_conn
+
+            # Build config with OAuth/token/password support
+            oauth_client_id = os.getenv('SNOWFLAKE_OAUTH_CLIENT_ID', '')
+            oauth_refresh_token = os.getenv('SNOWFLAKE_OAUTH_REFRESH_TOKEN', '')
+            token = os.getenv('SNOWFLAKE_TOKEN', '')
+            password = os.getenv('SNOWFLAKE_PASSWORD', '')
+
+            cfg = {
+                "snowflake": {
+                    "user": os.getenv('SNOWFLAKE_USER', ''),
+                    "account": os.getenv('SNOWFLAKE_ACCOUNT', ''),
+                    "warehouse": os.getenv('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH'),
+                    "database": os.getenv('SNOWFLAKE_DATABASE', 'SAMPLEDW'),
+                    "schema": os.getenv('SNOWFLAKE_SCHEMA', 'PUBLIC'),
+                    "role": os.getenv('SNOWFLAKE_ROLE', '')
+                }
+            }
+
+            # Add auth method (OAuth > token > password)
+            if oauth_client_id and oauth_refresh_token:
+                cfg["snowflake"]["oauth_client_id"] = oauth_client_id
+                cfg["snowflake"]["oauth_client_secret"] = os.getenv('SNOWFLAKE_OAUTH_CLIENT_SECRET', '')
+                cfg["snowflake"]["oauth_refresh_token"] = oauth_refresh_token
+            elif token:
+                cfg["snowflake"]["token"] = token
+            else:
+                cfg["snowflake"]["password"] = password
+
+            snow_conn_context = get_snow_conn(cfg)
+            conn = snow_conn_context.__enter__()
         else:
             conn_str = os.getenv("SQLSERVER_CONN_STR", "")
             if not conn_str:
@@ -380,7 +423,9 @@ def validate_relationship(request: ValidateRelationshipRequest):
         )
 
         # Close connection
-        if conn:
+        if snow_conn_context:
+            snow_conn_context.__exit__(None, None, None)
+        elif conn:
             conn.close()
 
         return {
