@@ -11,6 +11,7 @@ Executes batch operations with support for:
 import asyncio
 import uuid
 import logging
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +20,9 @@ from threading import Thread
 from config.paths import paths
 
 logger = logging.getLogger(__name__)
+
+# Get backend URL from environment - for internal API calls
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8001")
 from .models import (
     BatchJob,
     BatchJobStatus,
@@ -375,11 +379,11 @@ class BatchExecutor:
 
         # Regular pipeline file - execute normally
         logger.info(f"[BATCH EXECUTOR] Executing regular pipeline: {pipeline_id}.yaml")
-        logger.info(f"[BATCH EXECUTOR] Calling POST http://localhost:8000/pipelines/execute")
+        logger.info(f"[BATCH EXECUTOR] Calling POST {BACKEND_URL}/pipelines/execute")
 
         try:
             response = requests.post(
-                "http://localhost:8000/pipelines/execute",
+                f"{BACKEND_URL}/pipelines/execute",
                 json={
                     "pipeline_yaml": pipeline_yaml,
                     "pipeline_name": pipeline_name
@@ -411,7 +415,7 @@ class BatchExecutor:
 
             try:
                 status_response = requests.get(
-                    f"http://localhost:8000/pipelines/status/{run_id}",
+                    f"{BACKEND_URL}/pipelines/status/{run_id}",
                     timeout=30
                 )
                 if status_response.status_code == 200:
@@ -475,7 +479,7 @@ class BatchExecutor:
 
         # Call data generation endpoint
         response = requests.post(
-            "http://localhost:8000/data/generate",
+            f"{BACKEND_URL}/data/generate",
             json={
                 "schema_type": schema_type,
                 "row_count": row_count
@@ -507,7 +511,7 @@ class BatchExecutor:
 
         # Call metadata extraction endpoint
         response = requests.post(
-            "http://localhost:8000/metadata/extract",
+            f"{BACKEND_URL}/metadata/extract",
             json={
                 "source": connection_type,
                 "schema": schema_name
@@ -541,7 +545,7 @@ class BatchExecutor:
         results = []
         for pipeline_id in pipeline_ids:
             response = requests.post(
-                "http://localhost:8000/pipelines/execute",
+                f"{BACKEND_URL}/pipelines/execute",
                 json={
                     "pipeline_id": pipeline_id,
                     "project_id": project_id
