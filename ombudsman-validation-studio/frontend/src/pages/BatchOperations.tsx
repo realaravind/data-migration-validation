@@ -305,7 +305,11 @@ const BatchOperations: React.FC = () => {
                 setPipelineJobName('');
                 setSelectedPipelines([]);
                 setActiveTab(2); // Switch to Active Jobs tab
-                fetchJobs();
+                // Fetch multiple times with delays to ensure job appears
+                await fetchJobs();
+                setTimeout(() => fetchJobs(), 300);
+                setTimeout(() => fetchJobs(), 1000);
+                setTimeout(() => fetchJobs(), 2000);
             } else {
                 setSnackbar({ open: true, message: 'Failed to create batch job', severity: 'error' });
             }
