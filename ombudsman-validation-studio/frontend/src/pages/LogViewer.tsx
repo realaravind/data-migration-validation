@@ -104,7 +104,7 @@ const LogViewer: React.FC = () => {
 
   // Auto-refresh
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [refreshInterval, setRefreshInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
   const fetchLogs = useCallback(async () => {
     try {
