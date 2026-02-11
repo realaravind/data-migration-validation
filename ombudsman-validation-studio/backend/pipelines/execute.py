@@ -449,8 +449,8 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                         else:
                             raise Exception("Project metadata not found")
 
-                    print(f"[CONFIG] Using active project config - SQL DB: {metadata.get('sql_database')}, Snowflake DB: {metadata.get('snowflake_database')}")
-                    print(f"[CONFIG] SQL connection: host={os.getenv('MSSQL_HOST', 'NOT SET')}, port={os.getenv('MSSQL_PORT', '1433')}, user={os.getenv('MSSQL_USER', 'sa')}")
+                    logger.info(f"[CONFIG] Using active project config - SQL DB: {metadata.get('sql_database')}, Snowflake DB: {metadata.get('snowflake_database')}")
+                    logger.info(f"[CONFIG] SQL connection: host={os.getenv('MSSQL_HOST', 'NOT SET')}, port={os.getenv('MSSQL_PORT', '1433')}, user={os.getenv('MSSQL_USER', 'sa')}")
                     cfg = {
                         "connections": {
                             "sql": {
@@ -476,12 +476,12 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
             except Exception as e:
                 # Fall back to environment variables
-                print(f"[CONFIG] No active project or error loading project ({e}), using environment variables")
-                print(f"[CONFIG] MSSQL_HOST from env: {os.getenv('MSSQL_HOST', 'NOT SET - using host.docker.internal')}")
-                print(f"[CONFIG] MSSQL_PORT from env: {os.getenv('MSSQL_PORT', '1433')}")
-                print(f"[CONFIG] MSSQL_USER from env: {os.getenv('MSSQL_USER', 'sa')}")
-                print(f"[CONFIG] MSSQL_DATABASE from env: {os.getenv('MSSQL_DATABASE', 'SampleDW')}")
-                print(f"[CONFIG] SNOWFLAKE_DATABASE from env: {os.getenv('SNOWFLAKE_DATABASE', 'SAMPLEDW')}")
+                logger.warning(f"[CONFIG] No active project or error loading project ({e}), using environment variables")
+                logger.info(f"[CONFIG] MSSQL_HOST from env: {os.getenv('MSSQL_HOST', 'NOT SET - using host.docker.internal')}")
+                logger.info(f"[CONFIG] MSSQL_PORT from env: {os.getenv('MSSQL_PORT', '1433')}")
+                logger.info(f"[CONFIG] MSSQL_USER from env: {os.getenv('MSSQL_USER', 'sa')}")
+                logger.info(f"[CONFIG] MSSQL_DATABASE from env: {os.getenv('MSSQL_DATABASE', 'SampleDW')}")
+                logger.info(f"[CONFIG] SNOWFLAKE_DATABASE from env: {os.getenv('SNOWFLAKE_DATABASE', 'SAMPLEDW')}")
                 cfg = {
                     "connections": {
                         "sql": {
@@ -587,7 +587,41 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
         StepExecutor.run_step = patched_run_step
 
         # Create connections and execute pipeline
-        with get_sql_conn(cfg) as sql_conn, get_snow_conn(cfg) as snow_conn:
+        logger.info(f"[PIPELINE] Attempting to create database connections...")
+        sql_cfg = cfg.get('connections', {}).get('sql', {})
+        snow_cfg = cfg.get('snowflake', {})
+        logger.info(f"[PIPELINE] SQL Config: host={sql_cfg.get('host')}, port={sql_cfg.get('port')}, database={sql_cfg.get('database')}, user={sql_cfg.get('user')}")
+        logger.info(f"[PIPELINE] Snowflake Config: account={snow_cfg.get('account')}, database={snow_cfg.get('database')}, schema={snow_cfg.get('schema')}, user={snow_cfg.get('user')}")
+
+        # Try connections separately to identify which one fails
+        sql_conn_ctx = None
+        snow_conn_ctx = None
+        try:
+            logger.info("[PIPELINE] Creating SQL Server connection...")
+            sql_conn_ctx = get_sql_conn(cfg)
+            sql_conn = sql_conn_ctx.__enter__()
+            logger.info("[PIPELINE] SQL Server connection established successfully")
+        except Exception as sql_err:
+            logger.error(f"[PIPELINE] SQL Server connection FAILED: {type(sql_err).__name__}: {sql_err}")
+            import traceback
+            logger.error(f"[PIPELINE] SQL Traceback: {traceback.format_exc()}")
+            raise Exception(f"SQL Server connection failed: {sql_err}")
+
+        try:
+            logger.info("[PIPELINE] Creating Snowflake connection...")
+            snow_conn_ctx = get_snow_conn(cfg)
+            snow_conn = snow_conn_ctx.__enter__()
+            logger.info("[PIPELINE] Snowflake connection established successfully")
+        except Exception as snow_err:
+            logger.error(f"[PIPELINE] Snowflake connection FAILED: {type(snow_err).__name__}: {snow_err}")
+            import traceback
+            logger.error(f"[PIPELINE] Snowflake Traceback: {traceback.format_exc()}")
+            if sql_conn_ctx:
+                sql_conn_ctx.__exit__(None, None, None)
+            raise Exception(f"Snowflake connection failed: {snow_err}")
+
+        try:
+            logger.info("[PIPELINE] Both database connections established successfully")
             # Create executor
             executor = StepExecutor(
                 registry=registry,
@@ -739,6 +773,21 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                     "error": f"Failed to serialize results: {str(e)}",
                     "raw_data": str(pipeline_runs[run_id])
                 }, f, indent=2)
+
+        finally:
+            # Clean up connections
+            if sql_conn_ctx:
+                try:
+                    sql_conn_ctx.__exit__(None, None, None)
+                    logger.info("[PIPELINE] SQL Server connection closed")
+                except:
+                    pass
+            if snow_conn_ctx:
+                try:
+                    snow_conn_ctx.__exit__(None, None, None)
+                    logger.info("[PIPELINE] Snowflake connection closed")
+                except:
+                    pass
 
     except Exception as e:
         import traceback
