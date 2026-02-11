@@ -649,10 +649,11 @@ def generate_consolidated_report(job_id: str):
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        # Extract run_ids from completed operations
+        # Extract run_ids from completed AND failed operations (so we can show failure reports)
         run_ids = []
         for operation in job.operations:
-            if operation.status == BatchOperationStatus.COMPLETED and operation.result:
+            # Include both completed and failed operations that have results
+            if operation.status in [BatchOperationStatus.COMPLETED, BatchOperationStatus.FAILED] and operation.result:
                 # Check if this is a batch execution result with nested pipeline results
                 if "results" in operation.result and isinstance(operation.result["results"], list):
                     # Extract run_ids from nested results (batch execution)

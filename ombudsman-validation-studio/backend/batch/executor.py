@@ -179,10 +179,22 @@ class BatchExecutor:
 
             try:
                 result = operation_func(operation)
-                batch_job_manager.update_operation_status(
-                    job.job_id, operation.operation_id,
-                    BatchOperationStatus.COMPLETED, result=result
-                )
+
+                # Check if result indicates a failure (pipeline returned failure with run_id)
+                if result and result.get("status") == "failed":
+                    batch_job_manager.update_operation_status(
+                        job.job_id, operation.operation_id,
+                        BatchOperationStatus.FAILED,
+                        result=result,  # Include result so run_id is available for reports
+                        error=result.get("error", "Pipeline execution failed")
+                    )
+                    if job.stop_on_error:
+                        break
+                else:
+                    batch_job_manager.update_operation_status(
+                        job.job_id, operation.operation_id,
+                        BatchOperationStatus.COMPLETED, result=result
+                    )
             except Exception as e:
                 batch_job_manager.update_operation_status(
                     job.job_id, operation.operation_id,
@@ -465,7 +477,19 @@ class BatchExecutor:
 
                             error_summary = "; ".join(error_messages) if error_messages else "Pipeline execution had failures (no error details available)"
                             logger.error(f"[BATCH EXECUTOR] Pipeline failed summary: {error_summary}")
-                            raise Exception(f"Pipeline failed: {error_summary}")
+
+                            # Return failure result WITH run_id so reports can still be generated
+                            return {
+                                "run_id": run_id,
+                                "status": "failed",
+                                "pipeline_id": pipeline_id,
+                                "error": error_summary,
+                                "results_summary": {
+                                    "total_steps": len(results),
+                                    "passed": len([r for r in results if r.get("status") == "PASS"]),
+                                    "failed": len(failed_steps)
+                                }
+                            }
 
                         # Success
                         logger.info(f"[BATCH EXECUTOR] Pipeline {run_id} completed successfully")
