@@ -87,13 +87,18 @@ class BatchExecutor:
                 # Generic execution
                 self._execute_generic_batch(job)
 
+            # Re-fetch job to get updated failure/success counts
+            job = batch_job_manager.get_job(job_id)
+
             # Determine final status
+            logger.info(f"[BATCH EXECUTOR] Job {job_id} counts: success={job.success_count}, failure={job.failure_count}")
             if job.failure_count > 0 and job.success_count > 0:
                 final_status = BatchJobStatus.PARTIAL_SUCCESS
             elif job.failure_count > 0:
                 final_status = BatchJobStatus.FAILED
             else:
                 final_status = BatchJobStatus.COMPLETED
+            logger.info(f"[BATCH EXECUTOR] Job {job_id} final status: {final_status}")
 
             # Generate consolidated result for pipeline executions
             if job.job_type == BatchJobType.BULK_PIPELINE_EXECUTION:

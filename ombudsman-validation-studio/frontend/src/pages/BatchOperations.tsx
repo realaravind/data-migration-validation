@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -99,6 +99,9 @@ const BatchOperations: React.FC = () => {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' });
 
+    // Track previous job statuses for detecting state changes
+    const prevJobStatusesRef = useRef<Map<string, string>>(new Map());
+
     // Filter state for Batch vs Pipeline view
     const [viewFilter, setViewFilter] = useState<'all' | 'batches' | 'pipelines'>('batches');
 
@@ -139,12 +142,55 @@ const BatchOperations: React.FC = () => {
         fetchActiveProject();
     }, []);
 
-    // Auto-refresh for active jobs
+    // Auto-refresh for active jobs and detect status changes
     useEffect(() => {
-        const interval = setInterval(() => {
+        const interval = setInterval(async () => {
             const hasActiveJobs = jobs.some(j => j.status === 'running' || j.status === 'queued');
             if (hasActiveJobs) {
-                fetchJobs();
+                try {
+                    const response = await fetch(__API_URL__ + '/batch/jobs?limit=100');
+                    const data = await response.json();
+                    const newJobs = data.jobs || [];
+
+                    // Check for status changes to terminal states
+                    const prevStatuses = prevJobStatusesRef.current;
+                    for (const job of newJobs) {
+                        const prevStatus = prevStatuses.get(job.job_id);
+                        if (prevStatus && (prevStatus === 'running' || prevStatus === 'queued')) {
+                            // Job was active, check if it's now complete
+                            if (job.status === 'completed') {
+                                setSnackbar({
+                                    open: true,
+                                    message: `Job "${job.name}" completed successfully`,
+                                    severity: 'success'
+                                });
+                            } else if (job.status === 'failed') {
+                                setSnackbar({
+                                    open: true,
+                                    message: `Job "${job.name}" failed`,
+                                    severity: 'error'
+                                });
+                            } else if (job.status === 'partial_success') {
+                                setSnackbar({
+                                    open: true,
+                                    message: `Job "${job.name}" completed with some failures`,
+                                    severity: 'error'
+                                });
+                            }
+                        }
+                    }
+
+                    // Update tracked statuses
+                    const newStatuses = new Map<string, string>();
+                    for (const job of newJobs) {
+                        newStatuses.set(job.job_id, job.status);
+                    }
+                    prevJobStatusesRef.current = newStatuses;
+
+                    setJobs(newJobs);
+                } catch (error) {
+                    console.error('Failed to fetch jobs:', error);
+                }
             }
         }, 2000); // Refresh every 2 seconds
 
@@ -155,7 +201,18 @@ const BatchOperations: React.FC = () => {
         try {
             const response = await fetch(__API_URL__ + '/batch/jobs?limit=100');
             const data = await response.json();
-            setJobs(data.jobs || []);
+            const fetchedJobs = data.jobs || [];
+
+            // Initialize status tracking on first load
+            if (prevJobStatusesRef.current.size === 0) {
+                const statuses = new Map<string, string>();
+                for (const job of fetchedJobs) {
+                    statuses.set(job.job_id, job.status);
+                }
+                prevJobStatusesRef.current = statuses;
+            }
+
+            setJobs(fetchedJobs);
         } catch (error) {
             console.error('Failed to fetch jobs:', error);
         }
