@@ -167,6 +167,7 @@ const BatchReportViewerSimple: React.FC = () => {
   }
 
   const rep = report.report || {};
+  const systemAlerts = rep.system_alerts || [];
   const summary = rep.executive_summary || {};
   const metrics = rep.aggregate_metrics || {};
   const pipelines = rep.pipeline_details || [];
@@ -256,6 +257,33 @@ const BatchReportViewerSimple: React.FC = () => {
           ← Back to Batch Operations
         </Button>
       </Paper>
+
+      {/* System Alerts - Show prominently at top if there are any */}
+      {systemAlerts.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3, bgcolor: '#fff3e0', border: '2px solid #ff9800' }}>
+          <Typography variant="h5" gutterBottom sx={{ color: '#e65100', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon /> System Alerts ({systemAlerts.length})
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            These alerts indicate system-level issues that may affect validation accuracy.
+          </Typography>
+          {systemAlerts.map((alert: any, idx: number) => (
+            <Alert
+              key={idx}
+              severity={alert.severity === 'CRITICAL' ? 'error' : 'warning'}
+              sx={{ mb: 2 }}
+            >
+              <Typography variant="subtitle2" fontWeight="bold">{alert.title}</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>{alert.message}</Typography>
+              {alert.recommendation && (
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                  <strong>Recommendation:</strong> {alert.recommendation}
+                </Typography>
+              )}
+            </Alert>
+          ))}
+        </Paper>
+      )}
 
       {/* Executive Summary */}
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -410,7 +438,7 @@ const BatchReportViewerSimple: React.FC = () => {
                             )}
 
                             {/* View Comparison Button - Show for validations with comparison details */}
-                            {rep.consolidated_run_id && (validation.comparison_details ||
+                            {pipeline.run_id && (validation.comparison_details ||
                               validation.details?.comparison_details ||
                               (validation.sql_row_count !== undefined && validation.snow_row_count !== undefined) ||
                               validation.name?.toLowerCase().includes('comparative') ||
@@ -421,7 +449,7 @@ const BatchReportViewerSimple: React.FC = () => {
                                 size="small"
                                 variant="outlined"
                                 startIcon={<CompareArrowsIcon />}
-                                onClick={() => navigate(`/comparison/${rep.consolidated_run_id}/${validation.name}`)}
+                                onClick={() => navigate(`/comparison/${pipeline.run_id}/${validation.name}`)}
                                 sx={{ mb: 1, fontSize: '0.75rem' }}
                               >
                                 View Comparison

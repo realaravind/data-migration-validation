@@ -98,6 +98,9 @@ class ConsolidatedReportGenerator:
         # Find consolidated result file for this batch job
         consolidated_run_id = self._find_consolidated_run_id(job_id)
 
+        # Detect system-level issues first
+        system_alerts = self._detect_system_alerts(all_results)
+
         # Generate report sections
         report = {
             "job_id": job_id,
@@ -105,6 +108,9 @@ class ConsolidatedReportGenerator:
             "pipeline_count": len(all_results),
             "run_ids": run_ids,
             "consolidated_run_id": consolidated_run_id,  # Add consolidated run_id for comparison links
+
+            # System alerts (permission issues, configuration problems)
+            "system_alerts": system_alerts,
 
             # Executive summary
             "executive_summary": self._generate_executive_summary(all_results),
@@ -346,6 +352,61 @@ class ConsolidatedReportGenerator:
             }
 
         return analysis
+
+    def _detect_system_alerts(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Detect system-level issues that indicate configuration/permission problems"""
+        alerts = []
+        seen_issues = set()
+
+        for result in results:
+            pipeline_name = result.get("pipeline_name", "unknown")
+            steps = result.get("steps", result.get("results", []))
+
+            for step in steps:
+                step_name = step.get("step_name", step.get("name", ""))
+                details = step.get("details", {})
+
+                # Detect Snowflake permission issues (0 columns while SQL has columns)
+                if "schema" in step_name.lower() and "column" in step_name.lower():
+                    sql_col_count = details.get("column_count_sql", 0)
+                    snow_col_count = details.get("column_count_snow", 0)
+
+                    if sql_col_count > 0 and snow_col_count == 0:
+                        issue_key = "snowflake_no_metadata"
+                        if issue_key not in seen_issues:
+                            seen_issues.add(issue_key)
+                            alerts.append({
+                                "type": "PERMISSION_ERROR",
+                                "severity": "CRITICAL",
+                                "title": "Snowflake Metadata Access Issue",
+                                "message": f"Snowflake returned 0 columns for tables that have {sql_col_count} columns in SQL Server. This typically indicates a permission issue - the Snowflake user may not have access to read table metadata.",
+                                "recommendation": "Check that the Snowflake user has SELECT privileges on the tables and USAGE on the schema. Verify the table exists in the specified schema.",
+                                "affected_pipeline": pipeline_name
+                            })
+
+                # Detect datatype validation with no Snowflake data
+                if "datatype" in step_name.lower():
+                    mismatches = details.get("mismatches", [])
+                    if mismatches:
+                        # Check if all mismatches have empty Snowflake datatype
+                        all_empty_snow = all(
+                            not m.get("snow_datatype") or m.get("snow_datatype") == "None"
+                            for m in mismatches if isinstance(m, dict)
+                        )
+                        if all_empty_snow:
+                            issue_key = "snowflake_no_datatypes"
+                            if issue_key not in seen_issues:
+                                seen_issues.add(issue_key)
+                                alerts.append({
+                                    "type": "PERMISSION_ERROR",
+                                    "severity": "HIGH",
+                                    "title": "Snowflake Datatype Information Unavailable",
+                                    "message": "All datatype validations show empty Snowflake datatypes. This suggests the Snowflake user cannot read column metadata from INFORMATION_SCHEMA.",
+                                    "recommendation": "Grant the Snowflake user SELECT on INFORMATION_SCHEMA views or ensure the tables exist in the specified database/schema.",
+                                    "affected_pipeline": pipeline_name
+                                })
+
+        return alerts
 
     def _categorize_failure(self, step_name: str, details: Dict[str, Any]) -> str:
         """Categorize a failure based on validation type"""
