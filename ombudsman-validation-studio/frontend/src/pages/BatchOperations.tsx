@@ -635,7 +635,16 @@ const BatchOperations: React.FC = () => {
             field: 'total_duration_ms',
             headerName: 'Duration',
             width: 100,
-            renderCell: (params: any) => formatDuration(params.value)
+            renderCell: (params: any) => {
+                const job = params.row;
+                // For running jobs, calculate elapsed time from started_at
+                if ((job.status === 'running' || job.status === 'queued') && job.started_at) {
+                    const startedAt = new Date(job.started_at).getTime();
+                    const elapsed = Date.now() - startedAt;
+                    return formatDuration(elapsed);
+                }
+                return formatDuration(params.value);
+            }
         },
         {
             field: 'actions',

@@ -61,20 +61,65 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
     ```
     """
     try:
-        # Create operations for each pipeline
+        import yaml
+        from config.paths import paths
+
+        # Create operations for each pipeline (expand batch files)
         operations = []
-        for idx, pipeline_item in enumerate(request.pipelines):
-            operation = BatchOperation(
-                operation_id=f"pipeline_{idx}_{pipeline_item.pipeline_id}",
-                operation_type="pipeline_execution",
-                status=BatchOperationStatus.PENDING,
-                metadata={
-                    "pipeline_id": pipeline_item.pipeline_id,
-                    "pipeline_name": pipeline_item.pipeline_name or pipeline_item.pipeline_id,
-                    "config_override": pipeline_item.config_override or {}
-                }
-            )
-            operations.append(operation)
+        op_idx = 0
+
+        for pipeline_item in request.pipelines:
+            pipeline_id = pipeline_item.pipeline_id.replace(".yaml", "").replace(".yml", "")
+
+            # Check if this is a batch file by reading it
+            pipeline_path = paths.results_dir / "pipelines" / f"{pipeline_id}.yaml"
+            is_batch_file = False
+            nested_pipelines = []
+
+            if pipeline_path.exists():
+                try:
+                    with open(pipeline_path) as f:
+                        parsed_yaml = yaml.safe_load(f)
+                    if parsed_yaml and "batch" in parsed_yaml and "batch" not in parsed_yaml.get("pipeline", {}):
+                        is_batch_file = True
+                        batch_def = parsed_yaml["batch"]
+                        nested_pipelines = batch_def.get("pipelines", [])
+                except Exception:
+                    pass  # If we can't parse, treat as regular pipeline
+
+            if is_batch_file and nested_pipelines:
+                # Expand batch file into individual pipeline operations
+                for nested_item in nested_pipelines:
+                    nested_file = nested_item.get("file", "")
+                    nested_id = nested_file.replace(".yaml", "").replace(".yml", "")
+                    if nested_id:
+                        operation = BatchOperation(
+                            operation_id=f"pipeline_{op_idx}_{nested_id}",
+                            operation_type="pipeline_execution",
+                            status=BatchOperationStatus.PENDING,
+                            metadata={
+                                "pipeline_id": nested_id,
+                                "pipeline_name": nested_id,
+                                "config_override": pipeline_item.config_override or {},
+                                "from_batch": pipeline_id  # Track source batch file
+                            }
+                        )
+                        operations.append(operation)
+                        op_idx += 1
+            else:
+                # Regular pipeline
+                operation = BatchOperation(
+                    operation_id=f"pipeline_{op_idx}_{pipeline_id}",
+                    operation_type="pipeline_execution",
+                    status=BatchOperationStatus.PENDING,
+                    metadata={
+                        "pipeline_id": pipeline_id,
+                        "pipeline_name": pipeline_item.pipeline_name or pipeline_id,
+                        "config_override": pipeline_item.config_override or {}
+                    }
+                )
+                operations.append(operation)
+                op_idx += 1
 
         # Create batch job
         job = batch_job_manager.create_job(
