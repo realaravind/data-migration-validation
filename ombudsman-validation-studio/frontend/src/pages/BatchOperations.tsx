@@ -1075,6 +1075,30 @@ const BatchOperations: React.FC = () => {
                                                     ) : op.result.run_id ? (
                                                         /* Single pipeline execution result */
                                                         <Box sx={{ mt: 1 }}>
+                                                            {/* Show results summary if available */}
+                                                            {op.result.results_summary && (
+                                                                <Box sx={{ mb: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                                                    <Chip
+                                                                        size="small"
+                                                                        label={`${op.result.results_summary.total_steps || 0} steps`}
+                                                                        variant="outlined"
+                                                                    />
+                                                                    {op.result.results_summary.passed > 0 && (
+                                                                        <Chip
+                                                                            size="small"
+                                                                            label={`${op.result.results_summary.passed} passed`}
+                                                                            color="success"
+                                                                        />
+                                                                    )}
+                                                                    {op.result.results_summary.failed > 0 && (
+                                                                        <Chip
+                                                                            size="small"
+                                                                            label={`${op.result.results_summary.failed} failed`}
+                                                                            color="error"
+                                                                        />
+                                                                    )}
+                                                                </Box>
+                                                            )}
                                                             <Button
                                                                 size="small"
                                                                 variant="outlined"

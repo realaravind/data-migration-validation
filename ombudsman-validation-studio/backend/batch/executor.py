@@ -385,10 +385,65 @@ class BatchExecutor:
             raise Exception(f"Pipeline execution failed: {response.text}")
 
         result = response.json()
+        run_id = result.get("run_id")
+
+        # Poll for completion (pipeline runs async)
+        import time
+        max_wait_seconds = 300  # 5 minutes max
+        poll_interval = 2  # Check every 2 seconds
+        elapsed = 0
+
+        while elapsed < max_wait_seconds:
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+
+            try:
+                status_response = requests.get(
+                    f"http://localhost:8000/pipelines/status/{run_id}",
+                    timeout=30
+                )
+                if status_response.status_code == 200:
+                    status_data = status_response.json()
+                    current_status = status_data.get("status")
+
+                    if current_status in ["completed", "failed"]:
+                        # Check for step failures
+                        results = status_data.get("results", [])
+                        failed_steps = [r for r in results if r.get("status") == "FAIL"]
+
+                        if current_status == "failed" or failed_steps:
+                            # Collect error details
+                            error_messages = []
+                            if status_data.get("error"):
+                                error_messages.append(status_data.get("error"))
+                            for step in failed_steps:
+                                step_error = step.get("details", {}).get("error") or step.get("details", {}).get("message")
+                                if step_error:
+                                    error_messages.append(f"{step.get('name')}: {step_error}")
+
+                            error_summary = "; ".join(error_messages) if error_messages else "Pipeline execution had failures"
+                            raise Exception(f"Pipeline failed: {error_summary}")
+
+                        # Success
+                        return {
+                            "run_id": run_id,
+                            "status": "completed",
+                            "pipeline_id": pipeline_id,
+                            "results_summary": {
+                                "total_steps": len(results),
+                                "passed": len([r for r in results if r.get("status") == "PASS"]),
+                                "failed": len(failed_steps)
+                            }
+                        }
+            except requests.RequestException as e:
+                print(f"[BATCH EXECUTOR] Status poll failed: {e}")
+
+        # Timeout - return pending status
         return {
-            "run_id": result.get("run_id"),
-            "status": result.get("status"),
-            "pipeline_id": pipeline_id
+            "run_id": run_id,
+            "status": "timeout",
+            "pipeline_id": pipeline_id,
+            "message": f"Pipeline did not complete within {max_wait_seconds} seconds"
         }
 
     def _execute_data_gen_operation(self, operation: BatchOperation) -> Dict[str, Any]:
