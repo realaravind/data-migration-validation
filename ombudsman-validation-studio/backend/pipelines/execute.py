@@ -449,7 +449,8 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
                         else:
                             raise Exception("Project metadata not found")
 
-                    print(f"[CONFIG] Using active project config - Snowflake DB: {metadata.get('snowflake_database')}")
+                    print(f"[CONFIG] Using active project config - SQL DB: {metadata.get('sql_database')}, Snowflake DB: {metadata.get('snowflake_database')}")
+                    print(f"[CONFIG] SQL connection: host={os.getenv('MSSQL_HOST', 'NOT SET')}, port={os.getenv('MSSQL_PORT', '1433')}, user={os.getenv('MSSQL_USER', 'sa')}")
                     cfg = {
                         "connections": {
                             "sql": {
@@ -476,6 +477,10 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
             except Exception as e:
                 # Fall back to environment variables
                 print(f"[CONFIG] No active project or error loading project ({e}), using environment variables")
+                print(f"[CONFIG] MSSQL_HOST from env: {os.getenv('MSSQL_HOST', 'NOT SET - using host.docker.internal')}")
+                print(f"[CONFIG] MSSQL_PORT from env: {os.getenv('MSSQL_PORT', '1433')}")
+                print(f"[CONFIG] MSSQL_USER from env: {os.getenv('MSSQL_USER', 'sa')}")
+                print(f"[CONFIG] MSSQL_DATABASE from env: {os.getenv('MSSQL_DATABASE', 'SampleDW')}")
                 print(f"[CONFIG] SNOWFLAKE_DATABASE from env: {os.getenv('SNOWFLAKE_DATABASE', 'SAMPLEDW')}")
                 cfg = {
                     "connections": {
