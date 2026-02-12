@@ -259,13 +259,17 @@ class AlertService:
         category: Optional[AlertCategory] = None,
         title: Optional[str] = None,
         details: Optional[Dict] = None,
-        dedupe_minutes: int = 5
+        dedupe_minutes: int = 5,
+        action_url: Optional[str] = None,
+        action_label: Optional[str] = None
     ) -> Optional[Alert]:
         """Add a new alert with automatic fix suggestions.
 
         Args:
             dedupe_minutes: Don't add duplicate alerts from same source within this time window.
                            Set to 0 to disable deduplication.
+            action_url: Optional URL for quick action button (e.g., re-auth link)
+            action_label: Optional label for the action button
         """
         # Deduplication: check if we already have a recent alert from this source
         if dedupe_minutes > 0:
@@ -281,15 +285,18 @@ class AlertService:
         # Try to match against known patterns
         pattern_match = self._match_error_pattern(message)
 
-        action_url = None
-        action_label = None
+        # Use provided action_url/action_label or fall back to pattern match
+        final_action_url = action_url
+        final_action_label = action_label
 
         if pattern_match:
             category = category or pattern_match["category"]
             title = title or pattern_match["title"]
             suggestions = pattern_match.get("suggestions", [])
-            action_url = pattern_match.get("action_url")
-            action_label = pattern_match.get("action_label")
+            if not final_action_url:
+                final_action_url = pattern_match.get("action_url")
+            if not final_action_label:
+                final_action_label = pattern_match.get("action_label")
         else:
             category = category or AlertCategory.SYSTEM
             title = title or "System Error"
@@ -305,8 +312,8 @@ class AlertService:
             source=source,
             details=details,
             suggestions=suggestions,
-            action_url=action_url,
-            action_label=action_label
+            action_url=final_action_url,
+            action_label=final_action_label
         )
 
         self._alerts.insert(0, alert)  # Add to front (newest first)

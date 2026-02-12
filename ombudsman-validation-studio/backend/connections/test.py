@@ -147,10 +147,20 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
         if result.get("status") == "error":
             error_msg = result.get("message", "Snowflake connection failed")
             logger.warning(f"Snowflake connection error: {error_msg}")
+
+            # Check if it's an OAuth error - add re-auth action
+            is_oauth_error = any(x in error_msg.lower() for x in ['oauth', 'invalid_grant', 'token', 'refresh'])
+
+            from alerts.service import AlertSeverity, AlertCategory
             alert_service.add_alert(
                 message=error_msg,
                 source="connections/snowflake",
-                details=result.get("details")
+                severity=AlertSeverity.ERROR,
+                category=AlertCategory.AUTHENTICATION if is_oauth_error else AlertCategory.CONNECTION,
+                title="Snowflake OAuth Error" if is_oauth_error else "Snowflake Connection Error",
+                details=result.get("details"),
+                action_url="/oauth/snowflake/authorize" if is_oauth_error else None,
+                action_label="Re-authenticate with Snowflake" if is_oauth_error else None
             )
 
         return result
@@ -158,10 +168,20 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
     except Exception as e:
         error_msg = f"Snowflake connection failed: {str(e)}"
         logger.error(error_msg)
+
+        # Check if it's an OAuth error
+        is_oauth_error = any(x in error_msg.lower() for x in ['oauth', 'invalid_grant', 'token', 'refresh'])
+
+        from alerts.service import AlertSeverity, AlertCategory
         alert_service.add_alert(
             message=error_msg,
             source="connections/snowflake",
-            details={"error_type": type(e).__name__}
+            severity=AlertSeverity.ERROR,
+            category=AlertCategory.AUTHENTICATION if is_oauth_error else AlertCategory.CONNECTION,
+            title="Snowflake OAuth Error" if is_oauth_error else "Snowflake Connection Error",
+            details={"error_type": type(e).__name__},
+            action_url="/oauth/snowflake/authorize" if is_oauth_error else None,
+            action_label="Re-authenticate with Snowflake" if is_oauth_error else None
         )
         return {
             "status": "error",
