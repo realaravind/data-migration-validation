@@ -162,6 +162,7 @@ const BatchOperations: React.FC = () => {
                     success_count: jobData.success_count ?? updatedJobs[jobIndex].success_count,
                     failure_count: jobData.failure_count ?? updatedJobs[jobIndex].failure_count,
                     started_at: jobData.started_at || updatedJobs[jobIndex].started_at,
+                    completed_at: jobData.completed_at || updatedJobs[jobIndex].completed_at,
                     total_duration_ms: jobData.total_duration_ms ?? updatedJobs[jobIndex].total_duration_ms,
                 };
 
@@ -716,9 +717,35 @@ const BatchOperations: React.FC = () => {
         return `${seconds}s`;
     };
 
+    const formatDateTime = (dateStr?: string) => {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    };
+
     const jobColumns: GridColDef[] = [
-        { field: 'name', headerName: 'Job Name', width: 200 },
-        { field: 'job_type', headerName: 'Type', width: 180 },
+        {
+            field: 'name',
+            headerName: 'Job Name',
+            width: 280,
+            renderCell: (params: any) => {
+                const job = params.row;
+                const shortId = job.job_id?.substring(0, 8) || '';
+                return (
+                    <Typography variant="body2" title={job.job_id}>
+                        {job.name} <span style={{ color: '#888', fontSize: '0.85em' }}>({shortId})</span>
+                    </Typography>
+                );
+            }
+        },
+        { field: 'job_type', headerName: 'Type', width: 150 },
         {
             field: 'status',
             headerName: 'Status',
@@ -758,9 +785,21 @@ const BatchOperations: React.FC = () => {
             }
         },
         {
+            field: 'started_at',
+            headerName: 'Started',
+            width: 140,
+            renderCell: (params: any) => formatDateTime(params.value)
+        },
+        {
+            field: 'completed_at',
+            headerName: 'Ended',
+            width: 140,
+            renderCell: (params: any) => formatDateTime(params.value)
+        },
+        {
             field: 'total_duration_ms',
             headerName: 'Duration',
-            width: 100,
+            width: 90,
             renderCell: (params: any) => {
                 const job = params.row;
                 // For running jobs, calculate elapsed time from started_at
