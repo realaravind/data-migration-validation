@@ -1,5 +1,8 @@
 # src/ombudsman/validation/schema/validate_schema_datatypes.py
+import logging
 from ombudsman.validation.sql_utils import escape_sql_server_identifier, escape_snowflake_identifier
+
+logger = logging.getLogger(__name__)
 
 def normalize_sql_type(t):
     return t.lower().replace(" ", "")
@@ -68,8 +71,16 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
             AND TABLE_NAME = '{snow_table_name_upper}'
             ORDER BY ORDINAL_POSITION
         """
+        logger.info(f"[SNOW_TYPE] Snowflake query: {snow_query.strip()}")
+        logger.info(f"[SNOW_TYPE] snow_table input: {snow_table}, parsed: db={snow_db}, schema={snow_schema_upper}, table={snow_table_name_upper}")
+
         snow_results = snow_conn.fetch_many(snow_query)
+        logger.info(f"[SNOW_TYPE] Snowflake returned {len(snow_results)} rows")
+        for row in snow_results[:5]:  # Log first 5 rows
+            logger.info(f"[SNOW_TYPE]   Column: {row[0]}, Type: {row[1]}")
+
         snow_types = {row[0]: normalize_snow_type(row[1]) for row in snow_results}
+        logger.info(f"[SNOW_TYPE] Final snow_types dict: {snow_types}")
 
         # Compare types for each column
         mismatches = []
