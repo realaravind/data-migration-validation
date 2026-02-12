@@ -138,17 +138,29 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
         }
     }, [currentProjectProp]);
 
+    // Initialize Mermaid on mount
     useEffect(() => {
         fetchAvailableDatabases();
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    }, []);
+
+    // Load mappings when project changes (or on mount if project already set)
+    useEffect(() => {
+        if (!currentProject?.project_id) {
+            console.log('[DatabaseMapping] No project selected, skipping mappings load');
+            return;
+        }
+
+        console.log('[DatabaseMapping] Loading mappings for project:', currentProject.project_id);
+
+        // Load existing mappings with project context
         loadExistingMappings();
         loadSchemaMappings();
-        // Initialize Mermaid
-        mermaid.initialize({ startOnLoad: true, theme: 'default' });
 
         // Auto-load extraction results if they exist
         const autoLoadExtraction = async () => {
             try {
-                const response = await fetch(__API_URL__ + '/database-mapping/mappings');
+                const response = await fetch(`${__API_URL__}/database-mapping/mappings?project_id=${currentProject.project_id}`);
                 const data = await response.json();
 
                 if (data.status === 'success' && data.mappings && data.mappings.length > 0) {
@@ -167,15 +179,15 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
                             relationships_count: 0
                         }
                     });
-                    console.log('Loaded existing extraction with', data.mappings.length, 'table mappings');
+                    console.log('[DatabaseMapping] Loaded existing extraction with', data.mappings.length, 'table mappings');
                 }
             } catch (err) {
-                console.log('No existing extraction found');
+                console.log('[DatabaseMapping] No existing extraction found');
             }
         };
 
         autoLoadExtraction();
-    }, []);
+    }, [currentProject?.project_id]);
 
     // Reload schema mappings when project changes
     useEffect(() => {
@@ -319,7 +331,9 @@ export default function DatabaseMapping({ currentProject: currentProjectProp }: 
 
     const loadExistingMappings = async () => {
         try {
-            const response = await fetch(__API_URL__ + '/database-mapping/mappings');
+            // Pass project_id if available to ensure we load the correct project's mappings
+            const projectParam = currentProject?.project_id ? `?project_id=${currentProject.project_id}` : '';
+            const response = await fetch(`${__API_URL__}/database-mapping/mappings${projectParam}`);
             const data = await response.json();
 
             if (data.status === 'success') {

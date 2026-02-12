@@ -691,11 +691,11 @@ def generate_yaml_files(mappings: List[Dict], request: DatabaseMappingRequest, s
 
 
 @router.get("/mappings")
-async def get_existing_mappings():
+async def get_existing_mappings(project_id: str = None):
     """
     Read existing mappings from YAML files.
     Returns the current state of tables.yaml and relationships.yaml.
-    Uses active project's config if available, otherwise falls back to core config.
+    Uses specified project_id, or active project's config if available, otherwise falls back to core config.
     """
     try:
         # Try to get active project's config directory
@@ -704,8 +704,19 @@ async def get_existing_mappings():
 
         active_project = get_active_project()
 
-        # If no active project, try to load the most recent project
-        if not active_project:
+        # If project_id is provided, load that specific project
+        if project_id:
+            project_file = paths.projects_dir / project_id / "project.json"
+            if project_file.exists():
+                with open(project_file, 'r') as f:
+                    metadata = json_lib.load(f)
+                    set_active_project(project_id, metadata)
+                    active_project = get_active_project()
+                    print(f"[DEBUG] Loaded specified project: {project_id}")
+            else:
+                print(f"[DEBUG] Project not found: {project_id}")
+        # If no active project and no project_id, try to load the most recent project
+        elif not active_project:
             try:
                 import glob
                 project_dirs = glob.glob(str(paths.projects_dir / "*/project.json"))
