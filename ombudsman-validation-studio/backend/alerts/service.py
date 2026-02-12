@@ -91,7 +91,7 @@ GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE your_role;""",
     },
     # Snowflake OAuth errors
     {
-        "pattern": r"(Invalid OAuth access token|OAuth token expired|refresh_token|token-request failed|400.*token-request|Failed to get OAuth token)",
+        "pattern": r"(Invalid OAuth access token|OAuth token expired|invalid_grant|token-request failed|400.*token-request|Failed to get OAuth token)",
         "category": AlertCategory.AUTHENTICATION,
         "title": "Snowflake OAuth Token Expired",
         "action_url": "/oauth/snowflake/authorize",
