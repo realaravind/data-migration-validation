@@ -4,11 +4,77 @@ from ombudsman.validation.sql_utils import escape_sql_server_identifier, escape_
 
 logger = logging.getLogger(__name__)
 
-def normalize_sql_type(t):
-    return t.lower().replace(" ", "")
+# SQL Server to Snowflake type compatibility mapping
+TYPE_COMPATIBILITY = {
+    "varchar": ["varchar", "string", "text"],
+    "nvarchar": ["varchar", "string", "text"],
+    "char": ["char", "varchar", "string", "text"],
+    "nchar": ["char", "varchar", "string", "text"],
+    "text": ["text", "string", "varchar"],
+    "ntext": ["text", "string", "varchar"],
+    "int": ["int", "integer", "number"],
+    "bigint": ["bigint", "number", "integer"],
+    "smallint": ["smallint", "int", "number", "integer"],
+    "tinyint": ["tinyint", "int", "number", "integer"],
+    "decimal": ["decimal", "number", "numeric"],
+    "numeric": ["numeric", "number", "decimal"],
+    "float": ["float", "double", "number"],
+    "real": ["real", "float", "number"],
+    "money": ["number", "decimal"],
+    "smallmoney": ["number", "decimal"],
+    "datetime": ["datetime", "timestamp", "timestamp_ntz", "timestamp_ltz"],
+    "datetime2": ["datetime", "timestamp", "timestamp_ntz", "timestamp_ltz"],
+    "smalldatetime": ["datetime", "timestamp", "timestamp_ntz"],
+    "date": ["date"],
+    "time": ["time"],
+    "bit": ["boolean", "bit", "number"],
+    "uniqueidentifier": ["varchar", "string", "text"],
+    "varbinary": ["binary", "varbinary"],
+    "binary": ["binary", "varbinary"],
+    "image": ["binary", "varbinary"],
+}
 
-def normalize_snow_type(t):
-    return t.lower().replace(" ", "")
+def normalize_type(t):
+    """Normalize type name for comparison."""
+    if not t:
+        return ""
+    # Lowercase, remove spaces, remove size specs like (255)
+    t = t.lower().replace(" ", "")
+    # Remove size/precision specs: varchar(255) -> varchar
+    if "(" in t:
+        t = t.split("(")[0]
+    return t
+
+def types_compatible(sql_type, snow_type):
+    """Check if SQL Server type is compatible with Snowflake type."""
+    sql_normalized = normalize_type(sql_type)
+    snow_normalized = normalize_type(snow_type)
+
+    # Exact match
+    if sql_normalized == snow_normalized:
+        return True
+
+    # Check compatibility mapping
+    compatible_types = TYPE_COMPATIBILITY.get(sql_normalized, [])
+    if snow_normalized in compatible_types:
+        return True
+
+    # Check if both are numeric
+    numeric_types = {"int", "integer", "bigint", "smallint", "tinyint", "decimal", "numeric", "float", "real", "double", "number", "money", "smallmoney"}
+    if sql_normalized in numeric_types and snow_normalized in numeric_types:
+        return True
+
+    # Check if both are string
+    string_types = {"varchar", "nvarchar", "char", "nchar", "text", "ntext", "string"}
+    if sql_normalized in string_types and snow_normalized in string_types:
+        return True
+
+    # Check if both are datetime
+    datetime_types = {"datetime", "datetime2", "smalldatetime", "date", "time", "timestamp", "timestamp_ntz", "timestamp_ltz", "timestamp_tz"}
+    if sql_normalized in datetime_types and snow_normalized in datetime_types:
+        return True
+
+    return False
 
 def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metadata=None, table=None, **kwargs):
     """
@@ -38,7 +104,7 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
         """
         sql_results = sql_conn.fetch_many(sql_query)
         # Uppercase column names for case-insensitive comparison
-        sql_types = {row[0].upper(): normalize_sql_type(row[1]) for row in sql_results}
+        sql_types = {row[0].upper(): normalize_type(row[1]) for row in sql_results}
 
         # Query Snowflake column types
         # Get database name from connection
@@ -75,35 +141,53 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
         logger.info(f"[SNOW_TYPE] Table: {snow_table} -> db={snow_db}, schema={snow_schema_upper}, table={snow_table_name_upper}")
         snow_results = snow_conn.fetch_many(snow_query)
         # Uppercase column names for case-insensitive comparison
-        snow_types = {row[0].upper(): normalize_snow_type(row[1]) for row in snow_results}
+        snow_types = {row[0].upper(): normalize_type(row[1]) for row in snow_results}
         logger.info(f"[SNOW_TYPE] Returned {len(snow_results)} columns: {dict(list(snow_types.items())[:5])}{'...' if len(snow_types) > 5 else ''}")
 
-        # Compare types for each column
+        # Compare types for each column using type compatibility
         mismatches = []
+        matched = []
         for col_name in sql_types.keys():
+            sql_type = sql_types[col_name]
             if col_name not in snow_types:
                 mismatches.append({
                     "column": col_name,
-                    "sql_type": sql_types[col_name],
+                    "sql_type": sql_type,
                     "snow_type": None,
                     "match": False,
+                    "compatible": False,
                     "severity": "HIGH"
                 })
-            elif sql_types[col_name] != snow_types[col_name]:
-                mismatches.append({
-                    "column": col_name,
-                    "sql_type": sql_types[col_name],
-                    "snow_type": snow_types[col_name],
-                    "match": False,
-                    "severity": "MEDIUM"
-                })
+            else:
+                snow_type = snow_types[col_name]
+                is_compatible = types_compatible(sql_type, snow_type)
+                if is_compatible:
+                    matched.append({
+                        "column": col_name,
+                        "sql_type": sql_type,
+                        "snow_type": snow_type,
+                        "match": sql_type == snow_type,
+                        "compatible": True,
+                        "severity": "NONE"
+                    })
+                else:
+                    mismatches.append({
+                        "column": col_name,
+                        "sql_type": sql_type,
+                        "snow_type": snow_type,
+                        "match": False,
+                        "compatible": False,
+                        "severity": "MEDIUM"
+                    })
 
         return {
             "status": "FAIL" if mismatches else "PASS",
             "severity": "HIGH" if any(m["severity"] == "HIGH" for m in mismatches) else ("MEDIUM" if mismatches else "NONE"),
             "sql_types": sql_types,
             "snow_types": snow_types,
+            "matched": matched,
             "mismatches": mismatches,
+            "matched_count": len(matched),
             "mismatch_count": len(mismatches)
         }
     except Exception as e:
@@ -130,8 +214,8 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
         table_res = []
         for col in sql_columns[table]:
             col_name = col["name"]
-            sql_type = normalize_sql_type(col["type"])
-            snow_col = next((c for c in snow_columns.get(table, []) if c["name"] == col_name), None)
+            sql_type = normalize_type(col["type"])
+            snow_col = next((c for c in snow_columns.get(table, []) if c["name"].upper() == col_name.upper()), None)
 
             if not snow_col:
                 table_res.append({
@@ -139,25 +223,27 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
                     "sql_type": sql_type,
                     "snow_type": None,
                     "match": False,
+                    "compatible": False,
                     "severity": "HIGH"
                 })
                 continue
 
-            snow_type = normalize_snow_type(snow_col["type"])
-            match = sql_type == snow_type
+            snow_type = normalize_type(snow_col["type"])
+            is_compatible = types_compatible(sql_type, snow_type)
 
             table_res.append({
                 "column": col_name,
                 "sql_type": sql_type,
                 "snow_type": snow_type,
-                "match": match,
-                "severity": "NONE" if match else "MEDIUM"
+                "match": sql_type == snow_type,
+                "compatible": is_compatible,
+                "severity": "NONE" if is_compatible else "MEDIUM"
             })
 
         results[table] = table_res
 
     return {
-        "status": "PASS" if all(all(r["match"] for r in res) for res in results.values()) else "FAIL",
+        "status": "PASS" if all(all(r["compatible"] for r in res) for res in results.values()) else "FAIL",
         "severity": "HIGH" if any(any(r["severity"] == "HIGH" for r in res) for res in results.values()) else "NONE",
         "results": results
     }
