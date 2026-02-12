@@ -227,19 +227,30 @@ kill_process_on_port() {
         # Try multiple methods to find processes on port
         local pids=""
 
-        # Method 1: lsof
+        # Method 1: lsof (try with sudo first for better visibility)
         if command -v lsof &>/dev/null; then
-            pids=$(lsof -t -i:$port 2>/dev/null | tr '\n' ' ')
+            pids=$(sudo lsof -t -i:$port 2>/dev/null | tr '\n' ' ')
+            if [ -z "$pids" ]; then
+                pids=$(lsof -t -i:$port 2>/dev/null | tr '\n' ' ')
+            fi
         fi
 
         # Method 2: fuser (if lsof didn't find anything)
         if [ -z "$pids" ] && command -v fuser &>/dev/null; then
-            pids=$(fuser $port/tcp 2>/dev/null | tr -s ' ')
+            pids=$(sudo fuser $port/tcp 2>/dev/null | tr -s ' ')
+            if [ -z "$pids" ]; then
+                pids=$(fuser $port/tcp 2>/dev/null | tr -s ' ')
+            fi
         fi
 
         # Method 3: ss + awk
         if [ -z "$pids" ] && command -v ss &>/dev/null; then
-            pids=$(ss -tlnp "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | tr '\n' ' ')
+            pids=$(sudo ss -tlnp "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | tr '\n' ' ')
+        fi
+
+        # Method 4: netstat fallback
+        if [ -z "$pids" ] && command -v netstat &>/dev/null; then
+            pids=$(sudo netstat -tlnp 2>/dev/null | grep ":$port " | awk '{print $7}' | cut -d'/' -f1 | tr '\n' ' ')
         fi
 
         if [ -z "$pids" ]; then
@@ -249,7 +260,8 @@ kill_process_on_port() {
 
         echo "Killing processes on port $port: $pids (attempt $((attempt+1))/$max_attempts)"
         for pid in $pids; do
-            kill -9 $pid 2>/dev/null
+            # Try regular kill first, then sudo kill
+            kill -9 $pid 2>/dev/null || sudo kill -9 $pid 2>/dev/null
         done
 
         sleep 2
@@ -257,7 +269,7 @@ kill_process_on_port() {
     done
 
     # Final check
-    if lsof -t -i:$port &>/dev/null || fuser $port/tcp &>/dev/null 2>&1; then
+    if sudo lsof -t -i:$port &>/dev/null 2>&1 || sudo fuser $port/tcp &>/dev/null 2>&1; then
         echo "WARNING: Could not free port $port after $max_attempts attempts"
         return 1
     fi
@@ -433,10 +445,17 @@ stop_backend() {
     if [ -f "$LOG_DIR/backend.pid" ]; then
         PID=$(cat "$LOG_DIR/backend.pid")
         if ps -p $PID > /dev/null 2>&1; then
-            kill $PID
+            # Try graceful kill first
+            kill $PID 2>/dev/null || sudo kill $PID 2>/dev/null
+            sleep 1
+            # Force kill if still running
+            if ps -p $PID > /dev/null 2>&1; then
+                echo "Process still running, force killing..."
+                kill -9 $PID 2>/dev/null || sudo kill -9 $PID 2>/dev/null
+            fi
             echo "Backend stopped (PID: $PID)"
         else
-            echo "Backend not running"
+            echo "Backend not running (stale PID file, cleaning up)"
         fi
         rm -f "$LOG_DIR/backend.pid"
     else
@@ -451,10 +470,17 @@ stop_frontend() {
     if [ -f "$LOG_DIR/frontend.pid" ]; then
         PID=$(cat "$LOG_DIR/frontend.pid")
         if ps -p $PID > /dev/null 2>&1; then
-            kill $PID
+            # Try graceful kill first
+            kill $PID 2>/dev/null || sudo kill $PID 2>/dev/null
+            sleep 1
+            # Force kill if still running
+            if ps -p $PID > /dev/null 2>&1; then
+                echo "Process still running, force killing..."
+                kill -9 $PID 2>/dev/null || sudo kill -9 $PID 2>/dev/null
+            fi
             echo "Frontend stopped (PID: $PID)"
         else
-            echo "Frontend not running"
+            echo "Frontend not running (stale PID file, cleaning up)"
         fi
         rm -f "$LOG_DIR/frontend.pid"
     else
