@@ -273,60 +273,63 @@ async def callback(
     OAuth callback handler.
     Receives authorization code from Snowflake, exchanges for tokens.
     """
-    # Handle OAuth errors
-    if error:
-        logger.error(f"OAuth error: {error} - {error_description}")
-        return HTMLResponse(content=f"""
-        <html>
-        <head><title>Snowflake OAuth Error</title></head>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-            <h1 style="color: #d32f2f;">Authentication Failed</h1>
-            <p><strong>Error:</strong> {error}</p>
-            <p><strong>Description:</strong> {error_description or 'No details provided'}</p>
-            <p><a href="javascript:window.close()">Close this window</a></p>
-        </body>
-        </html>
-        """, status_code=400)
-
-    # Validate state
-    if not state or state not in _oauth_states:
-        logger.error("Invalid or missing state parameter")
-        return HTMLResponse(content="""
-        <html>
-        <head><title>Snowflake OAuth Error</title></head>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-            <h1 style="color: #d32f2f;">Invalid Request</h1>
-            <p>The authentication request has expired or is invalid. Please try again.</p>
-            <p><a href="javascript:window.close()">Close this window</a></p>
-        </body>
-        </html>
-        """, status_code=400)
-
-    # Get and remove state data
-    state_data = _oauth_states.pop(state, {})
-
-    if not code:
-        logger.error("No authorization code received")
-        return HTMLResponse(content="""
-        <html>
-        <head><title>Snowflake OAuth Error</title></head>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-            <h1 style="color: #d32f2f;">No Authorization Code</h1>
-            <p>No authorization code was received from Snowflake.</p>
-            <p><a href="javascript:window.close()">Close this window</a></p>
-        </body>
-        </html>
-        """, status_code=400)
-
-    config = _get_oauth_config()
-
-    # Build redirect URI (must match what was used in authorize)
-    redirect_uri = config["redirect_uri"]
-    if not redirect_uri:
-        base_url = str(request.base_url).rstrip("/")
-        redirect_uri = f"{base_url}/oauth/snowflake/callback"
+    logger.info(f"OAuth callback received: code={'yes' if code else 'no'}, state={'yes' if state else 'no'}, error={error}")
 
     try:
+        # Handle OAuth errors
+        if error:
+            logger.error(f"OAuth error: {error} - {error_description}")
+            return HTMLResponse(content=f"""
+            <html>
+            <head><title>Snowflake OAuth Error</title></head>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+                <h1 style="color: #d32f2f;">Authentication Failed</h1>
+                <p><strong>Error:</strong> {error}</p>
+                <p><strong>Description:</strong> {error_description or 'No details provided'}</p>
+                <p><a href="javascript:window.close()">Close this window</a></p>
+            </body>
+            </html>
+            """, status_code=400)
+
+        # Validate state
+        if not state or state not in _oauth_states:
+            logger.error(f"Invalid or missing state parameter. Known states: {list(_oauth_states.keys())}")
+            return HTMLResponse(content="""
+            <html>
+            <head><title>Snowflake OAuth Error</title></head>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+                <h1 style="color: #d32f2f;">Invalid Request</h1>
+                <p>The authentication request has expired or is invalid. Please try again.</p>
+                <p><a href="javascript:window.close()">Close this window</a></p>
+            </body>
+            </html>
+            """, status_code=400)
+
+        # Get and remove state data
+        state_data = _oauth_states.pop(state, {})
+
+        if not code:
+            logger.error("No authorization code received")
+            return HTMLResponse(content="""
+            <html>
+            <head><title>Snowflake OAuth Error</title></head>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+                <h1 style="color: #d32f2f;">No Authorization Code</h1>
+                <p>No authorization code was received from Snowflake.</p>
+                <p><a href="javascript:window.close()">Close this window</a></p>
+            </body>
+            </html>
+            """, status_code=400)
+
+        config = _get_oauth_config()
+
+        # Build redirect URI (must match what was used in authorize)
+        redirect_uri = config["redirect_uri"]
+        if not redirect_uri:
+            base_url = str(request.base_url).rstrip("/")
+            redirect_uri = f"{base_url}/oauth/snowflake/callback"
+
+        logger.info(f"Exchanging auth code, redirect_uri={redirect_uri}")
         # Exchange code for tokens
         tokens = await _exchange_auth_code(config, code, redirect_uri)
 
