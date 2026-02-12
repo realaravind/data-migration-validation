@@ -61,11 +61,11 @@ def _get_oauth_config():
 
 def _get_env_file_path() -> str:
     """Get the path to the environment file"""
-    # Check common locations
+    # Check common locations - must match where start-ombudsman.sh loads from
     possible_paths = [
         os.getenv("ENV_FILE_PATH"),
-        "/ombudsman/deploy/ombudsman.env",
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "deploy", "ombudsman.env"),
+        "/ombudsman/ombudsman.env",  # Production: $BASE_DIR/ombudsman.env
+        "/ombudsman/deploy/ombudsman.env",  # Fallback
         os.path.expanduser("~/.ombudsman.env"),
     ]
 
