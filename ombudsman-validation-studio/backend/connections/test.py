@@ -60,6 +60,18 @@ async def test_sqlserver_connection(request: ConnectionTestRequest):
             "connection_string": conn_str.replace(request.password or os.getenv('MSSQL_PASSWORD', ''), '***') if not request.use_env else "Using environment variables"
         }
 
+    except pyodbc.Error as e:
+        error_msg = f"SQL Server connection failed: {str(e)}"
+        logger.error(error_msg)
+        alert_service.add_alert(
+            message=error_msg,
+            source="connections/sqlserver",
+            details={"error_type": "pyodbc.Error", "sql_state": getattr(e, 'args', [None])[0] if e.args else None}
+        )
+        return {
+            "status": "error",
+            "message": error_msg
+        }
     except Exception as e:
         error_msg = f"SQL Server connection failed: {str(e)}"
         logger.error(error_msg)
@@ -130,6 +142,16 @@ async def test_snowflake_connection(request: ConnectionTestRequest):
 
         # Test connection using core function
         result = test_snow_conn(cfg)
+
+        # Create alert if connection failed (even without exception)
+        if result.get("status") == "error":
+            error_msg = result.get("message", "Snowflake connection failed")
+            logger.warning(f"Snowflake connection error: {error_msg}")
+            alert_service.add_alert(
+                message=error_msg,
+                source="connections/snowflake",
+                details=result.get("details")
+            )
 
         return result
 

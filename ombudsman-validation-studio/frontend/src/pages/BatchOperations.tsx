@@ -163,23 +163,31 @@ const BatchOperations: React.FC = () => {
 
                     // Check for status changes to terminal states
                     const prevStatuses = prevJobStatusesRef.current;
+                    console.log('[BATCH] Checking status changes, tracking', prevStatuses.size, 'jobs');
                     for (const job of newJobs) {
                         const prevStatus = prevStatuses.get(job.job_id);
+                        // Log any status change for debugging
+                        if (prevStatus && prevStatus !== job.status) {
+                            console.log(`[BATCH] Job "${job.name}" status changed: ${prevStatus} -> ${job.status}`);
+                        }
                         if (prevStatus && (prevStatus === 'running' || prevStatus === 'queued')) {
                             // Job was active, check if it's now complete
                             if (job.status === 'completed') {
+                                console.log(`[BATCH] Showing success alert for job: ${job.name}`);
                                 setSnackbar({
                                     open: true,
                                     message: `Job "${job.name}" completed successfully`,
                                     severity: 'success'
                                 });
                             } else if (job.status === 'failed') {
+                                console.log(`[BATCH] Showing failure alert for job: ${job.name}`);
                                 setSnackbar({
                                     open: true,
                                     message: `Job "${job.name}" failed`,
                                     severity: 'error'
                                 });
                             } else if (job.status === 'partial_success') {
+                                console.log(`[BATCH] Showing partial success alert for job: ${job.name}`);
                                 setSnackbar({
                                     open: true,
                                     message: `Job "${job.name}" completed with some failures`,
@@ -1216,13 +1224,19 @@ const BatchOperations: React.FC = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Snackbar for notifications */}
+            {/* Snackbar for notifications - positioned top-right */}
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={6000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-                <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+                <Alert
+                    severity={snackbar.severity}
+                    onClose={() => setSnackbar({ ...snackbar, open: false })}
+                    sx={{ width: '100%', minWidth: 300 }}
+                    variant="filled"
+                >
                     {snackbar.message}
                 </Alert>
             </Snackbar>

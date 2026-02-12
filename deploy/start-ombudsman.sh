@@ -519,6 +519,31 @@ show_logs() {
     fi
 }
 
+clean_stale_pids() {
+    # Clean up stale PID files (where process is no longer running)
+    local cleaned=0
+
+    if [ -f "$LOG_DIR/backend.pid" ]; then
+        PID=$(cat "$LOG_DIR/backend.pid")
+        if ! ps -p $PID > /dev/null 2>&1; then
+            echo "Removing stale backend PID file (process $PID no longer running)"
+            rm -f "$LOG_DIR/backend.pid"
+            cleaned=1
+        fi
+    fi
+
+    if [ -f "$LOG_DIR/frontend.pid" ]; then
+        PID=$(cat "$LOG_DIR/frontend.pid")
+        if ! ps -p $PID > /dev/null 2>&1; then
+            echo "Removing stale frontend PID file (process $PID no longer running)"
+            rm -f "$LOG_DIR/frontend.pid"
+            cleaned=1
+        fi
+    fi
+
+    return $cleaned
+}
+
 # ==============================================
 # Main
 # ==============================================
@@ -567,6 +592,8 @@ except Exception as e:
 
 case "${1:-start}" in
     start)
+        # Clean up any stale PID files first
+        clean_stale_pids
         create_directories
         start_backend
         sleep 2  # Wait for backend to initialize
@@ -585,6 +612,8 @@ case "${1:-start}" in
         stop_backend
         ;;
     restart)
+        # Clean up any stale PID files first
+        clean_stale_pids
         stop_frontend
         stop_backend
         sleep 2

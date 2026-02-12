@@ -190,8 +190,12 @@ function AppContent() {
                 const projects: Project[] = data.projects || [];
                 setAllProjects(projects);
 
-                // If no projects exist, redirect to project creation page
+                // If no projects exist, clear any stale state and redirect to project creation page
                 if (projects.length === 0) {
+                    console.log('[App] No projects found, clearing stale state and redirecting to create');
+                    setCurrentProject(null);
+                    sessionStorage.removeItem('currentProject');
+                    sessionStorage.removeItem('lastProjectId');
                     navigate('/projects');
                     return;
                 }
@@ -201,8 +205,15 @@ function AppContent() {
                 let projectToLoad: Project | undefined;
 
                 if (lastProjectId) {
-                    // Try to find the last used project
+                    // Try to find the last used project - it must exist in the backend's project list
                     projectToLoad = projects.find(p => p.project_id === lastProjectId);
+                    if (!projectToLoad) {
+                        // Last project was deleted - clear stale state
+                        console.log(`[App] Last project '${lastProjectId}' no longer exists, clearing stale state`);
+                        sessionStorage.removeItem('lastProjectId');
+                        sessionStorage.removeItem('currentProject');
+                        setCurrentProject(null);
+                    }
                 }
 
                 if (!projectToLoad) {
@@ -210,6 +221,7 @@ function AppContent() {
                     projectToLoad = projects.sort((a, b) =>
                         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                     )[0];
+                    console.log('[App] Falling back to most recent project:', projectToLoad.project_id);
                 }
 
                 // Load full project config from backend (this also sets active project)

@@ -263,9 +263,25 @@ class AlertService:
         severity: AlertSeverity = AlertSeverity.ERROR,
         category: Optional[AlertCategory] = None,
         title: Optional[str] = None,
-        details: Optional[Dict] = None
-    ) -> Alert:
-        """Add a new alert with automatic fix suggestions."""
+        details: Optional[Dict] = None,
+        dedupe_minutes: int = 5
+    ) -> Optional[Alert]:
+        """Add a new alert with automatic fix suggestions.
+
+        Args:
+            dedupe_minutes: Don't add duplicate alerts from same source within this time window.
+                           Set to 0 to disable deduplication.
+        """
+        # Deduplication: check if we already have a recent alert from this source
+        if dedupe_minutes > 0:
+            from datetime import timedelta
+            now = datetime.utcnow()
+            for existing in self._alerts:
+                if existing.source == source:
+                    existing_time = datetime.fromisoformat(existing.timestamp.rstrip('Z'))
+                    if (now - existing_time) < timedelta(minutes=dedupe_minutes):
+                        logger.debug(f"Skipping duplicate alert from {source} (within {dedupe_minutes}m window)")
+                        return None
 
         # Try to match against known patterns
         pattern_match = self._match_error_pattern(message)

@@ -35,12 +35,26 @@ def get_active_project() -> Optional[Dict[str, Any]]:
     """Get the active project metadata"""
     global _active_project_id, _active_project_metadata
 
-    # Return from memory if available
+    # Helper to validate project exists on disk
+    def project_exists(project_id: str) -> bool:
+        if not project_id:
+            return False
+        project_dir = paths.get_project_dir(project_id)
+        project_file = project_dir / "project.json"
+        return project_file.exists()
+
+    # Return from memory if available AND project still exists
     if _active_project_id and _active_project_metadata:
-        return {
-            "project_id": _active_project_id,
-            **_active_project_metadata
-        }
+        if project_exists(_active_project_id):
+            return {
+                "project_id": _active_project_id,
+                **_active_project_metadata
+            }
+        else:
+            # Project was deleted - clear stale state
+            print(f"[PROJECT_CONTEXT] Active project '{_active_project_id}' no longer exists, clearing")
+            clear_active_project()
+            return None
 
     # Try to load from file
     active_project_file = paths.active_project_file
@@ -48,13 +62,23 @@ def get_active_project() -> Optional[Dict[str, Any]]:
         try:
             with open(active_project_file, "r") as f:
                 data = json.load(f)
-                _active_project_id = data.get("project_id")
-                _active_project_metadata = data.get("metadata", {})
-                return {
-                    "project_id": _active_project_id,
-                    **_active_project_metadata
-                }
-        except Exception:
+                project_id = data.get("project_id")
+
+                # Validate project still exists before setting as active
+                if project_id and project_exists(project_id):
+                    _active_project_id = project_id
+                    _active_project_metadata = data.get("metadata", {})
+                    return {
+                        "project_id": _active_project_id,
+                        **_active_project_metadata
+                    }
+                else:
+                    # Project was deleted - clear stale file
+                    print(f"[PROJECT_CONTEXT] Persisted active project '{project_id}' no longer exists, clearing")
+                    clear_active_project()
+                    return None
+        except Exception as e:
+            print(f"[PROJECT_CONTEXT] Error loading active project: {e}")
             pass
 
     return None
