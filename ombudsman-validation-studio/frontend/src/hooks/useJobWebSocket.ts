@@ -64,6 +64,10 @@ export function useJobWebSocket(
             };
 
             ws.onmessage = (event) => {
+                // Ignore ping/pong messages
+                if (event.data === 'pong' || event.data === 'ping') {
+                    return;
+                }
                 try {
                     const update = JSON.parse(event.data) as JobUpdate;
                     setLastUpdate(update);
