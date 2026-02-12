@@ -218,6 +218,59 @@ export SQLSERVER_CONN_STR="DRIVER={ODBC Driver 18 for SQL Server};SERVER=${MSSQL
 # Functions
 # ==============================================
 
+# Nuclear option: kill EVERYTHING related to ombudsman
+nuke_all_processes() {
+    echo "=== NUKING ALL OMBUDSMAN PROCESSES ==="
+
+    # Kill by PID files first
+    for pidfile in "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid"; do
+        if [ -f "$pidfile" ]; then
+            PID=$(cat "$pidfile" 2>/dev/null)
+            if [ -n "$PID" ]; then
+                echo "Killing PID $PID from $pidfile"
+                sudo kill -9 $PID 2>/dev/null || true
+            fi
+            rm -f "$pidfile"
+        fi
+    done
+
+    # Kill any uvicorn processes (backend)
+    echo "Killing any uvicorn processes..."
+    sudo pkill -9 -f "uvicorn main:app" 2>/dev/null || true
+    sudo pkill -9 -f "uvicorn.*8001" 2>/dev/null || true
+
+    # Kill any node/npm processes on our ports
+    echo "Killing any node processes on our ports..."
+    sudo pkill -9 -f "vite.*preview.*${FRONTEND_PORT:-3000}" 2>/dev/null || true
+    sudo pkill -9 -f "node.*${FRONTEND_PORT:-3000}" 2>/dev/null || true
+
+    # Force kill on specific ports
+    for port in ${BACKEND_PORT:-8001} ${FRONTEND_PORT:-3000}; do
+        echo "Force freeing port $port..."
+
+        # Method 1: fuser -k (most reliable)
+        sudo fuser -k $port/tcp 2>/dev/null || true
+
+        # Method 2: lsof + kill
+        for pid in $(sudo lsof -t -i:$port 2>/dev/null); do
+            sudo kill -9 $pid 2>/dev/null || true
+        done
+
+        # Method 3: ss + kill
+        for pid in $(sudo ss -tlnp "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+'); do
+            sudo kill -9 $pid 2>/dev/null || true
+        done
+    done
+
+    # Wait for processes to die
+    sleep 2
+
+    # Final cleanup of PID files
+    rm -f "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid" 2>/dev/null || true
+
+    echo "=== NUKE COMPLETE ==="
+}
+
 kill_process_on_port() {
     local port=$1
     local max_attempts=5
@@ -227,7 +280,13 @@ kill_process_on_port() {
         # Try multiple methods to find processes on port
         local pids=""
 
-        # Method 1: lsof (try with sudo first for better visibility)
+        # Method 1: fuser -k is the most reliable - just kill directly
+        if command -v fuser &>/dev/null; then
+            sudo fuser -k $port/tcp 2>/dev/null || true
+            sleep 1
+        fi
+
+        # Method 2: lsof (try with sudo first for better visibility)
         if command -v lsof &>/dev/null; then
             pids=$(sudo lsof -t -i:$port 2>/dev/null | tr '\n' ' ')
             if [ -z "$pids" ]; then
@@ -235,7 +294,7 @@ kill_process_on_port() {
             fi
         fi
 
-        # Method 2: fuser (if lsof didn't find anything)
+        # Method 3: fuser to get PIDs
         if [ -z "$pids" ] && command -v fuser &>/dev/null; then
             pids=$(sudo fuser $port/tcp 2>/dev/null | tr -s ' ')
             if [ -z "$pids" ]; then
@@ -243,12 +302,12 @@ kill_process_on_port() {
             fi
         fi
 
-        # Method 3: ss + awk
+        # Method 4: ss + awk
         if [ -z "$pids" ] && command -v ss &>/dev/null; then
             pids=$(sudo ss -tlnp "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | tr '\n' ' ')
         fi
 
-        # Method 4: netstat fallback
+        # Method 5: netstat fallback
         if [ -z "$pids" ] && command -v netstat &>/dev/null; then
             pids=$(sudo netstat -tlnp 2>/dev/null | grep ":$port " | awk '{print $7}' | cut -d'/' -f1 | tr '\n' ' ')
         fi
@@ -260,8 +319,8 @@ kill_process_on_port() {
 
         echo "Killing processes on port $port: $pids (attempt $((attempt+1))/$max_attempts)"
         for pid in $pids; do
-            # Try regular kill first, then sudo kill
-            kill -9 $pid 2>/dev/null || sudo kill -9 $pid 2>/dev/null
+            # Force kill with sudo
+            sudo kill -9 $pid 2>/dev/null || true
         done
 
         sleep 2
@@ -618,11 +677,11 @@ except Exception as e:
 
 case "${1:-start}" in
     start)
-        # Clean up any stale PID files first
-        clean_stale_pids
+        # NUKE everything first to ensure clean state
+        nuke_all_processes
         create_directories
         start_backend
-        sleep 2  # Wait for backend to initialize
+        sleep 3  # Wait for backend to initialize
         start_frontend
         echo ""
         echo "=== Ombudsman Started ==="
@@ -634,19 +693,20 @@ case "${1:-start}" in
         echo "Use './start-ombudsman.sh stop' to stop services"
         ;;
     stop)
-        stop_frontend
-        stop_backend
+        nuke_all_processes
+        echo "All services stopped."
         ;;
     restart)
-        # Clean up any stale PID files first
-        clean_stale_pids
-        stop_frontend
-        stop_backend
-        sleep 2
+        # NUKE everything first
+        nuke_all_processes
         create_directories
         start_backend
-        sleep 2
+        sleep 3
         start_frontend
+        echo ""
+        echo "=== Ombudsman Restarted ==="
+        echo "Backend:  http://$BACKEND_HOST:$BACKEND_PORT"
+        echo "Frontend: http://$FRONTEND_HOST:$FRONTEND_PORT"
         ;;
     status)
         status
@@ -670,6 +730,65 @@ case "${1:-start}" in
         echo "VITE_API_URL=${VITE_API_URL:-http://localhost:8000}" > .env
         npm run build
         echo "Frontend rebuilt. Restart frontend to apply changes."
+        ;;
+    rebuild)
+        echo "=========================================="
+        echo "Full rebuild and restart"
+        echo "=========================================="
+        echo ""
+
+        # NUKE everything first
+        nuke_all_processes
+
+        # Pull latest code
+        echo ""
+        echo "[1/5] Pulling latest code..."
+        cd "$BASE_DIR"
+        git pull || echo "Git pull failed or no changes"
+
+        # Update Python dependencies
+        echo ""
+        echo "[2/5] Updating Python dependencies..."
+        cd "$BACKEND_DIR"
+        if [ -f "./venv/bin/pip" ]; then
+            ./venv/bin/pip install -r requirements.txt --quiet
+        fi
+
+        # Update frontend dependencies if package.json changed
+        echo ""
+        echo "[3/5] Checking frontend dependencies..."
+        cd "$FRONTEND_DIR"
+        if [ ! -d "node_modules" ]; then
+            npm install
+        fi
+
+        # Rebuild frontend
+        echo ""
+        echo "[4/5] Rebuilding frontend..."
+        npm run build
+
+        # Create directories and start
+        echo ""
+        echo "[5/5] Starting services..."
+        create_directories
+        start_backend
+        sleep 3
+        start_frontend
+
+        echo ""
+        echo "=========================================="
+        echo "Rebuild complete!"
+        echo "=========================================="
+        echo "Backend:  http://$BACKEND_HOST:$BACKEND_PORT"
+        echo "Frontend: http://$FRONTEND_HOST:$FRONTEND_PORT"
+        echo ""
+        ;;
+    nuke)
+        echo "NUCLEAR OPTION: Killing ALL ombudsman processes"
+        nuke_all_processes
+        echo ""
+        echo "All processes killed. Ports should be free now."
+        echo "Run './start-ombudsman.sh start' to start fresh."
         ;;
     enable-service)
         echo "Installing systemd services for auto-start on boot..."
@@ -1079,9 +1198,11 @@ EOF
         echo "Usage: $0 <command>"
         echo ""
         echo "Service Commands:"
-        echo "  start              Start backend and frontend services"
-        echo "  stop               Stop all services"
-        echo "  restart            Restart all services"
+        echo "  start              Start backend and frontend (kills existing first)"
+        echo "  stop               Stop all services (nuclear kill)"
+        echo "  restart            Restart all services (nuclear kill + start)"
+        echo "  rebuild            Git pull + rebuild frontend + restart (RECOMMENDED)"
+        echo "  nuke               NUCLEAR: Kill ALL ombudsman processes on ports"
         echo "  status             Show service status"
         echo "  logs               Show recent logs"
         echo "  backend            Start only the backend"
@@ -1110,7 +1231,7 @@ EOF
         echo ""
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|backend|frontend|reconfigure|setup-auth|rebuild-frontend|enable-service|disable-service|update|init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help}"
+        echo "Usage: $0 {start|stop|restart|rebuild|nuke|status|logs|backend|frontend|reconfigure|setup-auth|rebuild-frontend|enable-service|disable-service|update|init-secrets|encrypt-secrets|decrypt-secrets|edit-secrets|help}"
         exit 1
         ;;
 esac
