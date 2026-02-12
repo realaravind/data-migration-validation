@@ -51,11 +51,16 @@ def validate_schema_columns(sql_conn=None, snow_conn=None, mapping=None, metadat
             snow_schema = 'PUBLIC'
             snow_table_name = snow_table
 
+        # Snowflake stores unquoted identifiers as uppercase in INFORMATION_SCHEMA
+        # Uppercase the values for the WHERE clause to match
+        snow_schema_upper = snow_schema.upper()
+        snow_table_name_upper = snow_table_name.upper()
+
         snow_query = f"""
             SELECT COLUMN_NAME
             FROM {snow_db}.INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = '{snow_schema}'
-            AND TABLE_NAME = '{snow_table_name}'
+            WHERE TABLE_SCHEMA = '{snow_schema_upper}'
+            AND TABLE_NAME = '{snow_table_name_upper}'
             ORDER BY ORDINAL_POSITION
         """
         snow_cols = [row[0] for row in snow_conn.fetch_many(snow_query)]

@@ -102,11 +102,23 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
             pipeline_id = pipeline_item.pipeline_id.replace(".yaml", "").replace(".yml", "")
 
             # Check if this is a batch file by reading it
-            pipeline_path = paths.results_dir / "pipelines" / f"{pipeline_id}.yaml"
+            # Search in project-specific directory first, then flat pipelines directory
+            pipeline_path = None
+            search_paths = []
+            if request.project_id:
+                search_paths.append(paths.get_project_pipelines_dir(request.project_id))
+            search_paths.append(paths.pipelines_dir)
+
+            for search_path in search_paths:
+                candidate = search_path / f"{pipeline_id}.yaml"
+                if candidate.exists():
+                    pipeline_path = candidate
+                    break
+
             is_batch_file = False
             nested_pipelines = []
 
-            if pipeline_path.exists():
+            if pipeline_path and pipeline_path.exists():
                 try:
                     with open(pipeline_path) as f:
                         parsed_yaml = yaml.safe_load(f)
@@ -114,7 +126,9 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
                         is_batch_file = True
                         batch_def = parsed_yaml["batch"]
                         nested_pipelines = batch_def.get("pipelines", [])
-                except Exception:
+                        print(f"[BATCH ROUTER] Expanding batch file '{pipeline_id}' with {len(nested_pipelines)} pipelines")
+                except Exception as e:
+                    print(f"[BATCH ROUTER] Failed to parse {pipeline_id}: {e}")
                     pass  # If we can't parse, treat as regular pipeline
 
             if is_batch_file and nested_pipelines:
@@ -150,6 +164,10 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
                 )
                 operations.append(operation)
                 op_idx += 1
+
+        print(f"[BATCH ROUTER] Creating batch job with {len(operations)} operations")
+        for i, op in enumerate(operations):
+            print(f"[BATCH ROUTER]   Operation {i+1}: {op.operation_id}")
 
         # Create batch job
         job = batch_job_manager.create_job(
