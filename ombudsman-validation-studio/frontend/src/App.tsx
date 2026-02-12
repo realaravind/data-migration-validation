@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline, AppBar, Toolbar, Typography, Container, Button, Box, Chip, IconButton, Menu, MenuItem } from '@mui/material';
-import { useState, useEffect } from 'react';
+import { CssBaseline, AppBar, Toolbar, Typography, Container, Button, Box, Chip, IconButton, Menu, MenuItem, CircularProgress } from '@mui/material';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -26,35 +26,48 @@ interface Project {
     snowflake_schemas: string[];
     schema_mappings: { [key: string]: string };
 }
+
+// Lightweight components - load immediately
 import ProjectSwitcher from './components/ProjectSwitcher';
-import PipelineYamlEditor from './pages/PipelineYamlEditor';
 import LandingPage from './pages/LandingPage';
-import EnvironmentSetup from './pages/EnvironmentSetup';
-import MetadataExtraction from './pages/MetadataExtraction';
-import ValidationRules from './pages/ValidationRules';
-import Validations from './pages/Validations';
-import PipelineExecution from './pages/PipelineExecution';
-import PipelineSuggestions from './pages/PipelineSuggestions';
-import MermaidDiagram from './pages/MermaidDiagram';
 import ConnectionStatus from './pages/ConnectionStatus';
-import SampleDataGeneration from './pages/SampleDataGeneration';
-import DatabaseMapping from './pages/DatabaseMapping';
-import ProjectManager from './pages/ProjectManager';
-import PipelineBuilder from './pages/PipelineBuilder';
-import ResultsViewer from './pages/ResultsViewer';
-import WorkloadAnalysis from './pages/WorkloadAnalysis';
-import ComparisonViewer from './pages/ComparisonViewer';
-import ProjectSummary from './pages/ProjectSummary';
-import RunComparison from './pages/RunComparison';
-import AuditLogs from './pages/AuditLogs';
-import NotificationSettings from './pages/NotificationSettings';
-import BatchOperations from './pages/BatchOperations';
-import BatchReportViewer from './pages/BatchReportViewerSimple';
-import BatchBuilder from './pages/BatchBuilder';
-import BugReportPreview from './pages/BugReportPreview';
-import ProjectSettings from './pages/ProjectSettings';
-import LogViewer from './pages/LogViewer';
 import AlertsDrawer from './components/AlertsDrawer';
+
+// Heavy components - lazy load (Mermaid, DataGrid, Recharts)
+const DatabaseMapping = lazy(() => import('./pages/DatabaseMapping'));
+const MermaidDiagram = lazy(() => import('./pages/MermaidDiagram'));
+const PipelineBuilder = lazy(() => import('./pages/PipelineBuilder'));
+const ResultsViewer = lazy(() => import('./pages/ResultsViewer'));
+const WorkloadAnalysis = lazy(() => import('./pages/WorkloadAnalysis'));
+const ComparisonViewer = lazy(() => import('./pages/ComparisonViewer'));
+const BatchOperations = lazy(() => import('./pages/BatchOperations'));
+const BatchReportViewer = lazy(() => import('./pages/BatchReportViewerSimple'));
+const BatchBuilder = lazy(() => import('./pages/BatchBuilder'));
+
+// Medium components - lazy load
+const PipelineYamlEditor = lazy(() => import('./pages/PipelineYamlEditor'));
+const EnvironmentSetup = lazy(() => import('./pages/EnvironmentSetup'));
+const MetadataExtraction = lazy(() => import('./pages/MetadataExtraction'));
+const ValidationRules = lazy(() => import('./pages/ValidationRules'));
+const Validations = lazy(() => import('./pages/Validations'));
+const PipelineExecution = lazy(() => import('./pages/PipelineExecution'));
+const PipelineSuggestions = lazy(() => import('./pages/PipelineSuggestions'));
+const SampleDataGeneration = lazy(() => import('./pages/SampleDataGeneration'));
+const ProjectManager = lazy(() => import('./pages/ProjectManager'));
+const ProjectSummary = lazy(() => import('./pages/ProjectSummary'));
+const RunComparison = lazy(() => import('./pages/RunComparison'));
+const AuditLogs = lazy(() => import('./pages/AuditLogs'));
+const NotificationSettings = lazy(() => import('./pages/NotificationSettings'));
+const BugReportPreview = lazy(() => import('./pages/BugReportPreview'));
+const ProjectSettings = lazy(() => import('./pages/ProjectSettings'));
+const LogViewer = lazy(() => import('./pages/LogViewer'));
+
+// Loading fallback component
+const PageLoader = () => (
+    <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+    </Box>
+);
 
 const theme = createTheme({
     palette: {
@@ -345,6 +358,7 @@ function AppContent() {
             </AppBar>
 
             <Container maxWidth="xl" sx={{ py: 3, flexGrow: 1 }}>
+                <Suspense fallback={<PageLoader />}>
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
@@ -489,6 +503,7 @@ function AppContent() {
                         </ProtectedRoute>
                     } />
                 </Routes>
+                </Suspense>
             </Container>
 
             {/* Connection Status Footer - Shows on all pages */}

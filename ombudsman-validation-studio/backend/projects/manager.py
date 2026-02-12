@@ -107,6 +107,9 @@ async def create_project(
         with open(f"{project_dir}/project.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
+        # Invalidate projects cache
+        _invalidate_projects_cache()
+
         return {
             "status": "success",
             "message": f"Project '{project.name}' created successfully",
@@ -140,29 +143,68 @@ async def get_active_project():
         raise HTTPException(status_code=500, detail=f"Failed to get active project: {str(e)}")
 
 
+# Simple in-memory cache for projects list
+_projects_cache = {"data": None, "timestamp": 0, "ttl": 30}  # 30 second TTL
+
+
+def _invalidate_projects_cache():
+    """Invalidate the projects cache (call after create/update/delete)"""
+    _projects_cache["data"] = None
+    _projects_cache["timestamp"] = 0
+
+
 @router.get("/list")
-async def list_projects():
-    """List all projects"""
+async def list_projects(
+    limit: int = Query(50, description="Max projects to return", ge=1, le=500),
+    offset: int = Query(0, description="Pagination offset", ge=0),
+    search: str = Query(None, description="Search by project name")
+):
+    """List all projects with pagination and caching"""
+    import time
+
     try:
         os.makedirs(get_projects_dir(), exist_ok=True)
 
-        projects = []
-        for project_id in os.listdir(get_projects_dir()):
-            project_dir = f"{get_projects_dir()}/{project_id}"
-            metadata_file = f"{project_dir}/project.json"
+        # Check cache
+        now = time.time()
+        if _projects_cache["data"] is not None and (now - _projects_cache["timestamp"]) < _projects_cache["ttl"]:
+            all_projects = _projects_cache["data"]
+        else:
+            # Load all projects
+            all_projects = []
+            for project_id in os.listdir(get_projects_dir()):
+                project_dir = f"{get_projects_dir()}/{project_id}"
+                metadata_file = f"{project_dir}/project.json"
 
-            if os.path.isdir(project_dir) and os.path.exists(metadata_file):
-                with open(metadata_file, "r") as f:
-                    metadata = json.load(f)
-                    projects.append(metadata)
+                if os.path.isdir(project_dir) and os.path.exists(metadata_file):
+                    with open(metadata_file, "r") as f:
+                        metadata = json.load(f)
+                        all_projects.append(metadata)
 
-        # Sort by updated_at descending
-        projects.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+            # Sort by updated_at descending
+            all_projects.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+
+            # Update cache
+            _projects_cache["data"] = all_projects
+            _projects_cache["timestamp"] = now
+
+        # Apply search filter if provided
+        if search:
+            search_lower = search.lower()
+            all_projects = [p for p in all_projects if search_lower in p.get("name", "").lower()]
+
+        # Apply pagination
+        total = len(all_projects)
+        projects = all_projects[offset:offset + limit]
 
         return {
             "status": "success",
             "projects": projects,
-            "count": len(projects)
+            "count": len(projects),
+            "total": total,
+            "page": offset // limit + 1 if limit > 0 else 1,
+            "page_size": limit,
+            "has_more": offset + limit < total
         }
 
     except Exception as e:
@@ -509,6 +551,9 @@ async def delete_project(
         print(f"[PROJECT_DELETE]   - Batch jobs deleted: {len(deleted_items['batch_jobs'])}")
         print(f"[PROJECT_DELETE]   - Results deleted: {len(deleted_items['results'])}")
         print(f"[PROJECT_DELETE]   - Query stores deleted: {len(deleted_items['queries'])}")
+
+        # Invalidate projects cache
+        _invalidate_projects_cache()
 
         return {
             "status": "success",

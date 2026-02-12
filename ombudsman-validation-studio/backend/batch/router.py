@@ -4,7 +4,7 @@ Batch Operations API Router
 Provides REST API endpoints for batch job management, execution, and monitoring.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from typing import List, Optional
 from datetime import datetime
 
@@ -30,9 +30,39 @@ from .models import (
 )
 from .job_manager import batch_job_manager
 from .executor import batch_executor
+from .websocket import job_update_manager
 
 
 router = APIRouter()
+
+
+# WebSocket endpoint for real-time job updates
+@router.websocket("/ws/{project_id}")
+async def websocket_job_updates(websocket: WebSocket, project_id: str):
+    """WebSocket endpoint for real-time job updates for a specific project."""
+    await job_update_manager.connect(websocket, project_id)
+    try:
+        while True:
+            # Keep connection alive, handle any client messages
+            data = await websocket.receive_text()
+            # Client can send ping/pong for keepalive
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        job_update_manager.disconnect(websocket, project_id)
+
+
+@router.websocket("/ws")
+async def websocket_global_updates(websocket: WebSocket):
+    """WebSocket endpoint for real-time job updates (all projects)."""
+    await job_update_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        job_update_manager.disconnect(websocket)
 
 
 # Job Creation Endpoints
@@ -366,22 +396,15 @@ def list_batch_jobs(
     - offset: Pagination offset (default: 0)
     """
     try:
-        jobs = batch_job_manager.list_jobs(
+        # Get jobs and total count in single call
+        jobs, total = batch_job_manager.list_jobs(
             status=status,
             job_type=job_type,
             project_id=project_id,
             limit=limit,
-            offset=offset
+            offset=offset,
+            return_total=True
         )
-
-        # Get total count (for pagination)
-        all_jobs = batch_job_manager.list_jobs(
-            status=status,
-            job_type=job_type,
-            project_id=project_id,
-            limit=10000  # Get all for count
-        )
-        total = len(all_jobs)
 
         return BatchJobListResponse(
             jobs=jobs,

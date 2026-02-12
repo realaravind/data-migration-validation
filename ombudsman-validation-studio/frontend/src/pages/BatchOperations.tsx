@@ -151,68 +151,72 @@ const BatchOperations: React.FC = () => {
         }
     }, [activeProjectId]);
 
+    // Track if we have active jobs (use ref to avoid re-creating interval)
+    const hasActiveJobsRef = useRef(false);
+    hasActiveJobsRef.current = jobs.some(j => j.status === 'running' || j.status === 'queued');
+
     // Auto-refresh for active jobs and detect status changes
     useEffect(() => {
-        const interval = setInterval(async () => {
-            const hasActiveJobs = jobs.some(j => j.status === 'running' || j.status === 'queued');
-            if (hasActiveJobs && activeProjectId) {
-                try {
-                    const response = await fetch(__API_URL__ + `/batch/jobs?limit=100&project_id=${activeProjectId}`);
-                    const data = await response.json();
-                    const newJobs = data.jobs || [];
+        if (!activeProjectId) return;
 
-                    // Check for status changes to terminal states
-                    const prevStatuses = prevJobStatusesRef.current;
-                    console.log('[BATCH] Checking status changes, tracking', prevStatuses.size, 'jobs');
-                    for (const job of newJobs) {
-                        const prevStatus = prevStatuses.get(job.job_id);
-                        // Log any status change for debugging
-                        if (prevStatus && prevStatus !== job.status) {
-                            console.log(`[BATCH] Job "${job.name}" status changed: ${prevStatus} -> ${job.status}`);
-                        }
-                        if (prevStatus && (prevStatus === 'running' || prevStatus === 'queued')) {
-                            // Job was active, check if it's now complete
-                            if (job.status === 'completed') {
-                                console.log(`[BATCH] Showing success alert for job: ${job.name}`);
-                                setSnackbar({
-                                    open: true,
-                                    message: `Job "${job.name}" completed successfully`,
-                                    severity: 'success'
-                                });
-                            } else if (job.status === 'failed') {
-                                console.log(`[BATCH] Showing failure alert for job: ${job.name}`);
-                                setSnackbar({
-                                    open: true,
-                                    message: `Job "${job.name}" failed`,
-                                    severity: 'error'
-                                });
-                            } else if (job.status === 'partial_success') {
-                                console.log(`[BATCH] Showing partial success alert for job: ${job.name}`);
-                                setSnackbar({
-                                    open: true,
-                                    message: `Job "${job.name}" completed with some failures`,
-                                    severity: 'error'
-                                });
-                            }
+        const pollJobs = async () => {
+            // Only poll if we have active jobs
+            if (!hasActiveJobsRef.current) return;
+
+            try {
+                const response = await fetch(__API_URL__ + `/batch/jobs?limit=100&project_id=${activeProjectId}`);
+                const data = await response.json();
+                const newJobs = data.jobs || [];
+
+                // Check for status changes to terminal states
+                const prevStatuses = prevJobStatusesRef.current;
+                for (const job of newJobs) {
+                    const prevStatus = prevStatuses.get(job.job_id);
+                    if (prevStatus && prevStatus !== job.status) {
+                        console.log(`[BATCH] Job "${job.name}" status changed: ${prevStatus} -> ${job.status}`);
+                    }
+                    if (prevStatus && (prevStatus === 'running' || prevStatus === 'queued')) {
+                        // Job was active, check if it's now complete
+                        if (job.status === 'completed') {
+                            setSnackbar({
+                                open: true,
+                                message: `Job "${job.name}" completed successfully`,
+                                severity: 'success'
+                            });
+                        } else if (job.status === 'failed') {
+                            setSnackbar({
+                                open: true,
+                                message: `Job "${job.name}" failed`,
+                                severity: 'error'
+                            });
+                        } else if (job.status === 'partial_success') {
+                            setSnackbar({
+                                open: true,
+                                message: `Job "${job.name}" completed with some failures`,
+                                severity: 'error'
+                            });
                         }
                     }
-
-                    // Update tracked statuses
-                    const newStatuses = new Map<string, string>();
-                    for (const job of newJobs) {
-                        newStatuses.set(job.job_id, job.status);
-                    }
-                    prevJobStatusesRef.current = newStatuses;
-
-                    setJobs(newJobs);
-                } catch (error) {
-                    console.error('Failed to fetch jobs:', error);
                 }
+
+                // Update tracked statuses
+                const newStatuses = new Map<string, string>();
+                for (const job of newJobs) {
+                    newStatuses.set(job.job_id, job.status);
+                }
+                prevJobStatusesRef.current = newStatuses;
+
+                setJobs(newJobs);
+            } catch (error) {
+                console.error('Failed to fetch jobs:', error);
             }
-        }, 2000); // Refresh every 2 seconds
+        };
+
+        // Poll every 5 seconds (reduced from 2s)
+        const interval = setInterval(pollJobs, 5000);
 
         return () => clearInterval(interval);
-    }, [jobs, activeProjectId]);
+    }, [activeProjectId]); // Only depend on activeProjectId, not jobs
 
     const fetchJobs = async () => {
         try {

@@ -264,7 +264,8 @@ class BatchJobManager:
         job_type: Optional[BatchJobType] = None,
         project_id: Optional[str] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        return_total: bool = False
     ) -> List[BatchJob]:
         """
         List batch jobs with filtering.
@@ -275,9 +276,10 @@ class BatchJobManager:
             project_id: Filter by project
             limit: Max results
             offset: Offset for pagination
+            return_total: If True, returns tuple (jobs, total_count)
 
         Returns:
-            List of matching jobs
+            List of matching jobs, or tuple (jobs, total) if return_total=True
         """
         jobs = list(self._jobs.values())
 
@@ -292,8 +294,14 @@ class BatchJobManager:
         # Sort by created_at descending
         jobs.sort(key=lambda j: j.created_at, reverse=True)
 
+        total = len(jobs)
+
         # Pagination
-        return jobs[offset:offset + limit]
+        paginated = jobs[offset:offset + limit]
+
+        if return_total:
+            return paginated, total
+        return paginated
 
     def cancel_job(self, job_id: str, reason: Optional[str] = None) -> bool:
         """
