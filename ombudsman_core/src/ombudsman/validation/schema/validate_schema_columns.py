@@ -29,7 +29,8 @@ def validate_schema_columns(sql_conn=None, snow_conn=None, mapping=None, metadat
             AND TABLE_NAME = PARSENAME('{sql_table}', 1)
             ORDER BY ORDINAL_POSITION
         """
-        sql_cols = [row[0] for row in sql_conn.fetch_many(sql_query)]
+        # Uppercase column names for case-insensitive comparison
+        sql_cols = [row[0].upper() for row in sql_conn.fetch_many(sql_query)]
 
         # Query Snowflake columns
         # Get database name from connection
@@ -63,7 +64,8 @@ def validate_schema_columns(sql_conn=None, snow_conn=None, mapping=None, metadat
             AND TABLE_NAME = '{snow_table_name_upper}'
             ORDER BY ORDINAL_POSITION
         """
-        snow_cols = [row[0] for row in snow_conn.fetch_many(snow_query)]
+        # Uppercase column names for case-insensitive comparison
+        snow_cols = [row[0].upper() for row in snow_conn.fetch_many(snow_query)]
 
         # Compare columns
         missing_in_sql, missing_in_snow = diff_lists(snow_cols, sql_cols)

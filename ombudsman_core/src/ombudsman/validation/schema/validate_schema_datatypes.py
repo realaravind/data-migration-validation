@@ -37,7 +37,8 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
             ORDER BY ORDINAL_POSITION
         """
         sql_results = sql_conn.fetch_many(sql_query)
-        sql_types = {row[0]: normalize_sql_type(row[1]) for row in sql_results}
+        # Uppercase column names for case-insensitive comparison
+        sql_types = {row[0].upper(): normalize_sql_type(row[1]) for row in sql_results}
 
         # Query Snowflake column types
         # Get database name from connection
@@ -73,7 +74,8 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
         """
         logger.info(f"[SNOW_TYPE] Table: {snow_table} -> db={snow_db}, schema={snow_schema_upper}, table={snow_table_name_upper}")
         snow_results = snow_conn.fetch_many(snow_query)
-        snow_types = {row[0]: normalize_snow_type(row[1]) for row in snow_results}
+        # Uppercase column names for case-insensitive comparison
+        snow_types = {row[0].upper(): normalize_snow_type(row[1]) for row in snow_results}
         logger.info(f"[SNOW_TYPE] Returned {len(snow_results)} columns: {dict(list(snow_types.items())[:5])}{'...' if len(snow_types) > 5 else ''}")
 
         # Compare types for each column
