@@ -10,13 +10,15 @@ Handles the complete OAuth flow for Snowflake when refresh tokens expire:
 import os
 import logging
 import secrets
+import subprocess
+import asyncio
 from typing import Optional
 from urllib.parse import urlencode, quote
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from alerts.service import alert_service, AlertSeverity, AlertCategory
@@ -374,22 +376,51 @@ async def callback(
                     body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
                     .success { color: #2e7d32; }
                     .checkmark { font-size: 64px; color: #2e7d32; }
-                    .btn { background: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 20px; }
+                    .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid #1976d2; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; margin-left: 10px; vertical-align: middle; }
+                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                    .btn { background: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 20px; border: none; cursor: pointer; }
                 </style>
             </head>
             <body>
                 <div class="checkmark">&#10004;</div>
                 <h1 class="success">Authentication Successful!</h1>
                 <p>Your Snowflake OAuth token has been refreshed and saved.</p>
-                <p>The connection should now work. You can close this window.</p>
-                <a href="javascript:window.close()" class="btn">Close Window</a>
+                <p id="status">Encrypting secrets and restarting server... <span class="spinner"></span></p>
+                <button id="closeBtn" class="btn" style="display:none" onclick="window.close()">Close Window</button>
                 <script>
                     // Notify parent window if opened as popup
                     if (window.opener) {
                         window.opener.postMessage({ type: 'snowflake_oauth_success' }, '*');
                     }
-                    // Auto-close after 5 seconds
-                    setTimeout(() => window.close(), 5000);
+
+                    // Auto-trigger finalization
+                    async function finalize() {
+                        try {
+                            const response = await fetch(window.location.origin + '/oauth/snowflake/finalize', {
+                                method: 'POST'
+                            });
+                            const data = await response.json();
+
+                            document.getElementById('status').innerHTML = '✓ ' + data.message + '<br><br>You can close this window now.';
+                            document.getElementById('closeBtn').style.display = 'inline-block';
+
+                            // Notify parent about finalization
+                            if (window.opener) {
+                                window.opener.postMessage({ type: 'snowflake_oauth_finalized' }, '*');
+                            }
+
+                            // Auto-close after 8 seconds
+                            setTimeout(() => window.close(), 8000);
+                        } catch (error) {
+                            document.getElementById('status').innerHTML =
+                                'Token saved but auto-restart failed.<br>' +
+                                'Please run: <code>sudo ./start-ombudsman.sh encrypt-secrets && sudo ./start-ombudsman.sh restart</code>';
+                            document.getElementById('closeBtn').style.display = 'inline-block';
+                        }
+                    }
+
+                    // Start finalization after a short delay
+                    setTimeout(finalize, 1000);
                 </script>
             </body>
             </html>
@@ -451,3 +482,156 @@ async def test_connection():
             "message": str(e),
             "action_required": "re-authenticate"
         }
+
+
+def _get_start_script_path() -> str:
+    """Get the path to start-ombudsman.sh"""
+    possible_paths = [
+        "/ombudsman/deploy/start-ombudsman.sh",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "deploy", "start-ombudsman.sh"),
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    return possible_paths[0]
+
+
+def _run_encrypt_and_restart():
+    """Run encrypt-secrets and then restart the server (runs in background)"""
+    import time
+    script_path = _get_start_script_path()
+    base_dir = os.path.dirname(os.path.dirname(script_path))
+
+    try:
+        # Run encrypt-secrets
+        logger.info(f"Running encrypt-secrets from {script_path}")
+        result = subprocess.run(
+            ["sudo", script_path, "encrypt-secrets"],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode != 0:
+            logger.error(f"encrypt-secrets failed: {result.stderr}")
+            return False
+        logger.info("encrypt-secrets completed successfully")
+
+        # Small delay before restart
+        time.sleep(2)
+
+        # Trigger restart (this will kill the current process)
+        logger.info("Triggering server restart...")
+        subprocess.Popen(
+            ["sudo", script_path, "restart"],
+            cwd=base_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True  # Detach from parent process
+        )
+        return True
+
+    except Exception as e:
+        logger.exception(f"Failed to encrypt and restart: {e}")
+        return False
+
+
+@router.post("/finalize")
+async def finalize_oauth(background_tasks: BackgroundTasks):
+    """
+    Finalize OAuth by encrypting secrets and restarting the server.
+    Call this after OAuth callback completes successfully.
+    """
+    logger.info("OAuth finalize requested - will encrypt secrets and restart")
+
+    # Add the encrypt and restart to background tasks
+    # We use a thread to avoid blocking
+    import threading
+
+    def delayed_restart():
+        import time
+        time.sleep(3)  # Give time for response to be sent
+        _run_encrypt_and_restart()
+
+    thread = threading.Thread(target=delayed_restart, daemon=True)
+    thread.start()
+
+    return JSONResponse(content={
+        "status": "success",
+        "message": "Secrets will be encrypted and server will restart in ~5 seconds"
+    })
+
+
+@router.get("/finalize-page")
+async def finalize_page():
+    """
+    Page shown after OAuth success to trigger encrypt and restart.
+    """
+    return HTMLResponse(content="""
+    <html>
+    <head>
+        <title>Finalizing Snowflake OAuth</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+            .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #1976d2; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            .success { color: #2e7d32; }
+            .error { color: #d32f2f; }
+            .btn { background: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 20px; border: none; cursor: pointer; font-size: 16px; }
+            .btn:disabled { background: #ccc; cursor: not-allowed; }
+            #status { margin: 20px 0; padding: 15px; border-radius: 4px; }
+        </style>
+    </head>
+    <body>
+        <h1>Finalizing Authentication</h1>
+        <div id="spinner" class="spinner"></div>
+        <div id="status">Encrypting secrets and restarting server...</div>
+        <button id="closeBtn" class="btn" style="display:none" onclick="window.close()">Close Window</button>
+
+        <script>
+            const API_BASE = window.location.origin;
+
+            async function finalize() {
+                try {
+                    const response = await fetch(API_BASE + '/oauth/snowflake/finalize', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+
+                    document.getElementById('spinner').style.display = 'none';
+                    document.getElementById('status').innerHTML = `
+                        <div class="success">
+                            <h2>✓ Success!</h2>
+                            <p>${data.message}</p>
+                            <p>The server is restarting. Please wait a moment, then refresh the main application.</p>
+                        </div>
+                    `;
+                    document.getElementById('closeBtn').style.display = 'inline-block';
+
+                    // Notify parent window
+                    if (window.opener) {
+                        window.opener.postMessage({ type: 'snowflake_oauth_finalized' }, '*');
+                    }
+
+                    // Auto-close after 10 seconds
+                    setTimeout(() => window.close(), 10000);
+
+                } catch (error) {
+                    document.getElementById('spinner').style.display = 'none';
+                    document.getElementById('status').innerHTML = `
+                        <div class="error">
+                            <h2>Error</h2>
+                            <p>Failed to finalize: ${error.message}</p>
+                            <p>You may need to manually run: sudo ./start-ombudsman.sh encrypt-secrets && sudo ./start-ombudsman.sh restart</p>
+                        </div>
+                    `;
+                    document.getElementById('closeBtn').style.display = 'inline-block';
+                }
+            }
+
+            // Start finalization immediately
+            finalize();
+        </script>
+    </body>
+    </html>
+    """)

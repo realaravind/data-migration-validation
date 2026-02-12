@@ -47,7 +47,22 @@
       "Bash(git tag:*)",
       "Bash(.claude/hooks/play-tts.sh:*)",
       "Bash(ls:*)",
-      "Bash(git check-ignore:*)"
+      "Bash(git check-ignore:*)",
+      "Bash(grep:*)",
+      "Bash(LLM_PROVIDER=openai OPENAI_API_KEY=sk-test python3:*)",
+      "mcp__agentvibes__text_to_speech",
+      "Bash(npm audit:*)",
+      "Bash(npm info:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(pip index:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx eslint:*)",
+      "WebFetch(domain:community.snowflake.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.snowflake.com)",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
