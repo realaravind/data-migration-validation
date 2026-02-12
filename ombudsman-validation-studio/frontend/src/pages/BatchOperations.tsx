@@ -255,75 +255,69 @@ const BatchOperations: React.FC = () => {
     const wsConnectedRef = useRef(wsConnected);
     wsConnectedRef.current = wsConnected;
 
-    // Fallback polling - only when WebSocket is disconnected and we have active jobs
+    // Fallback polling - only when WebSocket is disconnected AND we have active jobs
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
     useEffect(() => {
-        if (!activeProjectId) return;
+        // Only poll when: WebSocket is disconnected AND there are active jobs
+        const shouldPoll = !wsConnected && hasActiveJobsRef.current && activeProjectId;
 
-        const pollJobs = async () => {
-            // Skip polling if WebSocket is connected - we get real-time updates
-            if (wsConnectedRef.current) {
-                console.log('[BATCH] WebSocket connected, skipping poll');
-                return;
-            }
+        if (shouldPoll && !pollingIntervalRef.current) {
+            console.log('[BATCH] Starting fallback polling (WebSocket disconnected, active jobs present)');
 
-            // Only poll if we have active jobs
-            if (!hasActiveJobsRef.current) return;
+            const pollJobs = async () => {
+                // Double-check conditions
+                if (wsConnectedRef.current || !hasActiveJobsRef.current) {
+                    return;
+                }
 
-            console.log('[BATCH] WebSocket disconnected, polling for updates...');
-            try {
-                const response = await fetch(__API_URL__ + `/batch/jobs?limit=100&project_id=${activeProjectId}`);
-                const data = await response.json();
-                const newJobs = data.jobs || [];
+                try {
+                    const response = await fetch(__API_URL__ + `/batch/jobs?limit=100&project_id=${activeProjectId}`);
+                    const data = await response.json();
+                    const newJobs = data.jobs || [];
 
-                // Check for status changes to terminal states
-                const prevStatuses = prevJobStatusesRef.current;
-                for (const job of newJobs) {
-                    const prevStatus = prevStatuses.get(job.job_id);
-                    if (prevStatus && prevStatus !== job.status) {
-                        console.log(`[BATCH] Job "${job.name}" status changed: ${prevStatus} -> ${job.status}`);
-                    }
-                    if (prevStatus && (prevStatus === 'running' || prevStatus === 'queued')) {
-                        // Job was active, check if it's now complete
-                        if (job.status === 'completed') {
-                            setSnackbar({
-                                open: true,
-                                message: `Job "${job.name}" completed successfully`,
-                                severity: 'success'
-                            });
-                        } else if (job.status === 'failed') {
-                            setSnackbar({
-                                open: true,
-                                message: `Job "${job.name}" failed`,
-                                severity: 'error'
-                            });
-                        } else if (job.status === 'partial_success') {
-                            setSnackbar({
-                                open: true,
-                                message: `Job "${job.name}" completed with some failures`,
-                                severity: 'error'
-                            });
+                    // Check for status changes to terminal states
+                    const prevStatuses = prevJobStatusesRef.current;
+                    for (const job of newJobs) {
+                        const prevStatus = prevStatuses.get(job.job_id);
+                        if (prevStatus && (prevStatus === 'running' || prevStatus === 'queued')) {
+                            if (job.status === 'completed') {
+                                setSnackbar({ open: true, message: `Job "${job.name}" completed successfully`, severity: 'success' });
+                            } else if (job.status === 'failed') {
+                                setSnackbar({ open: true, message: `Job "${job.name}" failed`, severity: 'error' });
+                            } else if (job.status === 'partial_success') {
+                                setSnackbar({ open: true, message: `Job "${job.name}" completed with some failures`, severity: 'error' });
+                            }
                         }
                     }
-                }
 
-                // Update tracked statuses
-                const newStatuses = new Map<string, string>();
-                for (const job of newJobs) {
-                    newStatuses.set(job.job_id, job.status);
-                }
-                prevJobStatusesRef.current = newStatuses;
+                    // Update tracked statuses
+                    const newStatuses = new Map<string, string>();
+                    for (const job of newJobs) {
+                        newStatuses.set(job.job_id, job.status);
+                    }
+                    prevJobStatusesRef.current = newStatuses;
 
-                setJobs(newJobs);
-            } catch (error) {
-                console.error('Failed to fetch jobs:', error);
+                    setJobs(newJobs);
+                } catch (error) {
+                    console.error('Failed to fetch jobs:', error);
+                }
+            };
+
+            pollingIntervalRef.current = setInterval(pollJobs, 5000);
+        } else if (!shouldPoll && pollingIntervalRef.current) {
+            console.log('[BATCH] Stopping fallback polling (WebSocket connected or no active jobs)');
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
             }
         };
-
-        // Poll every 5 seconds as fallback when WebSocket is down
-        const interval = setInterval(pollJobs, 5000);
-
-        return () => clearInterval(interval);
-    }, [activeProjectId]); // Only depend on activeProjectId
+    }, [wsConnected, activeProjectId]); // React to WebSocket connection changes
 
     const fetchJobs = async () => {
         try {
@@ -429,11 +423,8 @@ const BatchOperations: React.FC = () => {
                 setPipelineJobName('');
                 setSelectedPipelines([]);
                 setActiveTab(2); // Switch to Active Jobs tab
-                // Fetch multiple times with delays to ensure job appears
+                // Single fetch - WebSocket will handle updates
                 await fetchJobs();
-                setTimeout(() => fetchJobs(), 300);
-                setTimeout(() => fetchJobs(), 1000);
-                setTimeout(() => fetchJobs(), 2000);
             } else {
                 setSnackbar({ open: true, message: 'Failed to create batch job', severity: 'error' });
             }
