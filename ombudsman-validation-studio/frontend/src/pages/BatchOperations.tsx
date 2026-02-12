@@ -27,7 +27,8 @@ import {
     Divider,
     FormGroup,
     ToggleButtonGroup,
-    ToggleButton
+    ToggleButton,
+    Tooltip
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -46,6 +47,9 @@ import FolderIcon from '@mui/icons-material/Folder';
 import DescriptionIcon from '@mui/icons-material/Description';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import WifiIcon from '@mui/icons-material/Wifi';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import { useJobWebSocket } from '../hooks/useJobWebSocket';
 
 interface BatchJob {
     job_id: string;
@@ -102,6 +106,70 @@ const BatchOperations: React.FC = () => {
     // Track previous job statuses for detecting state changes
     const prevJobStatusesRef = useRef<Map<string, string>>(new Map());
 
+    // Active project - loaded from API (moved up for WebSocket)
+    const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+
+    // WebSocket for real-time job updates
+    const handleWebSocketUpdate = useCallback((update: any) => {
+        if (update.type === 'job_update' && update.data) {
+            const jobData = update.data;
+            console.log('[WebSocket] Job update received:', jobData.job_id, jobData.status);
+
+            setJobs(prevJobs => {
+                const jobIndex = prevJobs.findIndex(j => j.job_id === jobData.job_id);
+                if (jobIndex === -1) {
+                    // New job, fetch full list
+                    fetchJobs();
+                    return prevJobs;
+                }
+
+                // Update existing job
+                const updatedJobs = [...prevJobs];
+                const prevStatus = updatedJobs[jobIndex].status;
+
+                updatedJobs[jobIndex] = {
+                    ...updatedJobs[jobIndex],
+                    status: jobData.status,
+                    progress: jobData.progress || updatedJobs[jobIndex].progress,
+                    success_count: jobData.success_count ?? updatedJobs[jobIndex].success_count,
+                    failure_count: jobData.failure_count ?? updatedJobs[jobIndex].failure_count,
+                };
+
+                // Show notification on status change to terminal state
+                if (prevStatus !== jobData.status) {
+                    if (prevStatus === 'running' || prevStatus === 'queued') {
+                        if (jobData.status === 'completed') {
+                            setSnackbar({
+                                open: true,
+                                message: `Job "${jobData.name}" completed successfully`,
+                                severity: 'success'
+                            });
+                        } else if (jobData.status === 'failed') {
+                            setSnackbar({
+                                open: true,
+                                message: `Job "${jobData.name}" failed`,
+                                severity: 'error'
+                            });
+                        } else if (jobData.status === 'partial_success') {
+                            setSnackbar({
+                                open: true,
+                                message: `Job "${jobData.name}" completed with some failures`,
+                                severity: 'error'
+                            });
+                        }
+                    }
+                }
+
+                return updatedJobs;
+            });
+        }
+    }, []);
+
+    const { connected: wsConnected, reconnect: wsReconnect } = useJobWebSocket(
+        activeProjectId,
+        handleWebSocketUpdate
+    );
+
     // Filter state for Batch vs Pipeline view
     const [viewFilter, setViewFilter] = useState<'all' | 'batches' | 'pipelines'>('batches');
 
@@ -120,9 +188,6 @@ const BatchOperations: React.FC = () => {
 
     // Available pipelines - loaded from API
     const [availablePipelines, setAvailablePipelines] = useState<any[]>([]);
-
-    // Active project - loaded from API
-    const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
     // Memoized toggle handler to prevent recreation on every render
     const handlePipelineToggle = useCallback((filename: string) => {
@@ -155,14 +220,25 @@ const BatchOperations: React.FC = () => {
     const hasActiveJobsRef = useRef(false);
     hasActiveJobsRef.current = jobs.some(j => j.status === 'running' || j.status === 'queued');
 
-    // Auto-refresh for active jobs and detect status changes
+    // Track WebSocket connection state with ref (avoids re-creating interval on connect/disconnect)
+    const wsConnectedRef = useRef(wsConnected);
+    wsConnectedRef.current = wsConnected;
+
+    // Fallback polling - only when WebSocket is disconnected and we have active jobs
     useEffect(() => {
         if (!activeProjectId) return;
 
         const pollJobs = async () => {
+            // Skip polling if WebSocket is connected - we get real-time updates
+            if (wsConnectedRef.current) {
+                console.log('[BATCH] WebSocket connected, skipping poll');
+                return;
+            }
+
             // Only poll if we have active jobs
             if (!hasActiveJobsRef.current) return;
 
+            console.log('[BATCH] WebSocket disconnected, polling for updates...');
             try {
                 const response = await fetch(__API_URL__ + `/batch/jobs?limit=100&project_id=${activeProjectId}`);
                 const data = await response.json();
@@ -212,11 +288,11 @@ const BatchOperations: React.FC = () => {
             }
         };
 
-        // Poll every 5 seconds (reduced from 2s)
+        // Poll every 5 seconds as fallback when WebSocket is down
         const interval = setInterval(pollJobs, 5000);
 
         return () => clearInterval(interval);
-    }, [activeProjectId]); // Only depend on activeProjectId, not jobs
+    }, [activeProjectId]); // Only depend on activeProjectId
 
     const fetchJobs = async () => {
         try {
@@ -709,9 +785,21 @@ const BatchOperations: React.FC = () => {
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h4">
-                    Batch Operations
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h4">
+                        Batch Operations
+                    </Typography>
+                    <Tooltip title={wsConnected ? 'Real-time updates active' : 'WebSocket disconnected - using polling fallback'}>
+                        <Chip
+                            icon={wsConnected ? <WifiIcon /> : <WifiOffIcon />}
+                            label={wsConnected ? 'Live' : 'Polling'}
+                            color={wsConnected ? 'success' : 'warning'}
+                            size="small"
+                            onClick={wsConnected ? undefined : wsReconnect}
+                            sx={{ cursor: wsConnected ? 'default' : 'pointer' }}
+                        />
+                    </Tooltip>
+                </Box>
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}

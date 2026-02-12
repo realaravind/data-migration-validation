@@ -11,6 +11,8 @@ Manages the lifecycle of batch jobs:
 import os
 import json
 import uuid
+import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -25,6 +27,46 @@ from .models import (
     BatchOperationStatus,
     BatchProgress
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _broadcast_job_update_sync(job: 'BatchJob'):
+    """Broadcast job update via WebSocket (called from sync code)."""
+    try:
+        from .websocket import job_update_manager
+
+        # Create job data for broadcast
+        job_data = {
+            "job_id": job.job_id,
+            "status": job.status.value if hasattr(job.status, 'value') else str(job.status),
+            "name": job.name,
+            "project_id": job.project_id,
+            "progress": {
+                "total_operations": job.progress.total_operations if job.progress else 0,
+                "completed_operations": job.progress.completed_operations if job.progress else 0,
+                "failed_operations": job.progress.failed_operations if job.progress else 0,
+                "percent_complete": job.progress.percent_complete if job.progress else 0,
+            } if job.progress else None,
+            "success_count": job.success_count,
+            "failure_count": job.failure_count,
+        }
+
+        # Try to get existing event loop or create new one
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context, schedule the coroutine
+            asyncio.create_task(job_update_manager.broadcast_job_update(job_data, job.project_id))
+        except RuntimeError:
+            # No running loop, create one for this broadcast
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(job_update_manager.broadcast_job_update(job_data, job.project_id))
+            finally:
+                loop.close()
+
+    except Exception as e:
+        logger.warning(f"Failed to broadcast job update: {e}")
 
 
 class BatchJobManager:
@@ -154,8 +196,8 @@ class BatchJobManager:
             self._jobs[job.job_id] = job
             self._save_job(job)
 
-    def update_job_status(self, job_id: str, status: BatchJobStatus):
-        """Update job status"""
+    def update_job_status(self, job_id: str, status: BatchJobStatus, broadcast: bool = True):
+        """Update job status and optionally broadcast via WebSocket"""
         job = self.get_job(job_id)
         if job:
             job.status = status
@@ -180,15 +222,20 @@ class BatchJobManager:
 
             self.update_job(job)
 
+            # Broadcast update via WebSocket
+            if broadcast:
+                _broadcast_job_update_sync(job)
+
     def update_operation_status(
         self,
         job_id: str,
         operation_id: str,
         status: BatchOperationStatus,
         result: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        broadcast: bool = True
     ):
-        """Update individual operation status"""
+        """Update individual operation status and optionally broadcast via WebSocket"""
         job = self.get_job(job_id)
         if not job:
             return
@@ -216,6 +263,10 @@ class BatchJobManager:
         # Update progress
         self._update_progress(job)
         self.update_job(job)
+
+        # Broadcast progress update via WebSocket
+        if broadcast:
+            _broadcast_job_update_sync(job)
 
     def _update_progress(self, job: BatchJob):
         """Update job progress based on operation statuses"""
