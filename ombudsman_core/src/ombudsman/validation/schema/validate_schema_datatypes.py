@@ -71,16 +71,14 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
             AND TABLE_NAME = '{snow_table_name_upper}'
             ORDER BY ORDINAL_POSITION
         """
-        logger.info(f"[SNOW_TYPE] Snowflake query: {snow_query.strip()}")
-        logger.info(f"[SNOW_TYPE] snow_table input: {snow_table}, parsed: db={snow_db}, schema={snow_schema_upper}, table={snow_table_name_upper}")
-
         snow_results = snow_conn.fetch_many(snow_query)
-        logger.info(f"[SNOW_TYPE] Snowflake returned {len(snow_results)} rows")
-        for row in snow_results[:5]:  # Log first 5 rows
-            logger.info(f"[SNOW_TYPE]   Column: {row[0]}, Type: {row[1]}")
-
         snow_types = {row[0]: normalize_snow_type(row[1]) for row in snow_results}
-        logger.info(f"[SNOW_TYPE] Final snow_types dict: {snow_types}")
+
+        # Only log if no results returned (helps debug empty snow_type issue)
+        if not snow_results:
+            logger.warning(f"[SNOW_TYPE] No columns returned for {snow_table}")
+            logger.warning(f"[SNOW_TYPE]   Query: {snow_query.strip()}")
+            logger.warning(f"[SNOW_TYPE]   Parsed: db={snow_db}, schema={snow_schema_upper}, table={snow_table_name_upper}")
 
         # Compare types for each column
         mismatches = []
