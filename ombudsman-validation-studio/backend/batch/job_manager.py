@@ -184,6 +184,9 @@ class BatchJobManager:
             self._jobs[job_id] = job
             self._save_job(job)
 
+        # Broadcast new job via WebSocket
+        _broadcast_job_update_sync(job)
+
         return job
 
     def get_job(self, job_id: str) -> Optional[BatchJob]:
