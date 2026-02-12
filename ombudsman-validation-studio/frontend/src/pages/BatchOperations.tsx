@@ -109,6 +109,9 @@ const BatchOperations: React.FC = () => {
     // Active project - loaded from API (moved up for WebSocket)
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
+    // Track if we need to fetch jobs (for new job detection)
+    const shouldFetchRef = useRef(false);
+
     // WebSocket for real-time job updates
     const handleWebSocketUpdate = useCallback((update: any) => {
         if (update.type === 'job_update' && update.data) {
@@ -118,8 +121,9 @@ const BatchOperations: React.FC = () => {
             setJobs(prevJobs => {
                 const jobIndex = prevJobs.findIndex(j => j.job_id === jobData.job_id);
                 if (jobIndex === -1) {
-                    // New job, fetch full list
-                    fetchJobs();
+                    // New job detected - signal to fetch
+                    console.log('[WebSocket] New job detected, will fetch full list');
+                    shouldFetchRef.current = true;
                     return prevJobs;
                 }
 
@@ -162,8 +166,28 @@ const BatchOperations: React.FC = () => {
 
                 return updatedJobs;
             });
+
+            // Fetch new jobs outside of state updater
+            if (shouldFetchRef.current) {
+                shouldFetchRef.current = false;
+                // Small delay to let backend finish saving
+                setTimeout(async () => {
+                    console.log('[WebSocket] Fetching jobs after new job detected');
+                    try {
+                        let url = __API_URL__ + '/batch/jobs?limit=100';
+                        if (activeProjectId) {
+                            url += `&project_id=${activeProjectId}`;
+                        }
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        setJobs(data.jobs || []);
+                    } catch (error) {
+                        console.error('[WebSocket] Failed to fetch jobs:', error);
+                    }
+                }, 100);
+            }
         }
-    }, []);
+    }, [activeProjectId]);
 
     const { connected: wsConnected, reconnect: wsReconnect } = useJobWebSocket(
         activeProjectId,
