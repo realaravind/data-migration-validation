@@ -62,7 +62,9 @@
       "WebSearch",
       "WebFetch(domain:docs.snowflake.com)",
       "Bash(git reset:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "mcp__agentvibes__mute",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []

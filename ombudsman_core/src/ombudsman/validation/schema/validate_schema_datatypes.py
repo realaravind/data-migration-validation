@@ -76,7 +76,7 @@ def types_compatible(sql_type, snow_type):
 
     return False
 
-def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metadata=None, table=None, **kwargs):
+def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metadata=None, table=None, type_checker=None, **kwargs):
     """
     Validate that data types match between SQL Server and Snowflake tables.
     Queries both databases and compares column data types.
@@ -145,6 +145,15 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
         logger.info(f"[SNOW_TYPE] Returned {len(snow_results)} columns: {dict(list(snow_types.items())[:5])}{'...' if len(snow_types) > 5 else ''}")
 
         # Compare types for each column using type compatibility
+        # Use injected type_checker (AI) if provided, fall back to rule-based
+        def check_compatibility(sql_t, snow_t):
+            if type_checker:
+                try:
+                    return type_checker(sql_t, snow_t)
+                except Exception as e:
+                    logger.warning(f"[SNOW_TYPE] AI type checker failed: {e}, using fallback")
+            return types_compatible(sql_t, snow_t)
+
         mismatches = []
         matched = []
         for col_name in sql_types.keys():
@@ -160,7 +169,7 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
                 })
             else:
                 snow_type = snow_types[col_name]
-                is_compatible = types_compatible(sql_type, snow_type)
+                is_compatible = check_compatibility(sql_type, snow_type)
                 if is_compatible:
                     matched.append({
                         "column": col_name,

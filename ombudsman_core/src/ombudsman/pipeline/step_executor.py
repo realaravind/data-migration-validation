@@ -7,12 +7,13 @@ Runs a single validator with injected dependencies.
 from ..core.result import ValidationResult
 
 class StepExecutor:
-    def __init__(self, registry, sql_conn, snow_conn, mapping, metadata):
+    def __init__(self, registry, sql_conn, snow_conn, mapping, metadata, type_checker=None):
         self.registry = registry
         self.sql_conn = sql_conn
         self.snow_conn = snow_conn
         self.mapping = mapping
         self.metadata = metadata
+        self.type_checker = type_checker  # Optional AI type checker
 
     def run_step(self, step):
         name = step["name"]
@@ -61,6 +62,8 @@ class StepExecutor:
                 call_kwargs['mapping'] = self.mapping
             if 'metadata' in params:
                 call_kwargs['metadata'] = self.metadata
+            if 'type_checker' in params and self.type_checker:
+                call_kwargs['type_checker'] = self.type_checker
 
             # Add config parameters (these override injected ones if same key)
             for key, value in cfg.items():

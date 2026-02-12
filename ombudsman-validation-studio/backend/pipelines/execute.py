@@ -622,13 +622,24 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
 
         try:
             logger.info("[PIPELINE] Both database connections established successfully")
+
+            # Get AI type checker if LLM is configured
+            type_checker = None
+            try:
+                from validation.ai_type_checker import get_ai_type_checker
+                type_checker = get_ai_type_checker()
+                logger.info("[PIPELINE] AI type checker enabled for datatype validation")
+            except Exception as e:
+                logger.info(f"[PIPELINE] AI type checker not available: {e}, using rule-based fallback")
+
             # Create executor
             executor = StepExecutor(
                 registry=registry,
                 sql_conn=sql_conn,
                 snow_conn=snow_conn,
                 mapping=mapping,
-                metadata=metadata
+                metadata=metadata,
+                type_checker=type_checker
             )
 
             # Create JSON logger for pipeline execution
