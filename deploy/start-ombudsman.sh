@@ -222,43 +222,36 @@ export SQLSERVER_CONN_STR="DRIVER={ODBC Driver 18 for SQL Server};SERVER=${MSSQL
 nuke_all_processes() {
     echo "Stopping all ombudsman processes..."
 
-    # Kill by PID files first (silently)
-    for pidfile in "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid"; do
-        if [ -f "$pidfile" ]; then
-            PID=$(cat "$pidfile" 2>/dev/null)
-            if [ -n "$PID" ]; then
-                sudo kill -9 $PID 2>/dev/null || true
+    # Run all kill commands in a subshell with job control disabled to suppress messages
+    (
+        set +m  # Disable job control messages
+
+        # Kill by PID files first
+        for pidfile in "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid"; do
+            if [ -f "$pidfile" ]; then
+                PID=$(cat "$pidfile" 2>/dev/null)
+                [ -n "$PID" ] && sudo kill -9 $PID 2>/dev/null
+                rm -f "$pidfile"
             fi
-            rm -f "$pidfile"
-        fi
-    done
-
-    # Kill any uvicorn processes (backend) - silently
-    sudo pkill -9 -f "uvicorn main:app" 2>/dev/null || true
-    sudo pkill -9 -f "uvicorn.*8001" 2>/dev/null || true
-    sudo pkill -9 -f "uvicorn.*${BACKEND_PORT:-8001}" 2>/dev/null || true
-
-    # Kill any node/npm processes on our ports - silently
-    sudo pkill -9 -f "vite.*preview.*${FRONTEND_PORT:-3000}" 2>/dev/null || true
-    sudo pkill -9 -f "node.*${FRONTEND_PORT:-3000}" 2>/dev/null || true
-
-    # Force kill on specific ports - silently
-    for port in ${BACKEND_PORT:-8001} ${FRONTEND_PORT:-3000}; do
-        # fuser -k is most reliable
-        sudo fuser -k $port/tcp >/dev/null 2>&1 || true
-
-        # lsof + kill as backup
-        for pid in $(sudo lsof -t -i:$port 2>/dev/null); do
-            sudo kill -9 $pid 2>/dev/null || true
         done
-    done
 
-    # Wait for processes to die
+        # Kill uvicorn processes
+        sudo pkill -9 -f "uvicorn main:app" 2>/dev/null
+        sudo pkill -9 -f "uvicorn.*${BACKEND_PORT:-8001}" 2>/dev/null
+
+        # Kill node/vite processes
+        sudo pkill -9 -f "vite.*preview" 2>/dev/null
+        sudo pkill -9 -f "node.*${FRONTEND_PORT:-3000}" 2>/dev/null
+
+        # Force kill on ports
+        sudo fuser -k ${BACKEND_PORT:-8001}/tcp 2>/dev/null
+        sudo fuser -k ${FRONTEND_PORT:-3000}/tcp 2>/dev/null
+
+        true  # Always exit success
+    ) 2>/dev/null
+
     sleep 2
-
-    # Final cleanup of PID files
-    rm -f "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid" 2>/dev/null || true
-
+    rm -f "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid" 2>/dev/null
     echo "Done."
 }
 
