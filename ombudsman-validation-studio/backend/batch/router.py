@@ -103,7 +103,7 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
             print(f"[BATCH ROUTER] Processing pipeline_id: {pipeline_id}")
 
             # Check if this is a batch file by reading it
-            # Search in project-specific directory first, then flat pipelines directory
+            # Search in multiple locations: project pipelines, flat pipelines, batch_jobs_dir
             pipeline_path = None
             search_paths = []
             if request.project_id:
@@ -111,7 +111,9 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
                 search_paths.append(project_pipelines)
                 print(f"[BATCH ROUTER]   Project pipelines dir: {project_pipelines}")
             search_paths.append(paths.pipelines_dir)
+            search_paths.append(paths.batch_jobs_dir)  # Batch files may be saved here
             print(f"[BATCH ROUTER]   Flat pipelines dir: {paths.pipelines_dir}")
+            print(f"[BATCH ROUTER]   Batch jobs dir: {paths.batch_jobs_dir}")
 
             for search_path in search_paths:
                 candidate = search_path / f"{pipeline_id}.yaml"
@@ -120,6 +122,19 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
                     pipeline_path = candidate
                     print(f"[BATCH ROUTER]   FOUND: {pipeline_path}")
                     break
+
+            # If still not found, search ALL project directories (like executor does)
+            if not pipeline_path and paths.projects_dir.exists():
+                print(f"[BATCH ROUTER]   Searching all project directories...")
+                for project_dir in paths.projects_dir.iterdir():
+                    if project_dir.is_dir():
+                        pipeline_dir = project_dir / "pipelines"
+                        if pipeline_dir.exists():
+                            candidate = pipeline_dir / f"{pipeline_id}.yaml"
+                            if candidate.exists():
+                                pipeline_path = candidate
+                                print(f"[BATCH ROUTER]   FOUND in {project_dir.name}: {pipeline_path}")
+                                break
 
             is_batch_file = False
             nested_pipelines = []
