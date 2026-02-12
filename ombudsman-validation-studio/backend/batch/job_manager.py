@@ -127,16 +127,28 @@ class BatchJobManager:
 
     def _load_jobs(self):
         """Load existing jobs from storage"""
-        try:
-            for job_file in self._job_storage_dir.glob("*.json"):
-                with open(job_file, 'r') as f:
-                    job_data = json.load(f)
-                    job = BatchJob(**job_data)
-                    self._jobs[job.job_id] = job
+        loaded_count = 0
+        error_count = 0
 
-            print(f"Loaded {len(self._jobs)} batch jobs from storage")
+        try:
+            job_files = list(self._job_storage_dir.glob("*.json"))
+            print(f"[BatchJobManager] Found {len(job_files)} job files in {self._job_storage_dir}")
+
+            for job_file in job_files:
+                try:
+                    with open(job_file, 'r') as f:
+                        job_data = json.load(f)
+                        job = BatchJob(**job_data)
+                        self._jobs[job.job_id] = job
+                        loaded_count += 1
+                except Exception as e:
+                    error_count += 1
+                    print(f"[BatchJobManager] Error loading job file {job_file.name}: {e}")
+                    # Continue loading other jobs
+
+            print(f"[BatchJobManager] Loaded {loaded_count} batch jobs from storage ({error_count} errors)")
         except Exception as e:
-            print(f"Error loading batch jobs: {e}")
+            print(f"[BatchJobManager] Critical error scanning job directory: {e}")
 
     def _save_job(self, job: BatchJob):
         """Save job to storage"""
