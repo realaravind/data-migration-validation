@@ -50,6 +50,8 @@ class Alert:
     details: Optional[Dict[str, Any]] = None
     suggestions: List[FixSuggestion] = field(default_factory=list)
     read: bool = False
+    action_url: Optional[str] = None  # URL for quick action (e.g., re-auth)
+    action_label: Optional[str] = None  # Label for the action button
 
     def to_dict(self) -> Dict:
         data = asdict(self)
@@ -89,28 +91,21 @@ GRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE your_role;""",
     },
     # Snowflake OAuth errors
     {
-        "pattern": r"(Invalid OAuth access token|OAuth token expired|refresh_token|token-request failed)",
+        "pattern": r"(Invalid OAuth access token|OAuth token expired|refresh_token|token-request failed|400.*token-request|Failed to get OAuth token)",
         "category": AlertCategory.AUTHENTICATION,
-        "title": "Snowflake OAuth Token Error",
+        "title": "Snowflake OAuth Token Expired",
+        "action_url": "/oauth/snowflake/authorize",
+        "action_label": "Re-authenticate with Snowflake",
         "suggestions": [
             FixSuggestion(
-                title="Refresh OAuth Token",
-                description="Your Snowflake OAuth access token has expired or is invalid.",
+                title="One-Click Re-authentication",
+                description="Your Snowflake OAuth refresh token has expired. Click the button above or use the link below to re-authenticate.",
                 steps=[
-                    "Re-authenticate with Snowflake to get a new refresh token",
-                    "Visit your Snowflake OAuth authorization URL in browser",
-                    "After authorization, capture the new refresh token",
-                    "Update SNOWFLAKE_OAUTH_REFRESH_TOKEN in your environment config",
-                    "Restart the backend service"
+                    "Click 'Re-authenticate with Snowflake' button",
+                    "Sign in to Snowflake when prompted",
+                    "Authorize the application",
+                    "The token will be automatically saved"
                 ],
-                code_snippet="""# Get new authorization code:
-# Visit: https://<account>.snowflakecomputing.com/oauth/authorize?client_id=<client_id>&response_type=code&redirect_uri=<callback_url>
-
-# Exchange for refresh token:
-curl -X POST https://<account>.snowflakecomputing.com/oauth/token-request \\
-  -H "Content-Type: application/x-www-form-urlencoded" \\
-  -d "grant_type=authorization_code&code=<auth_code>&redirect_uri=<callback_url>" \\
-  -u "<client_id>:<client_secret>" """,
                 doc_link="https://docs.snowflake.com/en/user-guide/oauth-custom"
             )
         ]
@@ -286,10 +281,15 @@ class AlertService:
         # Try to match against known patterns
         pattern_match = self._match_error_pattern(message)
 
+        action_url = None
+        action_label = None
+
         if pattern_match:
             category = category or pattern_match["category"]
             title = title or pattern_match["title"]
             suggestions = pattern_match.get("suggestions", [])
+            action_url = pattern_match.get("action_url")
+            action_label = pattern_match.get("action_label")
         else:
             category = category or AlertCategory.SYSTEM
             title = title or "System Error"
@@ -304,7 +304,9 @@ class AlertService:
             message=message,
             source=source,
             details=details,
-            suggestions=suggestions
+            suggestions=suggestions,
+            action_url=action_url,
+            action_label=action_label
         )
 
         self._alerts.insert(0, alert)  # Add to front (newest first)

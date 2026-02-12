@@ -14,6 +14,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import WarningIcon from '@mui/icons-material/Warning';
+import LockResetIcon from '@mui/icons-material/LockReset';
 
 export default function ConnectionStatus() {
     const [loading, setLoading] = useState(false);
@@ -22,7 +23,38 @@ export default function ConnectionStatus() {
 
     useEffect(() => {
         fetchConnectionStatus();
+
+        // Listen for OAuth success from popup window
+        const handleOAuthMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'snowflake_oauth_success') {
+                console.log('[ConnectionStatus] OAuth success received, refreshing');
+                fetchConnectionStatus();
+                setTestResults({});  // Clear old test results
+            }
+        };
+        window.addEventListener('message', handleOAuthMessage);
+        return () => window.removeEventListener('message', handleOAuthMessage);
     }, []);
+
+    const handleReauthenticate = () => {
+        // Open OAuth in popup window
+        const width = 600;
+        const height = 700;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        window.open(
+            __API_URL__ + '/oauth/snowflake/authorize',
+            'oauth_popup',
+            `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        );
+    };
+
+    // Check if Snowflake error is OAuth-related
+    const isOAuthError = (message: string) => {
+        if (!message) return false;
+        const oauthPatterns = ['OAuth', 'token', 'refresh', 'expired', '400', 'authentication'];
+        return oauthPatterns.some(pattern => message.toLowerCase().includes(pattern.toLowerCase()));
+    };
 
     const fetchConnectionStatus = async () => {
         setLoading(true);
@@ -203,14 +235,31 @@ export default function ConnectionStatus() {
                                 </>
                             )}
 
-                            <Button
-                                variant="contained"
-                                onClick={testSnowflake}
-                                disabled={loading}
-                                fullWidth
-                            >
-                                Test Snowflake Connection
-                            </Button>
+                            <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+                                <Button
+                                    variant="contained"
+                                    onClick={testSnowflake}
+                                    disabled={loading}
+                                    fullWidth
+                                >
+                                    Test Snowflake Connection
+                                </Button>
+
+                                {/* Show Re-authenticate button if OAuth error or connection failed */}
+                                {connectionStatus?.snowflake?.status === 'error' &&
+                                 isOAuthError(connectionStatus.snowflake.message) && (
+                                    <Button
+                                        variant="outlined"
+                                        color="warning"
+                                        onClick={handleReauthenticate}
+                                        disabled={loading}
+                                        fullWidth
+                                        startIcon={<LockResetIcon />}
+                                    >
+                                        Re-authenticate with Snowflake
+                                    </Button>
+                                )}
+                            </Box>
 
                             {testResults.snowflake && (
                                 <Box sx={{ mt: 2 }}>

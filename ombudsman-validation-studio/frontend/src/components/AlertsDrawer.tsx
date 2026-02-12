@@ -55,6 +55,8 @@ interface AlertItem {
   details?: Record<string, any>;
   suggestions: FixSuggestion[];
   read: boolean;
+  action_url?: string;
+  action_label?: string;
 }
 
 const API_BASE_URL = __API_URL__ + '';
@@ -137,8 +139,22 @@ export default function AlertsDrawer() {
 
     // Poll for new alerts every 30 seconds
     const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [fetchUnreadCount]);
+
+    // Listen for OAuth success from popup window
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'snowflake_oauth_success') {
+        console.log('[AlertsDrawer] OAuth success received, refreshing alerts');
+        fetchAlerts();
+        fetchUnreadCount();
+      }
+    };
+    window.addEventListener('message', handleOAuthMessage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('message', handleOAuthMessage);
+    };
+  }, [fetchUnreadCount, fetchAlerts]);
 
   useEffect(() => {
     if (open) {
@@ -354,6 +370,30 @@ export default function AlertsDrawer() {
                         </Box>
                       </AccordionSummary>
                       <AccordionDetails>
+                        {/* Quick Action Button - shown prominently for OAuth re-auth etc. */}
+                        {alert.action_url && (
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            fullWidth
+                            sx={{ mb: 2 }}
+                            onClick={() => {
+                              // Open OAuth in popup window
+                              const width = 600;
+                              const height = 700;
+                              const left = window.screenX + (window.outerWidth - width) / 2;
+                              const top = window.screenY + (window.outerHeight - height) / 2;
+                              window.open(
+                                __API_URL__ + alert.action_url,
+                                'oauth_popup',
+                                `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+                              );
+                            }}
+                          >
+                            {alert.action_label || 'Take Action'}
+                          </Button>
+                        )}
+
                         <Alert severity={getSeverityColor(alert.severity)} sx={{ mb: 2 }}>
                           <AlertTitle>Error Details</AlertTitle>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
