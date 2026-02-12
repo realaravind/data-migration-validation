@@ -100,19 +100,25 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
 
         for pipeline_item in request.pipelines:
             pipeline_id = pipeline_item.pipeline_id.replace(".yaml", "").replace(".yml", "")
+            print(f"[BATCH ROUTER] Processing pipeline_id: {pipeline_id}")
 
             # Check if this is a batch file by reading it
             # Search in project-specific directory first, then flat pipelines directory
             pipeline_path = None
             search_paths = []
             if request.project_id:
-                search_paths.append(paths.get_project_pipelines_dir(request.project_id))
+                project_pipelines = paths.get_project_pipelines_dir(request.project_id)
+                search_paths.append(project_pipelines)
+                print(f"[BATCH ROUTER]   Project pipelines dir: {project_pipelines}")
             search_paths.append(paths.pipelines_dir)
+            print(f"[BATCH ROUTER]   Flat pipelines dir: {paths.pipelines_dir}")
 
             for search_path in search_paths:
                 candidate = search_path / f"{pipeline_id}.yaml"
+                print(f"[BATCH ROUTER]   Checking: {candidate} - exists: {candidate.exists()}")
                 if candidate.exists():
                     pipeline_path = candidate
+                    print(f"[BATCH ROUTER]   FOUND: {pipeline_path}")
                     break
 
             is_batch_file = False
@@ -122,14 +128,19 @@ def bulk_execute_pipelines(request: BatchPipelineRequest):
                 try:
                     with open(pipeline_path) as f:
                         parsed_yaml = yaml.safe_load(f)
+                    print(f"[BATCH ROUTER]   YAML keys: {list(parsed_yaml.keys()) if parsed_yaml else 'None'}")
                     if parsed_yaml and "batch" in parsed_yaml and "batch" not in parsed_yaml.get("pipeline", {}):
                         is_batch_file = True
                         batch_def = parsed_yaml["batch"]
                         nested_pipelines = batch_def.get("pipelines", [])
-                        print(f"[BATCH ROUTER] Expanding batch file '{pipeline_id}' with {len(nested_pipelines)} pipelines")
+                        print(f"[BATCH ROUTER]   IS BATCH FILE! Contains {len(nested_pipelines)} pipelines")
+                    else:
+                        print(f"[BATCH ROUTER]   Not a batch file (no 'batch' key or is pipeline)")
                 except Exception as e:
-                    print(f"[BATCH ROUTER] Failed to parse {pipeline_id}: {e}")
+                    print(f"[BATCH ROUTER]   Failed to parse {pipeline_id}: {e}")
                     pass  # If we can't parse, treat as regular pipeline
+            else:
+                print(f"[BATCH ROUTER]   File NOT FOUND for {pipeline_id}")
 
             if is_batch_file and nested_pipelines:
                 # Expand batch file into individual pipeline operations
