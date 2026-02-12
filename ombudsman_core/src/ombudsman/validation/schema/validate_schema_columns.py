@@ -34,11 +34,21 @@ def validate_schema_columns(sql_conn=None, snow_conn=None, mapping=None, metadat
         # Query Snowflake columns
         # Get database name from connection
         snow_db = snow_conn.database
+
+        # Parse snow_table - handle both "SCHEMA.TABLE" and "TABLE" formats
+        if '.' in snow_table:
+            snow_schema = snow_table.split('.')[0]
+            snow_table_name = snow_table.split('.')[1]
+        else:
+            # Default to PUBLIC schema if no schema specified
+            snow_schema = 'PUBLIC'
+            snow_table_name = snow_table
+
         snow_query = f"""
             SELECT COLUMN_NAME
             FROM {snow_db}.INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = SPLIT_PART('{snow_table}', '.', 1)
-            AND TABLE_NAME = SPLIT_PART('{snow_table}', '.', 2)
+            WHERE TABLE_SCHEMA = '{snow_schema}'
+            AND TABLE_NAME = '{snow_table_name}'
             ORDER BY ORDINAL_POSITION
         """
         snow_cols = [row[0] for row in snow_conn.fetch_many(snow_query)]
