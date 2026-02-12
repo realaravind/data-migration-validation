@@ -40,12 +40,19 @@ def validate_schema_datatypes(sql_conn=None, snow_conn=None, mapping=None, metad
         # Get database name from connection
         snow_db = snow_conn.database
 
-        # Parse snow_table - handle both "SCHEMA.TABLE" and "TABLE" formats
-        if '.' in snow_table:
-            snow_schema = snow_table.split('.')[0]
-            snow_table_name = snow_table.split('.')[1]
+        # Parse snow_table - handle "DATABASE.SCHEMA.TABLE", "SCHEMA.TABLE", and "TABLE" formats
+        parts = snow_table.split('.')
+        if len(parts) == 3:
+            # DATABASE.SCHEMA.TABLE - use the database from the identifier
+            snow_db = parts[0]
+            snow_schema = parts[1]
+            snow_table_name = parts[2]
+        elif len(parts) == 2:
+            # SCHEMA.TABLE
+            snow_schema = parts[0]
+            snow_table_name = parts[1]
         else:
-            # Default to PUBLIC schema if no schema specified
+            # Just TABLE - default to PUBLIC schema
             snow_schema = 'PUBLIC'
             snow_table_name = snow_table
 
