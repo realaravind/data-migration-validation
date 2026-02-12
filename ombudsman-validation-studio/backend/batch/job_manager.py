@@ -50,6 +50,8 @@ def _broadcast_job_update_sync(job: 'BatchJob'):
             } if job.progress else None,
             "success_count": job.success_count,
             "failure_count": job.failure_count,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "total_duration_ms": job.total_duration_ms,
         }
 
         # Try to get existing event loop or create new one

@@ -109,25 +109,49 @@ const BatchOperations: React.FC = () => {
     // Active project - loaded from API (moved up for WebSocket)
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
-    // Track if we need to fetch jobs (for new job detection)
-    const shouldFetchRef = useRef(false);
+    // Track known job IDs to detect new jobs
+    const knownJobIdsRef = useRef<Set<string>>(new Set());
 
     // WebSocket for real-time job updates
     const handleWebSocketUpdate = useCallback((update: any) => {
         if (update.type === 'job_update' && update.data) {
             const jobData = update.data;
-            console.log('[WebSocket] Job update received:', jobData.job_id, jobData.status);
+            console.log('[WebSocket] Job update received:', jobData.job_id, jobData.status, jobData.progress);
 
+            // Check if this is a new job (not in our known set)
+            const isNewJob = !knownJobIdsRef.current.has(jobData.job_id);
+
+            if (isNewJob) {
+                console.log('[WebSocket] New job detected:', jobData.job_id);
+                knownJobIdsRef.current.add(jobData.job_id);
+
+                // Fetch fresh job list to get full job data
+                setTimeout(async () => {
+                    console.log('[WebSocket] Fetching jobs after new job detected');
+                    try {
+                        let url = __API_URL__ + '/batch/jobs?limit=100';
+                        if (activeProjectId) {
+                            url += `&project_id=${activeProjectId}`;
+                        }
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        setJobs(data.jobs || []);
+                        // Update known IDs
+                        (data.jobs || []).forEach((j: any) => knownJobIdsRef.current.add(j.job_id));
+                    } catch (error) {
+                        console.error('[WebSocket] Failed to fetch jobs:', error);
+                    }
+                }, 100);
+                return;
+            }
+
+            // Update existing job
             setJobs(prevJobs => {
                 const jobIndex = prevJobs.findIndex(j => j.job_id === jobData.job_id);
                 if (jobIndex === -1) {
-                    // New job detected - signal to fetch
-                    console.log('[WebSocket] New job detected, will fetch full list');
-                    shouldFetchRef.current = true;
-                    return prevJobs;
+                    return prevJobs; // Job not in list yet, will be fetched
                 }
 
-                // Update existing job
                 const updatedJobs = [...prevJobs];
                 const prevStatus = updatedJobs[jobIndex].status;
 
@@ -137,6 +161,8 @@ const BatchOperations: React.FC = () => {
                     progress: jobData.progress || updatedJobs[jobIndex].progress,
                     success_count: jobData.success_count ?? updatedJobs[jobIndex].success_count,
                     failure_count: jobData.failure_count ?? updatedJobs[jobIndex].failure_count,
+                    started_at: jobData.started_at || updatedJobs[jobIndex].started_at,
+                    total_duration_ms: jobData.total_duration_ms ?? updatedJobs[jobIndex].total_duration_ms,
                 };
 
                 // Show notification on status change to terminal state
@@ -166,26 +192,6 @@ const BatchOperations: React.FC = () => {
 
                 return updatedJobs;
             });
-
-            // Fetch new jobs outside of state updater
-            if (shouldFetchRef.current) {
-                shouldFetchRef.current = false;
-                // Small delay to let backend finish saving
-                setTimeout(async () => {
-                    console.log('[WebSocket] Fetching jobs after new job detected');
-                    try {
-                        let url = __API_URL__ + '/batch/jobs?limit=100';
-                        if (activeProjectId) {
-                            url += `&project_id=${activeProjectId}`;
-                        }
-                        const response = await fetch(url);
-                        const data = await response.json();
-                        setJobs(data.jobs || []);
-                    } catch (error) {
-                        console.error('[WebSocket] Failed to fetch jobs:', error);
-                    }
-                }, 100);
-            }
         }
     }, [activeProjectId]);
 
@@ -337,6 +343,11 @@ const BatchOperations: React.FC = () => {
                     statuses.set(job.job_id, job.status);
                 }
                 prevJobStatusesRef.current = statuses;
+            }
+
+            // Track known job IDs for WebSocket new job detection
+            for (const job of fetchedJobs) {
+                knownJobIdsRef.current.add(job.job_id);
             }
 
             setJobs(fetchedJobs);
@@ -735,9 +746,12 @@ const BatchOperations: React.FC = () => {
             width: 150,
             renderCell: (params: any) => {
                 const job = params.row;
+                // Use progress.total_operations (from WebSocket) or operations.length (from API)
+                const totalOps = job.progress?.total_operations || job.operations?.length || 0;
+                const completedOps = job.progress?.completed_operations || job.success_count || 0;
                 return (
                     <Typography variant="body2">
-                        {job.success_count} / {job.operations?.length || 0}
+                        {completedOps} / {totalOps}
                         {job.failure_count > 0 && ` (${job.failure_count} failed)`}
                     </Typography>
                 );
