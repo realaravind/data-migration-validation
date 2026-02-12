@@ -221,11 +221,8 @@ def _get_snowflake_oauth_token(c: Dict[str, Any]) -> str:
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
     }
-
-    # Add redirect_uri if provided
-    redirect_uri = c.get("oauth_redirect_uri")
-    if redirect_uri:
-        data["redirect_uri"] = redirect_uri
+    # Note: redirect_uri is NOT included for refresh_token grant type
+    # It's only required for authorization_code grant type
 
     try:
         response = requests.post(token_endpoint, headers=headers, data=data, timeout=30)
