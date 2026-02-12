@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Any
 import yaml
 from io import StringIO
 import os
+import logging
 
 # Import domain-specific patterns
 try:
@@ -11,6 +12,22 @@ try:
     DOMAIN_PATTERNS_AVAILABLE = True
 except ImportError:
     DOMAIN_PATTERNS_AVAILABLE = False
+
+# Import AI table classifier for intelligent validation selection
+try:
+    from validation.ai_table_classifier import (
+        classify_table_sync,
+        TableType,
+        TableClassification,
+        FACT_VALIDATIONS,
+        DIMENSION_VALIDATIONS,
+    )
+    AI_CLASSIFIER_AVAILABLE = True
+except ImportError:
+    AI_CLASSIFIER_AVAILABLE = False
+    TableType = None  # Fallback
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -105,7 +122,11 @@ class NaturalLanguagePipelineRequest(BaseModel):
 @router.post("/suggest-for-fact")
 async def suggest_fact_validations(request: FactAnalysisRequest):
     """
-    Analyze a fact table and intelligently suggest business metric validations
+    Analyze a table and intelligently suggest appropriate validations.
+
+    Uses AI to determine if table is FACT or DIMENSION and suggests validations accordingly:
+    - FACT tables: Sum validations, averages, referential integrity, time-series
+    - DIMENSION tables: Schema validation, uniqueness, primary keys
 
     Example for SalesFact:
     - Sum validations: TotalAmount, Quantity, Tax
@@ -118,6 +139,43 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
         print(f"\n=== Analyzing {request.fact_table} ===")
         print(f"Total columns received: {len(request.columns)}")
         print(f"Sample columns: {request.columns[:3]}")
+
+        # Build columns dict for AI classification
+        columns_dict = {}
+        for col in request.columns:
+            col_name = col.get('name', '')
+            col_type = col.get('data_type') or col.get('type') or ''
+            # Handle wrapped structure
+            if col_name == 'columns' and isinstance(col_type, dict):
+                columns_dict = col_type
+                break
+            elif col_name != 'object_type' and isinstance(col_type, str):
+                columns_dict[col_name] = col_type
+
+        # Use AI to classify the table type
+        table_classification = None
+        detected_table_type = "fact"  # Default assumption
+
+        if AI_CLASSIFIER_AVAILABLE:
+            try:
+                table_classification = classify_table_sync(
+                    table_name=request.fact_table,
+                    schema_name=request.fact_schema,
+                    columns=columns_dict
+                )
+                detected_table_type = table_classification.table_type.value
+                logger.info(
+                    f"[SUGGEST] AI classified {request.fact_schema}.{request.fact_table} as "
+                    f"{detected_table_type} (confidence: {table_classification.confidence})"
+                )
+                print(f"[AI CLASSIFICATION] {request.fact_table} -> {detected_table_type} "
+                      f"(confidence: {table_classification.confidence:.2f})")
+                print(f"[AI CLASSIFICATION] Reason: {table_classification.reasoning}")
+            except Exception as e:
+                logger.warning(f"[SUGGEST] AI classification failed: {e}, assuming fact table")
+                print(f"[WARN] AI classification failed: {e}, defaulting to fact")
+        else:
+            print("[INFO] AI classifier not available, using default fact table logic")
 
         # Analyze columns
         numeric_columns = []
@@ -212,8 +270,87 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
                 if any(k in col_lower for k in ['net', 'gross', 'subtotal', 'tax']):
                     calculated_cols.append(col)
 
-        # Build suggested pipeline
+        # Build suggested pipeline based on table type
         suggested_checks = []
+
+        # Handle DIMENSION tables differently - no metric validations
+        if detected_table_type == "dimension":
+            print(f"[SUGGEST] Building DIMENSION-specific validations for {request.fact_table}")
+
+            # Schema validation (critical for dimensions)
+            suggested_checks.append({
+                "category": "Schema Validation",
+                "pipeline_type": "schema",
+                "checks": [
+                    "validate_schema_columns",
+                    "validate_schema_datatypes",
+                    "validate_schema_nullability"
+                ],
+                "reason": "Ensures dimension table structure matches between SQL Server and Snowflake",
+                "priority": "CRITICAL"
+            })
+
+            # Basic data quality
+            suggested_checks.append({
+                "category": "Data Quality",
+                "pipeline_type": "dq",
+                "checks": [
+                    "validate_record_counts",
+                    "validate_nulls"
+                ],
+                "reason": "Validates row counts match and NULL patterns are consistent",
+                "priority": "CRITICAL"
+            })
+
+            # Dimension-specific: Business key uniqueness
+            pk_candidates = [c for c in columns_dict.keys()
+                            if any(k in c.lower() for k in ['_id', '_key', '_pk', 'id', 'key'])]
+            if pk_candidates:
+                suggested_checks.append({
+                    "category": "Dimension Key Validation",
+                    "pipeline_type": "dq",
+                    "checks": [
+                        "validate_uniqueness",
+                        "validate_dim_business_keys"
+                    ],
+                    "applicable_columns": pk_candidates,
+                    "reason": f"Validates primary/business key uniqueness for dimension table ({len(pk_candidates)} key columns detected)",
+                    "priority": "HIGH"
+                })
+
+            # Generate pipeline YAML for dimension
+            pipeline_yaml = generate_fact_pipeline_yaml(
+                request.fact_table,
+                request.fact_schema,
+                suggested_checks,
+                numeric_columns,
+                date_columns,
+                request.relationships,
+                request.columns,
+                schema_mappings=request.schema_mappings
+            )
+
+            return {
+                "status": "success",
+                "fact_table": request.fact_table,
+                "detected_table_type": detected_table_type,
+                "classification": table_classification.to_dict() if table_classification else None,
+                "analysis": {
+                    "total_columns": len(request.columns),
+                    "numeric_columns": len(numeric_columns),
+                    "date_columns": len(date_columns),
+                    "fk_columns": len(fk_columns),
+                    "relationships": len(request.relationships),
+                    "key_columns": len(pk_candidates) if pk_candidates else 0
+                },
+                "suggested_checks": suggested_checks,
+                "pipeline_yaml": pipeline_yaml,
+                "total_validations": sum(len(check.get("checks", [])) for check in suggested_checks),
+                "note": "Metric validations (sums, averages) excluded - not applicable for dimension tables"
+            }
+
+        # For FACT tables (and unknown), continue with metric validations
+        print(f"[SUGGEST] Building FACT-specific validations for {request.fact_table}")
 
         # 1. ALWAYS include schema validation
         suggested_checks.append({
@@ -441,6 +578,8 @@ async def suggest_fact_validations(request: FactAnalysisRequest):
         return {
             "status": "success",
             "fact_table": request.fact_table,
+            "detected_table_type": detected_table_type,
+            "classification": table_classification.to_dict() if table_classification else None,
             "analysis": {
                 "total_columns": len(request.columns),
                 "numeric_columns": len(numeric_columns),
