@@ -225,8 +225,13 @@ def _get_snowflake_oauth_token(c: Dict[str, Any]) -> str:
     # It's only required for authorization_code grant type
 
     try:
+        logger.info(f"OAuth request: grant_type=refresh_token, token_length={len(refresh_token)}")
         response = requests.post(token_endpoint, headers=headers, data=data, timeout=30)
-        response.raise_for_status()
+
+        if response.status_code != 200:
+            error_body = response.text
+            logger.error(f"OAuth token request failed: {response.status_code} - {error_body}")
+            raise ValueError(f"Failed to get OAuth token: {response.status_code} - {error_body}")
 
         token_data = response.json()
         access_token = token_data.get("access_token")
@@ -240,7 +245,7 @@ def _get_snowflake_oauth_token(c: Dict[str, Any]) -> str:
     except requests.exceptions.RequestException as e:
         logger.error(f"OAuth token request failed: {e}")
         if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"Response: {e.response.text}")
+            logger.error(f"Response body: {e.response.text}")
         raise ValueError(f"Failed to get OAuth token: {e}")
 
 
