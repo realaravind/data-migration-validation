@@ -30,9 +30,19 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+# Store reference to the main event loop for thread-safe WebSocket broadcasts
+_main_event_loop = None
+
+
+def set_main_event_loop(loop):
+    """Set the main event loop for WebSocket broadcasts from background threads."""
+    global _main_event_loop
+    _main_event_loop = loop
+    logger.info(f"Main event loop set for WebSocket broadcasts: {loop}")
+
 
 def _broadcast_job_update_sync(job: 'BatchJob'):
-    """Broadcast job update via WebSocket (called from sync code)."""
+    """Broadcast job update via WebSocket (called from sync code, potentially from background thread)."""
     try:
         from .websocket import job_update_manager
 
@@ -55,21 +65,34 @@ def _broadcast_job_update_sync(job: 'BatchJob'):
             "total_duration_ms": job.total_duration_ms,
         }
 
-        # Try to get existing event loop or create new one
+        logger.info(f"[WebSocket] Broadcasting job update: {job.job_id} status={job_data['status']} progress={job_data['progress']}")
+
+        # Try to use the main event loop if we're in a background thread
         try:
             loop = asyncio.get_running_loop()
-            # We're in an async context, schedule the coroutine
+            # We're in an async context (main thread), schedule directly
             asyncio.create_task(job_update_manager.broadcast_job_update(job_data, job.project_id))
         except RuntimeError:
-            # No running loop, create one for this broadcast
-            loop = asyncio.new_event_loop()
-            try:
-                loop.run_until_complete(job_update_manager.broadcast_job_update(job_data, job.project_id))
-            finally:
-                loop.close()
+            # No running loop in this thread - use the main event loop
+            if _main_event_loop and _main_event_loop.is_running():
+                # Schedule coroutine in the main event loop (thread-safe)
+                future = asyncio.run_coroutine_threadsafe(
+                    job_update_manager.broadcast_job_update(job_data, job.project_id),
+                    _main_event_loop
+                )
+                # Wait for it to complete (with timeout)
+                try:
+                    future.result(timeout=5.0)
+                    logger.info(f"[WebSocket] Broadcast successful for job {job.job_id}")
+                except Exception as e:
+                    logger.warning(f"[WebSocket] Broadcast timed out or failed: {e}")
+            else:
+                logger.warning(f"[WebSocket] No main event loop available for broadcast")
 
     except Exception as e:
         logger.warning(f"Failed to broadcast job update: {e}")
+        import traceback
+        logger.warning(traceback.format_exc())
 
 
 class BatchJobManager:

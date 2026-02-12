@@ -105,6 +105,15 @@ app.include_router(results_history_router, prefix="/history", tags=["Results His
 app.include_router(websocket_router, tags=["WebSocket Real-time Updates"])
 app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 app.include_router(batch_router, prefix="/batch", tags=["Batch Operations"])
+
+# Set up main event loop for WebSocket broadcasts from background threads
+@app.on_event("startup")
+async def startup_event():
+    import asyncio
+    from batch.job_manager import set_main_event_loop
+    loop = asyncio.get_running_loop()
+    set_main_event_loop(loop)
+    print(f"[STARTUP] Main event loop registered for WebSocket broadcasts")
 app.include_router(bugs_router, tags=["Bug Reports"])
 app.include_router(docs_router, prefix="/docs", tags=["Documentation"])
 app.include_router(automation_router, tags=["Automation"])
