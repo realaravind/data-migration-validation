@@ -220,39 +220,28 @@ export SQLSERVER_CONN_STR="DRIVER={ODBC Driver 18 for SQL Server};SERVER=${MSSQL
 
 # Nuclear option: kill EVERYTHING related to ombudsman
 nuke_all_processes() {
-    echo "Stopping all ombudsman processes..."
+    printf "Stopping all ombudsman processes... "
 
-    # Run all kill commands in a subshell with job control disabled to suppress messages
-    (
-        set +m  # Disable job control messages
+    # Kill by PID files
+    for pidfile in "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid"; do
+        if [ -f "$pidfile" ]; then
+            PID=$(cat "$pidfile" 2>/dev/null)
+            [ -n "$PID" ] && sudo kill -9 $PID >/dev/null 2>&1 || true
+            rm -f "$pidfile" 2>/dev/null
+        fi
+    done
 
-        # Kill by PID files first
-        for pidfile in "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid"; do
-            if [ -f "$pidfile" ]; then
-                PID=$(cat "$pidfile" 2>/dev/null)
-                [ -n "$PID" ] && sudo kill -9 $PID 2>/dev/null
-                rm -f "$pidfile"
-            fi
-        done
-
-        # Kill uvicorn processes
-        sudo pkill -9 -f "uvicorn main:app" 2>/dev/null
-        sudo pkill -9 -f "uvicorn.*${BACKEND_PORT:-8001}" 2>/dev/null
-
-        # Kill node/vite processes
-        sudo pkill -9 -f "vite.*preview" 2>/dev/null
-        sudo pkill -9 -f "node.*${FRONTEND_PORT:-3000}" 2>/dev/null
-
-        # Force kill on ports
-        sudo fuser -k ${BACKEND_PORT:-8001}/tcp 2>/dev/null
-        sudo fuser -k ${FRONTEND_PORT:-3000}/tcp 2>/dev/null
-
-        true  # Always exit success
-    ) 2>/dev/null
+    # Kill processes silently
+    sudo pkill -9 -f "uvicorn main:app" >/dev/null 2>&1 || true
+    sudo pkill -9 -f "uvicorn.*${BACKEND_PORT:-8001}" >/dev/null 2>&1 || true
+    sudo pkill -9 -f "vite.*preview" >/dev/null 2>&1 || true
+    sudo pkill -9 -f "node.*${FRONTEND_PORT:-3000}" >/dev/null 2>&1 || true
+    sudo fuser -k ${BACKEND_PORT:-8001}/tcp >/dev/null 2>&1 || true
+    sudo fuser -k ${FRONTEND_PORT:-3000}/tcp >/dev/null 2>&1 || true
 
     sleep 2
-    rm -f "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid" 2>/dev/null
-    echo "Done."
+    rm -f "$LOG_DIR/backend.pid" "$LOG_DIR/frontend.pid" >/dev/null 2>&1 || true
+    printf "Done.\n"
 }
 
 kill_process_on_port() {
@@ -320,7 +309,7 @@ kill_process_on_port() {
 }
 
 create_directories() {
-    echo "Creating directories..."
+    printf "Creating directories... "
     mkdir -p "$DATA_DIR"
     mkdir -p "$LOG_DIR"
     mkdir -p "$DATA_DIR/projects"
@@ -329,16 +318,16 @@ create_directories() {
     mkdir -p "$DATA_DIR/batch_jobs"
     mkdir -p "$DATA_DIR/workloads"
     mkdir -p "$DATA_DIR/auth"
+    printf "Done.\n"
 }
 
 start_backend() {
-    echo "Starting backend on port $BACKEND_PORT..."
+    printf "Starting backend on port %s... " "$BACKEND_PORT"
 
     # Stop any existing backend by PID first
     if [ -f "$LOG_DIR/backend.pid" ]; then
         PID=$(cat "$LOG_DIR/backend.pid")
         if ps -p $PID > /dev/null 2>&1; then
-            echo "Stopping existing backend (PID: $PID)"
             kill -9 $PID 2>/dev/null
             sleep 1
         fi
@@ -346,26 +335,22 @@ start_backend() {
     fi
 
     # Kill any process on the backend port
-    echo "Ensuring port $BACKEND_PORT is free..."
     kill_process_on_port "$BACKEND_PORT"
 
     # Verify port is actually free
     local port_check_attempts=0
     while [ $port_check_attempts -lt 10 ]; do
         if ! lsof -i:$BACKEND_PORT -t &>/dev/null && ! fuser $BACKEND_PORT/tcp &>/dev/null 2>&1; then
-            echo "Port $BACKEND_PORT is free"
             break
         fi
-        echo "Port $BACKEND_PORT still in use, waiting... (attempt $((port_check_attempts+1))/10)"
         sleep 1
         kill_process_on_port "$BACKEND_PORT"
         port_check_attempts=$((port_check_attempts+1))
     done
 
     if lsof -i:$BACKEND_PORT -t &>/dev/null 2>&1; then
-        echo "ERROR: Could not free port $BACKEND_PORT after 10 attempts"
-        echo "Processes still on port:"
-        lsof -i:$BACKEND_PORT 2>/dev/null
+        printf "FAILED\n"
+        printf "ERROR: Could not free port %s\n" "$BACKEND_PORT"
         return 1
     fi
 
@@ -419,18 +404,16 @@ start_backend() {
         > "$LOG_DIR/backend.log" 2>&1 &
 
     echo $! > "$LOG_DIR/backend.pid"
-    echo "Backend started (PID: $!)"
-    echo "Backend log: $LOG_DIR/backend.log"
+    printf "Done (PID: %s)\n" "$!"
 }
 
 start_frontend() {
-    echo "Starting frontend on port $FRONTEND_PORT..."
+    printf "Starting frontend on port %s... " "$FRONTEND_PORT"
 
     # Stop any existing frontend by PID first
     if [ -f "$LOG_DIR/frontend.pid" ]; then
         PID=$(cat "$LOG_DIR/frontend.pid")
         if ps -p $PID > /dev/null 2>&1; then
-            echo "Stopping existing frontend (PID: $PID)"
             kill -9 $PID 2>/dev/null
             sleep 1
         fi
@@ -438,26 +421,22 @@ start_frontend() {
     fi
 
     # Kill any process on the frontend port
-    echo "Ensuring port $FRONTEND_PORT is free..."
     kill_process_on_port "$FRONTEND_PORT"
 
     # Verify port is actually free
     local port_check_attempts=0
     while [ $port_check_attempts -lt 10 ]; do
         if ! lsof -i:$FRONTEND_PORT -t &>/dev/null && ! fuser $FRONTEND_PORT/tcp &>/dev/null 2>&1; then
-            echo "Port $FRONTEND_PORT is free"
             break
         fi
-        echo "Port $FRONTEND_PORT still in use, waiting... (attempt $((port_check_attempts+1))/10)"
         sleep 1
         kill_process_on_port "$FRONTEND_PORT"
         port_check_attempts=$((port_check_attempts+1))
     done
 
     if lsof -i:$FRONTEND_PORT -t &>/dev/null 2>&1; then
-        echo "ERROR: Could not free port $FRONTEND_PORT after 10 attempts"
-        echo "Processes still on port:"
-        lsof -i:$FRONTEND_PORT 2>/dev/null
+        printf "FAILED\n"
+        printf "ERROR: Could not free port %s\n" "$FRONTEND_PORT"
         return 1
     fi
 
@@ -465,22 +444,21 @@ start_frontend() {
 
     # Check if node_modules exists
     if [ ! -d "node_modules" ]; then
-        echo "Installing frontend dependencies..."
-        npm install
+        printf "\n  Installing frontend dependencies... "
+        npm install --silent 2>/dev/null || npm install
     fi
 
     # Build if dist doesn't exist
     if [ ! -d "dist" ]; then
-        echo "Building frontend..."
-        npm run build
+        printf "\n  Building frontend... "
+        npm run build --silent 2>/dev/null || npm run build
     fi
 
     nohup npm run preview -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort \
         > "$LOG_DIR/frontend.log" 2>&1 &
 
     echo $! > "$LOG_DIR/frontend.pid"
-    echo "Frontend started (PID: $!)"
-    echo "Frontend log: $LOG_DIR/frontend.log"
+    printf "Done (PID: %s)\n" "$!"
 }
 
 stop_backend() {
@@ -666,10 +644,9 @@ case "${1:-start}" in
         start_backend
         sleep 3
         start_frontend
-        echo ""
-        echo "=== Started ==="
-        echo "Backend:  http://$BACKEND_HOST:$BACKEND_PORT"
-        echo "Frontend: http://$FRONTEND_HOST:$FRONTEND_PORT"
+        printf "\n=== Started ===\n"
+        printf "Backend:  http://%s:%s\n" "$BACKEND_HOST" "$BACKEND_PORT"
+        printf "Frontend: http://%s:%s\n" "$FRONTEND_HOST" "$FRONTEND_PORT"
         ;;
     stop)
         nuke_all_processes
@@ -680,10 +657,9 @@ case "${1:-start}" in
         start_backend
         sleep 3
         start_frontend
-        echo ""
-        echo "=== Restarted ==="
-        echo "Backend:  http://$BACKEND_HOST:$BACKEND_PORT"
-        echo "Frontend: http://$FRONTEND_HOST:$FRONTEND_PORT"
+        printf "\n=== Restarted ===\n"
+        printf "Backend:  http://%s:%s\n" "$BACKEND_HOST" "$BACKEND_PORT"
+        printf "Frontend: http://%s:%s\n" "$FRONTEND_HOST" "$FRONTEND_PORT"
         ;;
     status)
         status
@@ -709,45 +685,44 @@ case "${1:-start}" in
         echo "Frontend rebuilt. Restart frontend to apply changes."
         ;;
     rebuild)
-        echo "=== Full Rebuild and Restart ==="
+        printf "\n=== Full Rebuild and Restart ===\n\n"
 
         # NUKE everything first
         nuke_all_processes
 
         # Pull latest code
-        echo "[1/5] Pulling latest code..."
+        printf "[1/5] Pulling latest code...\n"
         cd "$BASE_DIR"
         git pull 2>&1 | grep -v "^Already up to date" || true
 
         # Update Python dependencies
-        echo "[2/5] Updating Python dependencies..."
+        printf "[2/5] Updating Python dependencies...\n"
         cd "$BACKEND_DIR"
         if [ -f "./venv/bin/pip" ]; then
             ./venv/bin/pip install -r requirements.txt --quiet 2>/dev/null
         fi
 
         # Update frontend dependencies if needed
-        echo "[3/5] Checking frontend dependencies..."
+        printf "[3/5] Checking frontend dependencies...\n"
         cd "$FRONTEND_DIR"
         if [ ! -d "node_modules" ]; then
             npm install --silent 2>/dev/null
         fi
 
         # Rebuild frontend
-        echo "[4/5] Rebuilding frontend..."
+        printf "[4/5] Rebuilding frontend...\n"
         npm run build --silent 2>/dev/null || npm run build
 
         # Create directories and start
-        echo "[5/5] Starting services..."
+        printf "[5/5] Starting services...\n"
         create_directories
         start_backend
         sleep 3
         start_frontend
 
-        echo ""
-        echo "=== Rebuild Complete ==="
-        echo "Backend:  http://$BACKEND_HOST:$BACKEND_PORT"
-        echo "Frontend: http://$FRONTEND_HOST:$FRONTEND_PORT"
+        printf "\n=== Rebuild Complete ===\n"
+        printf "Backend:  http://%s:%s\n" "$BACKEND_HOST" "$BACKEND_PORT"
+        printf "Frontend: http://%s:%s\n" "$FRONTEND_HOST" "$FRONTEND_PORT"
         ;;
     nuke)
         nuke_all_processes
