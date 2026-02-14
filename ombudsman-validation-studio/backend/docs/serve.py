@@ -12,8 +12,21 @@ router = APIRouter()
 
 def get_doc_path(filename: str) -> str:
     """Get absolute path to documentation file"""
-    # Documentation files are mounted in /docs/ inside the container
-    return os.path.join("/docs", filename)
+    # Try multiple locations for the documentation files
+    search_paths = [
+        "/docs",  # Docker mount point
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."),  # Project root (relative)
+        os.environ.get("OMBUDSMAN_BASE_DIR", "/opt/ombudsman"),  # Production install
+        "/data/ombudsman",  # Alternative production path
+    ]
+
+    for base_path in search_paths:
+        full_path = os.path.join(base_path, filename)
+        if os.path.exists(full_path):
+            return full_path
+
+    # Fallback to first path (will show "not found" error)
+    return os.path.join(search_paths[0], filename)
 
 def markdown_to_html(md_content: str, title: str, include_mermaid: bool = False) -> str:
     """Convert markdown to styled HTML"""

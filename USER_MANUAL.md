@@ -1,5 +1,5 @@
-**Version**: 1.0
-**Last Updated**: 2025-12-15
+**Version**: 2.0
+**Last Updated**: 2026-02-14
 **Product**: Ombudsman.AI Validation Studio
 
 ---
@@ -16,12 +16,16 @@
 8. [Pipeline Builder](#pipeline-builder)
 9. [Workload Analysis](#workload-analysis)
 10. [Pipeline Execution](#pipeline-execution)
-11. [Comparison Viewer](#comparison-viewer)
-12. [Results Viewer](#results-viewer)
-13. [User Profile Management](#user-profile-management)
-14. [Best Practices](#best-practices)
-15. [Troubleshooting](#troubleshooting)
-16. [Glossary](#glossary)
+11. [Batch Operations](#batch-operations)
+12. [Comparison Viewer](#comparison-viewer)
+13. [Results Viewer](#results-viewer)
+14. [Notifications & Alerts](#notifications--alerts)
+15. [AI Features & LLM Configuration](#ai-features--llm-configuration)
+16. [User Profile Management](#user-profile-management)
+17. [Administrator Guide](#administrator-guide)
+18. [Best Practices](#best-practices)
+19. [Troubleshooting](#troubleshooting)
+20. [Glossary](#glossary)
 
 ---
 
@@ -961,6 +965,160 @@ Once you've built a pipeline, you can execute it.
 
 ---
 
+## Batch Operations
+
+Batch Operations allow you to execute multiple pipelines at once, saving time when validating entire data warehouses.
+
+### What are Batch Operations?
+
+Instead of running pipelines one at a time, you can:
+- Select multiple pipelines to run together
+- Monitor all executions in real-time
+- Get a consolidated report across all pipelines
+
+### Accessing Batch Operations
+
+**Step 1: Navigate to "Batch Operations"** from the dashboard
+
+**Step 2: You'll see three tabs**:
+- **Bulk Pipeline Execution**: Run multiple existing pipelines
+- **Batch Data Generation**: Generate test data across tables
+- **Active Jobs / Job History**: Monitor running and completed jobs
+
+---
+
+### Creating a Batch Job
+
+**Step 1: Select "Bulk Pipeline Execution" tab**
+
+**Step 2: Select Pipelines**
+- Check the pipelines you want to include
+- You can select all pipelines for a project
+
+**Step 3: Click "Create Batch Job"**
+```
+┌─────────────────────────────────────────────┐
+│ Create Batch Job                            │
+├─────────────────────────────────────────────┤
+│ Job Name: [DW Full Validation]              │
+│                                             │
+│ Selected Pipelines:                         │
+│ ☑ DimCustomer_validation                   │
+│ ☑ DimProduct_validation                    │
+│ ☑ FactSales_validation                     │
+│ ☑ FactOrders_validation                    │
+│                                             │
+│ [Create Batch Job]                          │
+└─────────────────────────────────────────────┘
+```
+
+**Step 4: Job Starts Executing**
+- You'll be redirected to the Active Jobs tab
+- Watch real-time progress via WebSocket updates
+
+---
+
+### Monitoring Batch Jobs
+
+**Real-Time Progress Display**:
+```
+┌─────────────────────────────────────────────┐
+│ Batch Job: DW Full Validation               │
+├─────────────────────────────────────────────┤
+│ Status: Running                             │
+│ Progress: 2/4 pipelines (50%)               │
+│                                             │
+│ Pipeline                  | Status | Time   │
+│ ──────────────────────────┼────────┼─────── │
+│ DimCustomer_validation    | ✓ PASS | 12s   │
+│ DimProduct_validation     | ✓ PASS | 8s    │
+│ FactSales_validation      | ⏳ RUN  | 45s   │
+│ FactOrders_validation     | ⏸ WAIT | -     │
+│                                             │
+│ [Cancel Job] [View Details]                 │
+└─────────────────────────────────────────────┘
+```
+
+**Job States**:
+- **Queued**: Job is waiting to start
+- **Running**: Job is actively executing pipelines
+- **Completed**: All pipelines finished successfully
+- **Failed**: One or more pipelines failed
+- **Cancelled**: Job was manually stopped
+
+---
+
+### Viewing Batch Results
+
+**Step 1: Click "View Report"** on a completed job
+
+**Step 2: See Consolidated Report**
+```
+┌─────────────────────────────────────────────┐
+│ Batch Job Report                            │
+├─────────────────────────────────────────────┤
+│ Job ID: batch_20260214_103000              │
+│ Duration: 5m 23s                            │
+│                                             │
+│ Summary:                                    │
+│ ├─ Total Pipelines: 4                      │
+│ ├─ Passed: 3                               │
+│ ├─ Failed: 1                               │
+│ └─ Overall Status: PARTIAL                  │
+│                                             │
+│ Pipeline Results:                           │
+│ ✓ DimCustomer: 5/5 validations passed      │
+│ ✓ DimProduct: 4/4 validations passed       │
+│ ✗ FactSales: 6/8 validations passed        │
+│ ✓ FactOrders: 7/7 validations passed       │
+│                                             │
+│ [Download Report] [View Details]            │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+### Retrying Failed Jobs
+
+**Step 1: Find the failed job** in Job History
+
+**Step 2: Click "Retry"**
+- Only failed pipelines will re-run
+- Successful pipelines are skipped
+
+**Step 3: Monitor Progress**
+- New execution appears in Active Jobs
+
+---
+
+### Cancelling a Batch Job
+
+**Step 1: Find the running job** in Active Jobs
+
+**Step 2: Click "Cancel"**
+
+**Step 3: Confirm Cancellation**
+- Currently running pipelines will complete
+- Queued pipelines will be skipped
+- Partial results are saved
+
+---
+
+### Job History
+
+All batch jobs are saved for reference:
+- View past executions
+- Download reports
+- Compare results over time
+- Delete old jobs when no longer needed
+
+**Filtering Options**:
+- By status (Completed, Failed, Cancelled)
+- By date range
+- By project
+
+---
+
 ## Comparison Viewer
 
 The Comparison Viewer shows row-by-row differences between source and target data.
@@ -1222,6 +1380,169 @@ Each failed step shows:
 
 ---
 
+## Notifications & Alerts
+
+Stay informed about validation results and system events.
+
+### Alert Types
+
+**Validation Alerts**:
+- Pipeline completion (pass/fail)
+- Batch job completion
+- Validation failures requiring attention
+
+**System Alerts**:
+- Connection issues
+- LLM provider errors
+- Configuration problems
+
+---
+
+### Viewing Alerts
+
+**Step 1: Click the bell icon** in the top navigation bar
+
+**Step 2: See Recent Alerts**
+```
+┌─────────────────────────────────────────────┐
+│ 🔔 Notifications                            │
+├─────────────────────────────────────────────┤
+│ ✗ Batch job failed - FactSales validation  │
+│   2 minutes ago                             │
+│                                             │
+│ ✓ DimCustomer validation completed         │
+│   15 minutes ago                            │
+│                                             │
+│ ⚠️ LLM provider connection timeout          │
+│   1 hour ago                                │
+│                                             │
+│ [Mark All Read] [View All]                  │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+### Alert Details
+
+**Click on any alert** to see details:
+- What happened
+- When it happened
+- Affected resources
+- Recommended actions
+- Links to relevant pages
+
+---
+
+### Managing Alerts
+
+**Dismissing Alerts**:
+- Click "Mark as Read" on individual alerts
+- Click "Mark All Read" to clear all
+
+**Deleting Alerts**:
+- Click the X icon on individual alerts
+- Old alerts are automatically cleaned up
+
+---
+
+## AI Features & LLM Configuration
+
+Ombudsman.AI uses AI to provide intelligent features like schema mapping, table classification, and type compatibility checking.
+
+### AI-Powered Features
+
+**1. Intelligent Schema Mapping**
+- AI analyzes table and column names
+- Suggests mappings between source and target
+- Higher accuracy than simple fuzzy matching
+
+**2. Table Type Classification**
+- Automatically detects fact vs dimension tables
+- Suggests appropriate validations for each type
+- Fact tables: metric sums, averages, referential integrity
+- Dimension tables: uniqueness, business keys, schema validation
+
+**3. Type Compatibility Checking**
+- AI determines if SQL Server types are compatible with Snowflake types
+- Handles complex type mappings (e.g., NVARCHAR → TEXT)
+- Reduces false positives in schema validation
+
+---
+
+### Supported LLM Providers
+
+Ombudsman.AI supports multiple AI providers:
+
+| Provider | Description | Cost |
+|----------|-------------|------|
+| **Ollama** | Local, self-hosted | Free |
+| **OpenAI** | Cloud-based, GPT models | Pay-per-use |
+| **Azure OpenAI** | Enterprise Azure integration | Pay-per-use |
+| **Anthropic** | Claude models | Pay-per-use |
+
+---
+
+### Configuring LLM Provider
+
+Configuration is done via environment variables. Contact your administrator to change settings.
+
+**Ollama (Default - Free, Local)**:
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama2
+```
+
+**OpenAI**:
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+**Azure OpenAI**:
+```bash
+LLM_PROVIDER=azure_openai
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
+```
+
+**Anthropic**:
+```bash
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+```
+
+> **Note**: `AZURE_OPENAI_DEPLOYMENT` is the deployment name you created in Azure Portal, not the model name.
+
+---
+
+### Common LLM Settings
+
+These settings apply to all providers:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `LLM_TEMPERATURE` | Creativity level (0-1) | 0.1 |
+| `LLM_MAX_TOKENS` | Maximum response length | 2048 |
+| `LLM_TIMEOUT` | Request timeout (seconds) | 30 |
+
+---
+
+### When AI is Unavailable
+
+If the LLM provider is unavailable:
+- Schema mapping falls back to fuzzy matching
+- Table classification uses rule-based detection
+- Type checking uses predefined compatibility rules
+
+The system continues working, just with reduced accuracy.
+
+---
+
 ## User Profile Management
 
 ### Accessing Your Profile
@@ -1284,6 +1605,234 @@ Confirm New Password: [••••••••]
 - Full Name
 
 **Step 3: Save Changes**
+
+---
+
+## Administrator Guide
+
+This section is for system administrators who manage the Ombudsman.AI installation.
+
+### Installation
+
+See the deployment documentation at `/docs/` for full installation instructions.
+
+**Quick Install**:
+```bash
+cd /opt/ombudsman/deploy
+sudo ./install-ombudsman.sh
+```
+
+The interactive installer handles:
+- System dependencies
+- Database connections
+- LLM provider configuration
+- Authentication setup
+- Service installation
+
+---
+
+### Service Management
+
+**Starting Services**:
+```bash
+sudo systemctl start ombudsman-backend ombudsman-frontend
+```
+
+**Stopping Services**:
+```bash
+sudo systemctl stop ombudsman-backend ombudsman-frontend
+```
+
+**Restarting Services**:
+```bash
+sudo systemctl restart ombudsman-backend ombudsman-frontend
+```
+
+**Checking Status**:
+```bash
+sudo systemctl status ombudsman-backend
+sudo systemctl status ombudsman-frontend
+```
+
+---
+
+### Viewing Logs
+
+**Real-time Logs**:
+```bash
+sudo journalctl -u ombudsman-backend -f
+sudo journalctl -u ombudsman-frontend -f
+```
+
+**Log Files**:
+```bash
+tail -f /opt/ombudsman/logs/backend.log
+tail -f /opt/ombudsman/logs/frontend.log
+```
+
+---
+
+### Configuration File
+
+All configuration is in `ombudsman.env`:
+
+**Location**: `/opt/ombudsman/ombudsman.env`
+
+**Key Sections**:
+
+**Database Connections**:
+```bash
+# SQL Server (source)
+MSSQL_HOST=your-sql-server
+MSSQL_PORT=1433
+MSSQL_USER=your-user
+MSSQL_PASSWORD=your-password
+MSSQL_DATABASE=your-database
+
+# Snowflake (target)
+SNOWFLAKE_USER=your-user
+SNOWFLAKE_ACCOUNT=your-account
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+SNOWFLAKE_DATABASE=your-database
+SNOWFLAKE_PASSWORD=your-password
+```
+
+**LLM Provider**:
+```bash
+LLM_PROVIDER=azure_openai
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+```
+
+**Authentication**:
+```bash
+AUTH_BACKEND=sqlserver  # or sqlite
+JWT_SECRET_KEY=your-secret-key
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+---
+
+### Updating the System
+
+**One-Command Update**:
+```bash
+cd /opt/ombudsman/deploy
+sudo ./start-ombudsman.sh update
+```
+
+This automatically:
+1. Stops services
+2. Pulls latest code
+3. Updates dependencies
+4. Rebuilds frontend
+5. Restarts services
+
+---
+
+### Secrets Encryption
+
+For production, encrypt your configuration with SOPS:
+
+**Initialize Encryption**:
+```bash
+./start-ombudsman.sh init-secrets
+```
+
+**Encrypt Config**:
+```bash
+./start-ombudsman.sh encrypt-secrets
+```
+
+**Edit Encrypted Config**:
+```bash
+./start-ombudsman.sh edit-secrets
+```
+
+---
+
+### Backup & Recovery
+
+**What to Backup**:
+- `/opt/ombudsman/ombudsman.env` - Configuration
+- `/opt/ombudsman/.sops-age-key.txt` - Encryption key (if using SOPS)
+- `/opt/ombudsman/data/` - All project data, pipelines, results
+
+**Backup Command**:
+```bash
+tar -czvf ombudsman-backup-$(date +%Y%m%d).tar.gz \
+    /opt/ombudsman/ombudsman.env \
+    /opt/ombudsman/.sops-age-key.txt \
+    /opt/ombudsman/data/
+```
+
+**Restore**:
+```bash
+tar -xzvf ombudsman-backup-YYYYMMDD.tar.gz -C /
+sudo systemctl restart ombudsman-backend ombudsman-frontend
+```
+
+---
+
+### User Management
+
+**Default Admin Account**:
+- Username: `admin`
+- Password: `admin123`
+
+**Change Admin Password**:
+1. Log in as admin
+2. Go to Profile
+3. Change password immediately
+
+**Creating Users**:
+- Users self-register via the registration page
+- Or administrators can create accounts directly in the database
+
+---
+
+### Performance Tuning
+
+**For Large Databases**:
+1. Increase query timeout:
+   ```bash
+   QUERY_TIMEOUT=300  # seconds
+   ```
+
+2. Enable connection pooling (default):
+   ```bash
+   CONNECTION_POOL_SIZE=10
+   ```
+
+3. Use sampling for large tables in comparisons
+
+**For High Concurrency**:
+1. Increase worker threads:
+   ```bash
+   WORKERS=4
+   ```
+
+2. Consider load balancing multiple backend instances
+
+---
+
+### Monitoring
+
+**Health Check Endpoint**:
+```
+GET http://your-server:8000/health
+```
+
+**API Documentation**:
+```
+http://your-server:8000/docs
+```
+
+**Prometheus Metrics** (if enabled):
+```
+http://your-server:8000/metrics
+```
 
 ---
 
