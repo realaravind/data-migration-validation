@@ -8,8 +8,10 @@ import asyncio
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from config.paths import paths
+from pipelines.parallel_executor import ParallelStepExecutor
 from errors import (
     InvalidPipelineConfigError,
     PipelineNotFoundError,
@@ -648,46 +650,114 @@ async def run_pipeline_async(run_id: str, pipeline_def: dict, pipeline_name: str
             # Run pipeline with real-time event emission
             runner = PipelineRunner(executor, json_logger, cfg)
 
-            # Emit step events during execution
-            results = []
-            for i, step in enumerate(steps):
-                step_name = step.get("name", f"Step {i+1}")
-                validator_type = step.get("validator", step.get("name"))
+            # Check if parallel execution is enabled (default: True for 4+ steps)
+            parallel_enabled = cfg.get("parallel_execution", len(steps) >= 4)
+            max_workers = cfg.get("max_parallel_workers", 4)
 
-                # Update progress in pipeline_runs
-                pipeline_runs[run_id]["current_step"] = i + 1
-                pipeline_runs[run_id]["current_step_name"] = step_name
+            if parallel_enabled and len(steps) > 1:
+                logger.info(f"[PARALLEL] Running {len(steps)} steps with up to {max_workers} parallel workers")
 
-                # Emit step started
-                await emitter.step_started(
-                    step_name=step_name,
-                    step_order=i,
-                    validator_type=validator_type,
-                    config=step.get("config")
+                # Create parallel executor
+                parallel_exec = ParallelStepExecutor(
+                    step_executor=executor,
+                    max_workers=max_workers,
+                    stop_on_error=False
                 )
 
-                # Execute step
-                try:
-                    result = executor.run_step(step)
-                    results.append(result)
+                # Track step events for async emission
+                step_events = []
 
-                    # Emit step completed
+                def on_step_start(step_name, step_index):
+                    step = steps[step_index]
+                    validator_type = step.get("validator", step.get("name"))
+                    step_events.append(("start", step_name, step_index, validator_type, step.get("config")))
+                    pipeline_runs[run_id]["current_step"] = step_index + 1
+                    pipeline_runs[run_id]["current_step_name"] = step_name
+
+                def on_step_complete(step_name, step_index, result):
                     result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
-                    await emitter.step_completed(
+                    step_events.append(("complete", step_name, step_index, result_dict))
+
+                def on_step_error(step_name, step_index, error):
+                    step_events.append(("error", step_name, step_index, error))
+
+                # Run parallel execution in thread pool
+                loop = asyncio.get_event_loop()
+                results = await loop.run_in_executor(
+                    None,
+                    lambda: parallel_exec.execute_parallel(
+                        steps,
+                        on_step_start=on_step_start,
+                        on_step_complete=on_step_complete,
+                        on_step_error=on_step_error
+                    )
+                )
+
+                # Emit collected events asynchronously
+                for event in step_events:
+                    if event[0] == "start":
+                        await emitter.step_started(
+                            step_name=event[1],
+                            step_order=event[2],
+                            validator_type=event[3],
+                            config=event[4]
+                        )
+                    elif event[0] == "complete":
+                        await emitter.step_completed(
+                            step_name=event[1],
+                            step_order=event[2],
+                            status=event[3].get("status", "passed"),
+                            result=event[3]
+                        )
+                    elif event[0] == "error":
+                        await emitter.step_failed(
+                            step_name=event[1],
+                            step_order=event[2],
+                            error_message=event[3]
+                        )
+
+            else:
+                # Sequential execution for small pipelines or when disabled
+                logger.info(f"[SEQUENTIAL] Running {len(steps)} steps sequentially")
+                results = []
+                for i, step in enumerate(steps):
+                    step_name = step.get("name", f"Step {i+1}")
+                    validator_type = step.get("validator", step.get("name"))
+
+                    # Update progress in pipeline_runs
+                    pipeline_runs[run_id]["current_step"] = i + 1
+                    pipeline_runs[run_id]["current_step_name"] = step_name
+
+                    # Emit step started
+                    await emitter.step_started(
                         step_name=step_name,
                         step_order=i,
-                        status=result_dict.get("status", "passed"),
-                        result=result_dict
+                        validator_type=validator_type,
+                        config=step.get("config")
                     )
 
-                except Exception as step_error:
-                    # Emit step failed
-                    await emitter.step_failed(
-                        step_name=step_name,
-                        step_order=i,
-                        error_message=str(step_error)
-                    )
-                    raise
+                    # Execute step
+                    try:
+                        result = executor.run_step(step)
+                        results.append(result)
+
+                        # Emit step completed
+                        result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+                        await emitter.step_completed(
+                            step_name=step_name,
+                            step_order=i,
+                            status=result_dict.get("status", "passed"),
+                            result=result_dict
+                        )
+
+                    except Exception as step_error:
+                        # Emit step failed
+                        await emitter.step_failed(
+                            step_name=step_name,
+                            step_order=i,
+                            error_message=str(step_error)
+                        )
+                        raise
 
             # Convert results to dict
             results_dict = [r.to_dict() if hasattr(r, 'to_dict') else r for r in results]
