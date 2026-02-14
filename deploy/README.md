@@ -203,25 +203,46 @@ SNOWFLAKE_PASSWORD=your-password
 # SNOWFLAKE_TOKEN=your-pat-token  # Use instead of password
 ```
 
-### LLM Provider (for AI schema mapping)
+### LLM Provider (for AI schema mapping & table classification)
 ```bash
 LLM_PROVIDER=ollama  # Options: ollama, openai, azure_openai, anthropic
 
-# Ollama (default - local, no API key needed)
+# Common settings (all providers)
+LLM_TEMPERATURE=0.1      # Lower = more deterministic (default: 0.1)
+LLM_MAX_TOKENS=2048      # Max response tokens (default: 2048)
+LLM_TIMEOUT=30           # Request timeout in seconds (default: 30)
+```
+
+#### Ollama (default - local, free, no API key needed)
+```bash
+LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama2
+```
 
-# OpenAI
-# OPENAI_API_KEY=sk-...
-# OPENAI_MODEL=gpt-4o-mini
+#### OpenAI
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
 
-# Azure OpenAI
-# AZURE_OPENAI_API_KEY=...
-# AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
-# AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+#### Azure OpenAI
+```bash
+LLM_PROVIDER=azure_openai
+AZURE_OPENAI_API_KEY=your-azure-api-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+AZURE_OPENAI_API_VERSION=2024-02-15-preview  # Optional, has default
+```
 
-# Anthropic
-# ANTHROPIC_API_KEY=sk-ant-...
+> **Note:** `AZURE_OPENAI_DEPLOYMENT` is the deployment name you created in Azure Portal (e.g., `gpt-4o`, `gpt-35-turbo`), not the model name.
+
+#### Anthropic
+```bash
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
 ```
 
 ### Authentication Database
