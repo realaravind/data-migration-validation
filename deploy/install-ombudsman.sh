@@ -271,11 +271,51 @@ setup_python_venv() {
 
     REAL_USER="${SUDO_USER:-$USER}"
 
+    # Ensure python3-venv is installed (required for venv creation)
+    if ! $PYTHON_CMD -m venv --help > /dev/null 2>&1; then
+        echo "Installing python3-venv package..."
+        apt-get install -y python3-venv python3-full 2>/dev/null || apt-get install -y python3-venv
+    fi
+
     if [ ! -d "$BACKEND_DIR/venv" ]; then
-        sudo -u "$REAL_USER" $PYTHON_CMD -m venv "$BACKEND_DIR/venv"
+        echo "Creating virtual environment at $BACKEND_DIR/venv..."
+
+        # Try to create venv
+        if ! sudo -u "$REAL_USER" $PYTHON_CMD -m venv "$BACKEND_DIR/venv"; then
+            print_error "Failed to create virtual environment with $PYTHON_CMD -m venv"
+
+            # Try alternative methods
+            echo "Trying alternative: python3 -m venv..."
+            if ! sudo -u "$REAL_USER" python3 -m venv "$BACKEND_DIR/venv"; then
+                echo "Trying with --without-pip flag..."
+                if sudo -u "$REAL_USER" $PYTHON_CMD -m venv --without-pip "$BACKEND_DIR/venv"; then
+                    # Manually install pip
+                    echo "Installing pip manually..."
+                    curl -sS https://bootstrap.pypa.io/get-pip.py | sudo -u "$REAL_USER" "$BACKEND_DIR/venv/bin/python"
+                else
+                    print_error "Could not create virtual environment. Please install python3-venv:"
+                    print_error "  sudo apt-get install python3-venv python3-full"
+                    exit 1
+                fi
+            fi
+        fi
+
+        # Verify venv was created
+        if [ ! -f "$BACKEND_DIR/venv/bin/python" ]; then
+            print_error "Virtual environment creation failed - python binary not found"
+            print_error "Please run: sudo apt-get install python3-venv python3-full"
+            exit 1
+        fi
+
         print_status "Virtual environment created using $PYTHON_CMD"
     else
         print_status "Virtual environment already exists"
+    fi
+
+    # Verify venv exists before installing dependencies
+    if [ ! -f "$BACKEND_DIR/venv/bin/pip" ]; then
+        print_error "pip not found in virtual environment"
+        exit 1
     fi
 
     # Install Python dependencies
