@@ -179,14 +179,40 @@ install_odbc_drivers() {
         return
     fi
 
-    # Add Microsoft repo
-    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-    curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list > /etc/apt/sources.list.d/mssql-release.list
+    # Get Ubuntu version
+    UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "22.04")
+    echo "Detected Ubuntu version: $UBUNTU_VERSION"
 
+    # Install prerequisites
+    apt-get install -y curl gnupg2 apt-transport-https
+
+    # Add Microsoft GPG key (modern method for Ubuntu 22.04+)
+    echo "Adding Microsoft repository..."
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+
+    # Add Microsoft repository with signed-by
+    curl -fsSL "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/prod.list" -o /etc/apt/sources.list.d/mssql-release.list
+
+    # Fix the repo file to use the keyring
+    if [ -f /etc/apt/sources.list.d/mssql-release.list ]; then
+        # Add signed-by if not already present
+        if ! grep -q "signed-by" /etc/apt/sources.list.d/mssql-release.list; then
+            sed -i 's|https://packages.microsoft.com|[signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com|g' /etc/apt/sources.list.d/mssql-release.list
+        fi
+    fi
+
+    # Update and install
     apt-get update
+
+    # Install ODBC driver
     ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
 
-    print_status "ODBC Driver 18 for SQL Server installed"
+    # Verify installation
+    if odbcinst -q -d -n "ODBC Driver 18 for SQL Server" &> /dev/null; then
+        print_status "ODBC Driver 18 for SQL Server installed successfully"
+    else
+        print_error "ODBC Driver installation may have failed. Please check manually."
+    fi
 }
 
 # ==============================================
