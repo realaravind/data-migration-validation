@@ -184,14 +184,23 @@ install_odbc_drivers() {
     echo "Detected Ubuntu version: $UBUNTU_VERSION"
 
     # Install prerequisites
-    apt-get install -y curl gnupg2 apt-transport-https
+    apt-get install -y curl gnupg2 apt-transport-https ca-certificates
+
+    # Update CA certificates
+    update-ca-certificates 2>/dev/null || true
 
     # Add Microsoft GPG key (modern method for Ubuntu 22.04+)
     echo "Adding Microsoft repository..."
-    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+
+    # Remove old key if exists
+    rm -f /usr/share/keyrings/microsoft-prod.gpg
+
+    # Download and install key (run entire pipeline as root)
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg
+    chmod 644 /usr/share/keyrings/microsoft-prod.gpg
 
     # Add Microsoft repository with signed-by
-    curl -fsSL "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/prod.list" -o /etc/apt/sources.list.d/mssql-release.list
+    curl -fsSL "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/prod.list" 2>/dev/null > /etc/apt/sources.list.d/mssql-release.list
 
     # Fix the repo file to use the keyring
     if [ -f /etc/apt/sources.list.d/mssql-release.list ]; then
