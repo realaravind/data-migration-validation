@@ -284,10 +284,10 @@ create_directories() {
     mkdir -p "$BASE_DIR/data/auth"
 
     # Set ownership to current user (not root)
-    # This is critical for venv creation and npm install
+    # This is critical for npm install
     REAL_USER="${SUDO_USER:-$USER}"
 
-    # Set ownership on entire base directory (needed for venv, npm, etc.)
+    # Set ownership on entire base directory (needed for npm, etc.)
     # This handles any directory structure without hardcoding names
     chown -R "$REAL_USER:$REAL_USER" "$BASE_DIR"
     print_status "Set ownership on $BASE_DIR"
@@ -296,66 +296,27 @@ create_directories() {
 }
 
 # ==============================================
-# Setup Python virtual environment
+# Setup Python dependencies (system-wide)
 # ==============================================
-setup_python_venv() {
+setup_python_deps() {
     echo ""
     echo "=========================================="
-    echo "Setting up Python virtual environment..."
+    echo "Installing Python dependencies (system-wide)..."
     echo "=========================================="
 
-    REAL_USER="${SUDO_USER:-$USER}"
+    # Upgrade pip
+    pip3 install --upgrade pip --break-system-packages 2>/dev/null || pip3 install --upgrade pip
 
-    # Ensure python3-venv is installed (required for venv creation)
-    if ! $PYTHON_CMD -m venv --help > /dev/null 2>&1; then
-        echo "Installing python3-venv package..."
-        apt-get install -y python3-venv python3-full 2>/dev/null || apt-get install -y python3-venv
-    fi
+    # Install snowflake with binary-only to avoid compilation issues
+    echo "Installing snowflake-connector-python (binary only)..."
+    pip3 install --only-binary=:all: snowflake-connector-python --break-system-packages 2>/dev/null || \
+    pip3 install --only-binary=:all: snowflake-connector-python || \
+    echo "Warning: Could not install snowflake-connector-python, skipping..."
 
-    if [ ! -d "$BACKEND_DIR/venv" ]; then
-        echo "Creating virtual environment at $BACKEND_DIR/venv..."
-
-        # Try to create venv
-        if ! sudo -u "$REAL_USER" $PYTHON_CMD -m venv "$BACKEND_DIR/venv"; then
-            print_error "Failed to create virtual environment with $PYTHON_CMD -m venv"
-
-            # Try alternative methods
-            echo "Trying alternative: python3 -m venv..."
-            if ! sudo -u "$REAL_USER" python3 -m venv "$BACKEND_DIR/venv"; then
-                echo "Trying with --without-pip flag..."
-                if sudo -u "$REAL_USER" $PYTHON_CMD -m venv --without-pip "$BACKEND_DIR/venv"; then
-                    # Manually install pip
-                    echo "Installing pip manually..."
-                    curl -sS https://bootstrap.pypa.io/get-pip.py | sudo -u "$REAL_USER" "$BACKEND_DIR/venv/bin/python"
-                else
-                    print_error "Could not create virtual environment. Please install python3-venv:"
-                    print_error "  sudo apt-get install python3-venv python3-full"
-                    exit 1
-                fi
-            fi
-        fi
-
-        # Verify venv was created
-        if [ ! -f "$BACKEND_DIR/venv/bin/python" ]; then
-            print_error "Virtual environment creation failed - python binary not found"
-            print_error "Please run: sudo apt-get install python3-venv python3-full"
-            exit 1
-        fi
-
-        print_status "Virtual environment created using $PYTHON_CMD"
-    else
-        print_status "Virtual environment already exists"
-    fi
-
-    # Verify venv exists before installing dependencies
-    if [ ! -f "$BACKEND_DIR/venv/bin/pip" ]; then
-        print_error "pip not found in virtual environment"
-        exit 1
-    fi
-
-    # Install Python dependencies
-    sudo -u "$REAL_USER" "$BACKEND_DIR/venv/bin/pip" install --upgrade pip
-    sudo -u "$REAL_USER" "$BACKEND_DIR/venv/bin/pip" install -r "$BACKEND_DIR/requirements.txt"
+    # Install remaining Python dependencies
+    echo "Installing remaining dependencies..."
+    pip3 install -r "$BACKEND_DIR/requirements.txt" --break-system-packages 2>/dev/null || \
+    pip3 install -r "$BACKEND_DIR/requirements.txt"
 
     print_status "Python dependencies installed"
 }
@@ -1040,7 +1001,7 @@ setup_auth_db() {
                 AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
                 AUTH_DB_USER="$AUTH_DB_USER" \
                 AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
-                ./venv/bin/python auth/setup_sql_server_auth.py
+                python3 auth/setup_sql_server_auth.py
 
             # Create admin user with configured credentials
             echo "Creating admin user..."
@@ -1056,7 +1017,7 @@ setup_auth_db() {
                 ADMIN_USER="$ADMIN_USER" \
                 ADMIN_EMAIL="$ADMIN_EMAIL" \
                 ADMIN_PASS="$ADMIN_PASS" \
-                ./venv/bin/python -c "
+                python3 -c "
 import os
 from auth.sqlserver_auth_repository import SQLServerAuthRepository
 from auth.models import UserCreate, UserRole
@@ -1101,7 +1062,7 @@ except Exception as e:
             ADMIN_USER="$ADMIN_USER" \
             ADMIN_EMAIL="$ADMIN_EMAIL" \
             ADMIN_PASS="$ADMIN_PASS" \
-            ./venv/bin/python -c "
+            python3 -c "
 import os
 import sys
 sys.path.insert(0, '.')
@@ -1180,7 +1141,7 @@ EnvironmentFile=$BASE_DIR/ombudsman.env
 Environment=OMBUDSMAN_BASE_DIR=$BASE_DIR
 Environment=PYTHONPATH=$BACKEND_DIR:$BASE_DIR/ombudsman_core/src
 
-ExecStart=$BACKEND_DIR/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port $SVC_BACKEND_PORT --log-level info
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port $SVC_BACKEND_PORT --log-level info
 
 Restart=always
 RestartSec=5
@@ -1273,7 +1234,7 @@ main() {
     install_odbc_drivers
     install_sops
     create_directories
-    setup_python_venv
+    setup_python_deps
     setup_config           # Interactive wizard - collects VITE_API_URL
     setup_frontend         # Build frontend with correct API URL
     setup_auth_db

@@ -397,7 +397,7 @@ start_backend() {
         AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}" \
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
         ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" \
-        ./venv/bin/python -m uvicorn main:app \
+        python3 -m uvicorn main:app \
         --host "$BACKEND_HOST" \
         --port "$BACKEND_PORT" \
         --log-level info \
@@ -607,14 +607,14 @@ setup_auth() {
             AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
             AUTH_DB_USER="$AUTH_DB_USER" \
             AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
-            ./venv/bin/python auth/setup_sql_server_auth.py
+            python3 auth/setup_sql_server_auth.py
 
             echo "Creating default admin user..."
             AUTH_DB_SERVER="$AUTH_DB_SERVER" \
             AUTH_DB_NAME="${AUTH_DB_NAME:-ovs_studio}" \
             AUTH_DB_USER="$AUTH_DB_USER" \
             AUTH_DB_PASSWORD="$AUTH_DB_PASSWORD" \
-            ./venv/bin/python -c "
+            python3 -c "
 from auth.sqlserver_auth_repository import SQLServerAuthRepository
 from auth.models import UserCreate, UserRole
 repo = SQLServerAuthRepository()
@@ -698,8 +698,8 @@ case "${1:-start}" in
         # Update Python dependencies
         printf "[2/5] Updating Python dependencies...\n"
         cd "$BACKEND_DIR"
-        if [ -f "./venv/bin/pip" ]; then
-            ./venv/bin/pip install -r requirements.txt --quiet 2>/dev/null
+        if command -v pip3 &>/dev/null; then
+            pip3 install -r requirements.txt --quiet 2>/dev/null || pip3 install -r requirements.txt --break-system-packages --quiet 2>/dev/null
         fi
 
         # Update frontend dependencies if needed
@@ -800,8 +800,8 @@ case "${1:-start}" in
         echo ""
         echo "[3/6] Updating Python dependencies..."
         cd "$BACKEND_DIR"
-        ./venv/bin/pip install --upgrade pip
-        ./venv/bin/pip install -r requirements.txt
+        pip3 install --upgrade pip
+        pip3 install -r requirements.txt
 
         # Update frontend dependencies
         echo ""
