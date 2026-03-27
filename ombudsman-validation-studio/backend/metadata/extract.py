@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, List
 from core_adapter import get_metadata
 import os
@@ -12,11 +12,15 @@ router = APIRouter()
 class MetadataRequest(BaseModel):
     connection: str  # "sqlserver" or "snowflake"
     table: str
-    schema: Optional[str] = None
+    db_schema: Optional[str] = Field(default=None, alias="schema")
+
+    model_config = {"populate_by_name": True}
 
 class TablesRequest(BaseModel):
     connection: str  # "sqlserver" or "snowflake"
-    schema: Optional[str] = None
+    db_schema: Optional[str] = Field(default=None, alias="schema")
+
+    model_config = {"populate_by_name": True}
 
 
 @router.post("/extract")
@@ -45,7 +49,7 @@ def list_tables(payload: TablesRequest):
         loader = MetadataLoader(conn)
 
         # Get tables
-        schema = payload.schema
+        schema = payload.db_schema
         if not schema:
             if conn == "sqlserver":
                 schema = "dbo"

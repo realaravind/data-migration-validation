@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 import os
 import json
@@ -667,7 +667,9 @@ def auto_map_schemas(sql_schemas: List[str], snowflake_schemas: List[str]) -> Di
 class SetupRequest(BaseModel):
     """Request to extract metadata and infer relationships"""
     connection: str  # "sqlserver" or "snowflake"
-    schema: Optional[str] = None
+    db_schema: Optional[str] = Field(default=None, alias="schema")
+
+    model_config = {"populate_by_name": True}
 
 
 @router.post("/{project_id}/extract-metadata")
@@ -697,7 +699,7 @@ async def extract_metadata(
 
         # Extract metadata only
         print(f"[METADATA_EXTRACT] Extracting metadata for {project_id} from {payload.connection}")
-        metadata = automation.extract_all_metadata(payload.connection, payload.schema)
+        metadata = automation.extract_all_metadata(payload.connection, payload.db_schema)
 
         # Update project metadata
         project_metadata["updated_at"] = datetime.now().isoformat()

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 import yaml
 import os
@@ -14,10 +14,12 @@ SAVE_PATH = "pipeline_suggestions.json"
 class TableAnalysisRequest(BaseModel):
     """Request to analyze a table and suggest validations"""
     table_name: str
-    schema: str
+    db_schema: str = Field(alias="schema")
     database_type: str  # 'sql' or 'snow'
     columns: List[Dict[str, Any]]  # Column metadata
     relationships: Optional[List[Dict[str, Any]]] = []  # FK relationships
+
+    model_config = {"populate_by_name": True}
 
 
 class PipelineGenerateRequest(BaseModel):
